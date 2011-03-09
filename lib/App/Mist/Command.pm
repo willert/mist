@@ -1,4 +1,4 @@
-# package App::mist::Command;
+# package App::Mist::Command;
 #
 # use strict;
 # use warnings;

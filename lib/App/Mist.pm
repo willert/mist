@@ -1,4 +1,4 @@
-package App::mist;
+package App::Mist;
 
 use strict;
 use warnings;
@@ -8,7 +8,7 @@ use Scalar::Util qw/looks_like_number blessed/;
 
 use App::Cmd::Setup -app;
 
-use App::mist::Command::build;
-use App::mist::Command::index;
+use App::Mist::Command::build;
+use App::Mist::Command::index;
 
 1;

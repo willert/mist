@@ -1,9 +1,9 @@
-package App::mist::Command::index;
+package App::Mist::Command::index;
 
 use strict;
 use warnings;
 
-use App::mist -command;
+use App::Mist -command;
 
 use CPAN::ParseDistribution;
 use CPAN::DistnameInfo;
@@ -44,6 +44,15 @@ sub execute {
 
     my $dist    = CPAN::ParseDistribution->new( $d->pathname );
     my $modules = $dist->modules;
+
+    {
+      ( my $dist_pkg = $dist->dist ) =~ s/-/::/g;
+      $package_details->add_entry(
+        package_name => $dist_pkg,
+        version      => $dist->distversion,
+        path         => $mpath,
+      );
+    }
 
     while ( my ( $pkg, $version ) = each %$modules ) {
       $package_details->add_entry(

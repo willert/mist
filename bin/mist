@@ -4,8 +4,4484 @@
 BEGIN {
 my %fatpacked;
 
-$fatpacked{"App/mist.pm"} = <<'APP_MIST';
-  package App::mist;
+$fatpacked{"5.10/Devel/InnerPackage.pm"} = <<'5.10_DEVEL_INNERPACKAGE';
+  package Devel::InnerPackage;
+  
+  use strict;
+  use base qw(Exporter);
+  use vars qw($VERSION @EXPORT_OK);
+  
+  $VERSION = '0.3';
+  @EXPORT_OK = qw(list_packages);
+  
+  =pod
+  
+  =head1 NAME
+  
+  
+  Devel::InnerPackage - find all the inner packages of a package
+  
+  =head1 SYNOPSIS
+  
+      use Foo::Bar;
+      use Devel::InnerPackage qw(list_packages);
+  
+      my @inner_packages = list_packages('Foo::Bar');
+  
+  
+  =head1 DESCRIPTION
+  
+  
+  Given a file like this
+  
+  
+      package Foo::Bar;
+  
+      sub foo {}
+  
+  
+      package Foo::Bar::Quux;
+  
+      sub quux {}
+  
+      package Foo::Bar::Quirka;
+  
+      sub quirka {}
+  
+      1;
+  
+  then
+  
+      list_packages('Foo::Bar');
+  
+  will return
+  
+      Foo::Bar::Quux
+      Foo::Bar::Quirka
+  
+  =head1 METHODS
+  
+  =head2 list_packages <package name>
+  
+  Return a list of all inner packages of that package.
+  
+  =cut
+  
+  sub list_packages {
+              my $pack = shift; $pack .= "::" unless $pack =~ m!::$!;
+  
+              no strict 'refs';
+              my @packs;
+              my @stuff = grep !/^(main|)::$/, keys %{$pack};
+              for my $cand (grep /::$/, @stuff)
+              {
+                  $cand =~ s!::$!!;
+                  my @children = list_packages($pack.$cand);
+      
+                  push @packs, "$pack$cand" unless $cand =~ /^::/ ||
+                      !__PACKAGE__->_loaded($pack.$cand); # or @children;
+                  push @packs, @children;
+              }
+              return grep {$_ !~ /::(::ISA::CACHE|SUPER)/} @packs;
+  }
+  
+  ### XXX this is an inlining of the Class-Inspector->loaded()
+  ### method, but inlined to remove the dependency.
+  sub _loaded {
+         my ($class, $name) = @_;
+  
+      no strict 'refs';
+  
+         # Handle by far the two most common cases
+         # This is very fast and handles 99% of cases.
+         return 1 if defined ${"${name}::VERSION"};
+         return 1 if defined @{"${name}::ISA"};
+  
+         # Are there any symbol table entries other than other namespaces
+         foreach ( keys %{"${name}::"} ) {
+                 next if substr($_, -2, 2) eq '::';
+                 return 1 if defined &{"${name}::$_"};
+         }
+  
+         # No functions, and it doesn't have a version, and isn't anything.
+         # As an absolute last resort, check for an entry in %INC
+         my $filename = join( '/', split /(?:'|::)/, $name ) . '.pm';
+         return 1 if defined $INC{$filename};
+  
+         '';
+  }
+  
+  
+  =head1 AUTHOR
+  
+  Simon Wistow <simon@thegestalt.org>
+  
+  =head1 COPYING
+  
+  Copyright, 2005 Simon Wistow
+  
+  Distributed under the same terms as Perl itself.
+  
+  =head1 BUGS
+  
+  None known.
+  
+  =cut 
+  
+  
+  
+  
+  
+  1;
+5.10_DEVEL_INNERPACKAGE
+
+$fatpacked{"5.10/List/Util.pm"} = <<'5.10_LIST_UTIL';
+  # List::Util.pm
+  #
+  # Copyright (c) 1997-2009 Graham Barr <gbarr@pobox.com>. All rights reserved.
+  # This program is free software; you can redistribute it and/or
+  # modify it under the same terms as Perl itself.
+  #
+  # This module is normally only loaded if the XS module is not available
+  
+  package List::Util;
+  
+  use strict;
+  use vars qw(@ISA @EXPORT_OK $VERSION $XS_VERSION $TESTING_PERL_ONLY);
+  require Exporter;
+  
+  @ISA        = qw(Exporter);
+  @EXPORT_OK  = qw(first min max minstr maxstr reduce sum shuffle);
+  $VERSION    = "1.23";
+  $XS_VERSION = $VERSION;
+  $VERSION    = eval $VERSION;
+  
+  eval {
+    # PERL_DL_NONLAZY must be false, or any errors in loading will just
+    # cause the perl code to be tested
+    local $ENV{PERL_DL_NONLAZY} = 0 if $ENV{PERL_DL_NONLAZY};
+    eval {
+      require XSLoader;
+      XSLoader::load('List::Util', $XS_VERSION);
+      1;
+    } or do {
+      require DynaLoader;
+      local @ISA = qw(DynaLoader);
+      bootstrap List::Util $XS_VERSION;
+    };
+  } unless $TESTING_PERL_ONLY;
+  
+  
+  if (!defined &sum) {
+    require List::Util::PP;
+    List::Util::PP->import;
+  }
+  
+  1;
+  
+  __END__
+  
+  =head1 NAME
+  
+  List::Util - A selection of general-utility list subroutines
+  
+  =head1 SYNOPSIS
+  
+      use List::Util qw(first max maxstr min minstr reduce shuffle sum);
+  
+  =head1 DESCRIPTION
+  
+  C<List::Util> contains a selection of subroutines that people have
+  expressed would be nice to have in the perl core, but the usage would
+  not really be high enough to warrant the use of a keyword, and the size
+  so small such that being individual extensions would be wasteful.
+  
+  By default C<List::Util> does not export any subroutines. The
+  subroutines defined are
+  
+  =over 4
+  
+  =item first BLOCK LIST
+  
+  Similar to C<grep> in that it evaluates BLOCK setting C<$_> to each element
+  of LIST in turn. C<first> returns the first element where the result from
+  BLOCK is a true value. If BLOCK never returns true or LIST was empty then
+  C<undef> is returned.
+  
+      $foo = first { defined($_) } @list    # first defined value in @list
+      $foo = first { $_ > $value } @list    # first value in @list which
+                                            # is greater than $value
+  
+  This function could be implemented using C<reduce> like this
+  
+      $foo = reduce { defined($a) ? $a : wanted($b) ? $b : undef } undef, @list
+  
+  for example wanted() could be defined() which would return the first
+  defined value in @list
+  
+  =item max LIST
+  
+  Returns the entry in the list with the highest numerical value. If the
+  list is empty then C<undef> is returned.
+  
+      $foo = max 1..10                # 10
+      $foo = max 3,9,12               # 12
+      $foo = max @bar, @baz           # whatever
+  
+  This function could be implemented using C<reduce> like this
+  
+      $foo = reduce { $a > $b ? $a : $b } 1..10
+  
+  =item maxstr LIST
+  
+  Similar to C<max>, but treats all the entries in the list as strings
+  and returns the highest string as defined by the C<gt> operator.
+  If the list is empty then C<undef> is returned.
+  
+      $foo = maxstr 'A'..'Z'          # 'Z'
+      $foo = maxstr "hello","world"   # "world"
+      $foo = maxstr @bar, @baz        # whatever
+  
+  This function could be implemented using C<reduce> like this
+  
+      $foo = reduce { $a gt $b ? $a : $b } 'A'..'Z'
+  
+  =item min LIST
+  
+  Similar to C<max> but returns the entry in the list with the lowest
+  numerical value. If the list is empty then C<undef> is returned.
+  
+      $foo = min 1..10                # 1
+      $foo = min 3,9,12               # 3
+      $foo = min @bar, @baz           # whatever
+  
+  This function could be implemented using C<reduce> like this
+  
+      $foo = reduce { $a < $b ? $a : $b } 1..10
+  
+  =item minstr LIST
+  
+  Similar to C<min>, but treats all the entries in the list as strings
+  and returns the lowest string as defined by the C<lt> operator.
+  If the list is empty then C<undef> is returned.
+  
+      $foo = minstr 'A'..'Z'          # 'A'
+      $foo = minstr "hello","world"   # "hello"
+      $foo = minstr @bar, @baz        # whatever
+  
+  This function could be implemented using C<reduce> like this
+  
+      $foo = reduce { $a lt $b ? $a : $b } 'A'..'Z'
+  
+  =item reduce BLOCK LIST
+  
+  Reduces LIST by calling BLOCK, in a scalar context, multiple times,
+  setting C<$a> and C<$b> each time. The first call will be with C<$a>
+  and C<$b> set to the first two elements of the list, subsequent
+  calls will be done by setting C<$a> to the result of the previous
+  call and C<$b> to the next element in the list.
+  
+  Returns the result of the last call to BLOCK. If LIST is empty then
+  C<undef> is returned. If LIST only contains one element then that
+  element is returned and BLOCK is not executed.
+  
+      $foo = reduce { $a < $b ? $a : $b } 1..10       # min
+      $foo = reduce { $a lt $b ? $a : $b } 'aa'..'zz' # minstr
+      $foo = reduce { $a + $b } 1 .. 10               # sum
+      $foo = reduce { $a . $b } @bar                  # concat
+  
+  If your algorithm requires that C<reduce> produce an identity value, then
+  make sure that you always pass that identity value as the first argument to prevent
+  C<undef> being returned
+  
+    $foo = reduce { $a + $b } 0, @values;             # sum with 0 identity value
+  
+  =item shuffle LIST
+  
+  Returns the elements of LIST in a random order
+  
+      @cards = shuffle 0..51      # 0..51 in a random order
+  
+  =item sum LIST
+  
+  Returns the sum of all the elements in LIST. If LIST is empty then
+  C<undef> is returned.
+  
+      $foo = sum 1..10                # 55
+      $foo = sum 3,9,12               # 24
+      $foo = sum @bar, @baz           # whatever
+  
+  This function could be implemented using C<reduce> like this
+  
+      $foo = reduce { $a + $b } 1..10
+  
+  If your algorithm requires that C<sum> produce an identity of 0, then
+  make sure that you always pass C<0> as the first argument to prevent
+  C<undef> being returned
+  
+    $foo = sum 0, @values;
+  
+  =back
+  
+  =head1 KNOWN BUGS
+  
+  With perl versions prior to 5.005 there are some cases where reduce
+  will return an incorrect result. This will show up as test 7 of
+  reduce.t failing.
+  
+  =head1 SUGGESTED ADDITIONS
+  
+  The following are additions that have been requested, but I have been reluctant
+  to add due to them being very simple to implement in perl
+  
+    # One argument is true
+  
+    sub any { $_ && return 1 for @_; 0 }
+  
+    # All arguments are true
+  
+    sub all { $_ || return 0 for @_; 1 }
+  
+    # All arguments are false
+  
+    sub none { $_ && return 0 for @_; 1 }
+  
+    # One argument is false
+  
+    sub notall { $_ || return 1 for @_; 0 }
+  
+    # How many elements are true
+  
+    sub true { scalar grep { $_ } @_ }
+  
+    # How many elements are false
+  
+    sub false { scalar grep { !$_ } @_ }
+  
+  =head1 SEE ALSO
+  
+  L<Scalar::Util>, L<List::MoreUtils>
+  
+  =head1 COPYRIGHT
+  
+  Copyright (c) 1997-2007 Graham Barr <gbarr@pobox.com>. All rights reserved.
+  This program is free software; you can redistribute it and/or
+  modify it under the same terms as Perl itself.
+  
+  =cut
+5.10_LIST_UTIL
+
+$fatpacked{"5.10/List/Util/PP.pm"} = <<'5.10_LIST_UTIL_PP';
+  # List::Util::PP.pm
+  #
+  # Copyright (c) 1997-2009 Graham Barr <gbarr@pobox.com>. All rights reserved.
+  # This program is free software; you can redistribute it and/or
+  # modify it under the same terms as Perl itself.
+  
+  package List::Util::PP;
+  
+  use strict;
+  use warnings;
+  use vars qw(@ISA @EXPORT $VERSION $a $b);
+  require Exporter;
+  
+  @ISA     = qw(Exporter);
+  @EXPORT  = qw(first min max minstr maxstr reduce sum shuffle);
+  $VERSION = "1.23";
+  $VERSION = eval $VERSION;
+  
+  sub reduce (&@) {
+    my $code = shift;
+    require Scalar::Util;
+    my $type = Scalar::Util::reftype($code);
+    unless($type and $type eq 'CODE') {
+      require Carp;
+      Carp::croak("Not a subroutine reference");
+    }
+    no strict 'refs';
+  
+    return shift unless @_ > 1;
+  
+    use vars qw($a $b);
+  
+    my $caller = caller;
+    local(*{$caller."::a"}) = \my $a;
+    local(*{$caller."::b"}) = \my $b;
+  
+    $a = shift;
+    foreach (@_) {
+      $b = $_;
+      $a = &{$code}();
+    }
+  
+    $a;
+  }
+  
+  sub first (&@) {
+    my $code = shift;
+    require Scalar::Util;
+    my $type = Scalar::Util::reftype($code);
+    unless($type and $type eq 'CODE') {
+      require Carp;
+      Carp::croak("Not a subroutine reference");
+    }
+  
+    foreach (@_) {
+      return $_ if &{$code}();
+    }
+  
+    undef;
+  }
+  
+  
+  sub sum (@) { reduce { $a + $b } @_ }
+  
+  sub min (@) { reduce { $a < $b ? $a : $b } @_ }
+  
+  sub max (@) { reduce { $a > $b ? $a : $b } @_ }
+  
+  sub minstr (@) { reduce { $a lt $b ? $a : $b } @_ }
+  
+  sub maxstr (@) { reduce { $a gt $b ? $a : $b } @_ }
+  
+  sub shuffle (@) {
+    my @a=\(@_);
+    my $n;
+    my $i=@_;
+    map {
+      $n = rand($i--);
+      (${$a[$n]}, $a[$n] = $a[$i])[0];
+    } @_;
+  }
+  
+  1;
+5.10_LIST_UTIL_PP
+
+$fatpacked{"5.10/List/Util/XS.pm"} = <<'5.10_LIST_UTIL_XS';
+  package List::Util::XS;
+  use strict;
+  use vars qw($VERSION);
+  use List::Util;
+  
+  $VERSION = "1.23";           # FIXUP
+  $VERSION = eval $VERSION;    # FIXUP
+  
+  sub _VERSION { # FIXUP
+    require Carp;
+    Carp::croak("You need to install Scalar-List-Utils with a C compiler to ensure the XS is compiled")
+      if defined $_[1];
+    $VERSION;
+  }
+  
+  1;
+  __END__
+  
+  =head1 NAME
+  
+  List::Util::XS - Indicate if List::Util was compiled with a C compiler
+  
+  =head1 SYNOPSIS
+  
+      use List::Util::XS 1.20;
+  
+  =head1 DESCRIPTION
+  
+  C<List::Util::XS> can be used as a dependency to ensure List::Util was
+  installed using a C compiler and that the XS version is installed.
+  
+  During installation C<$List::Util::XS::VERSION> will be set to
+  C<undef> if the XS was not compiled.
+  
+  =head1 SEE ALSO
+  
+  L<Scalar::Util>, L<List::Util>, L<List::MoreUtils>
+  
+  =head1 COPYRIGHT
+  
+  Copyright (c) 2008 Graham Barr <gbarr@pobox.com>. All rights reserved.
+  This program is free software; you can redistribute it and/or
+  modify it under the same terms as Perl itself.
+  
+  =cut
+5.10_LIST_UTIL_XS
+
+$fatpacked{"5.10/Module/Pluggable.pm"} = <<'5.10_MODULE_PLUGGABLE';
+  package Module::Pluggable;
+  
+  use strict;
+  use vars qw($VERSION);
+  use Module::Pluggable::Object;
+  
+  # ObQuote:
+  # Bob Porter: Looks like you've been missing a lot of work lately. 
+  # Peter Gibbons: I wouldn't say I've been missing it, Bob! 
+  
+  
+  $VERSION = '3.9';
+  
+  sub import {
+      my $class        = shift;
+      my %opts         = @_;
+  
+      my ($pkg, $file) = caller; 
+      # the default name for the method is 'plugins'
+      my $sub          = $opts{'sub_name'}  || 'plugins';
+      # get our package 
+      my ($package)    = $opts{'package'} || $pkg;
+      $opts{filename}  = $file;
+      $opts{package}   = $package;
+  
+  
+      my $finder       = Module::Pluggable::Object->new(%opts);
+      my $subroutine   = sub { my $self = shift; return $finder->plugins(@_) };
+  
+      my $searchsub = sub {
+                my $self = shift;
+                my ($action,@paths) = @_;
+  
+                $finder->{'search_path'} = ["${package}::Plugin"] if ($action eq 'add'  and not   $finder->{'search_path'} );
+                push @{$finder->{'search_path'}}, @paths      if ($action eq 'add');
+                $finder->{'search_path'}       = \@paths      if ($action eq 'new');
+                return $finder->{'search_path'};
+      };
+  
+  
+      my $onlysub = sub {
+          my ($self, $only) = @_;
+  
+          if (defined $only) {
+              $finder->{'only'} = $only;
+          };
+          
+          return $finder->{'only'};
+      };
+  
+      my $exceptsub = sub {
+          my ($self, $except) = @_;
+  
+          if (defined $except) {
+              $finder->{'except'} = $except;
+          };
+          
+          return $finder->{'except'};
+      };
+  
+  
+      no strict 'refs';
+      no warnings qw(redefine prototype);
+      
+      *{"$package\::$sub"}        = $subroutine;
+      *{"$package\::search_path"} = $searchsub;
+      *{"$package\::only"}        = $onlysub;
+      *{"$package\::except"}      = $exceptsub;
+  
+  }
+  
+  1;
+  
+  =pod
+  
+  =head1 NAME
+  
+  Module::Pluggable - automatically give your module the ability to have plugins
+  
+  =head1 SYNOPSIS
+  
+  
+  Simple use Module::Pluggable -
+  
+      package MyClass;
+      use Module::Pluggable;
+      
+  
+  and then later ...
+  
+      use MyClass;
+      my $mc = MyClass->new();
+      # returns the names of all plugins installed under MyClass::Plugin::*
+      my @plugins = $mc->plugins(); 
+  
+  =head1 EXAMPLE
+  
+  Why would you want to do this? Say you have something that wants to pass an
+  object to a number of different plugins in turn. For example you may 
+  want to extract meta-data from every email you get sent and do something
+  with it. Plugins make sense here because then you can keep adding new 
+  meta data parsers and all the logic and docs for each one will be 
+  self contained and new handlers are easy to add without changing the 
+  core code. For that, you might do something like ...
+  
+      package Email::Examiner;
+  
+      use strict;
+      use Email::Simple;
+      use Module::Pluggable require => 1;
+  
+      sub handle_email {
+          my $self  = shift;
+          my $email = shift;
+  
+          foreach my $plugin ($self->plugins) {
+              $plugin->examine($email);
+          }
+  
+          return 1;
+      }
+  
+  
+  
+  .. and all the plugins will get a chance in turn to look at it.
+  
+  This can be trivally extended so that plugins could save the email
+  somewhere and then no other plugin should try and do that. 
+  Simply have it so that the C<examine> method returns C<1> if 
+  it has saved the email somewhere. You might also wnat to be paranoid
+  and check to see if the plugin has an C<examine> method.
+  
+          foreach my $plugin ($self->plugins) {
+              next unless $plugin->can('examine');
+              last if     $plugin->examine($email);
+          }
+  
+  
+  And so on. The sky's the limit.
+  
+  
+  =head1 DESCRIPTION
+  
+  Provides a simple but, hopefully, extensible way of having 'plugins' for 
+  your module. Obviously this isn't going to be the be all and end all of
+  solutions but it works for me.
+  
+  Essentially all it does is export a method into your namespace that 
+  looks through a search path for .pm files and turn those into class names. 
+  
+  Optionally it instantiates those classes for you.
+  
+  =head1 ADVANCED USAGE
+  
+      
+  Alternatively, if you don't want to use 'plugins' as the method ...
+      
+      package MyClass;
+      use Module::Pluggable sub_name => 'foo';
+  
+  
+  and then later ...
+  
+      my @plugins = $mc->foo();
+  
+  
+  Or if you want to look in another namespace
+  
+      package MyClass;
+      use Module::Pluggable search_path => ['Acme::MyClass::Plugin', 'MyClass::Extend'];
+  
+  or directory 
+  
+      use Module::Pluggable search_dirs => ['mylibs/Foo'];
+  
+  
+  Or if you want to instantiate each plugin rather than just return the name
+  
+      package MyClass;
+      use Module::Pluggable instantiate => 'new';
+  
+  and then
+  
+      # whatever is passed to 'plugins' will be passed 
+      # to 'new' for each plugin 
+      my @plugins = $mc->plugins(@options); 
+  
+  
+  alternatively you can just require the module without instantiating it
+  
+      package MyClass;
+      use Module::Pluggable require => 1;
+  
+  since requiring automatically searches inner packages, which may not be desirable, you can turn this off
+  
+  
+      package MyClass;
+      use Module::Pluggable require => 1, inner => 0;
+  
+  
+  You can limit the plugins loaded using the except option, either as a string,
+  array ref or regex
+  
+      package MyClass;
+      use Module::Pluggable except => 'MyClass::Plugin::Foo';
+  
+  or
+  
+      package MyClass;
+      use Module::Pluggable except => ['MyClass::Plugin::Foo', 'MyClass::Plugin::Bar'];
+  
+  or
+  
+      package MyClass;
+      use Module::Pluggable except => qr/^MyClass::Plugin::(Foo|Bar)$/;
+  
+  
+  and similarly for only which will only load plugins which match.
+  
+  Remember you can use the module more than once
+  
+      package MyClass;
+      use Module::Pluggable search_path => 'MyClass::Filters' sub_name => 'filters';
+      use Module::Pluggable search_path => 'MyClass::Plugins' sub_name => 'plugins';
+  
+  and then later ...
+  
+      my @filters = $self->filters;
+      my @plugins = $self->plugins;
+  
+  =head1 INNER PACKAGES
+  
+  If you have, for example, a file B<lib/Something/Plugin/Foo.pm> that
+  contains package definitions for both C<Something::Plugin::Foo> and 
+  C<Something::Plugin::Bar> then as long as you either have either 
+  the B<require> or B<instantiate> option set then we'll also find 
+  C<Something::Plugin::Bar>. Nifty!
+  
+  =head1 OPTIONS
+  
+  You can pass a hash of options when importing this module.
+  
+  The options can be ...
+  
+  =head2 sub_name
+  
+  The name of the subroutine to create in your namespace. 
+  
+  By default this is 'plugins'
+  
+  =head2 search_path
+  
+  An array ref of namespaces to look in. 
+  
+  =head2 search_dirs 
+  
+  An array ref of directorys to look in before @INC.
+  
+  =head2 instantiate
+  
+  Call this method on the class. In general this will probably be 'new'
+  but it can be whatever you want. Whatever arguments are passed to 'plugins' 
+  will be passed to the method.
+  
+  The default is 'undef' i.e just return the class name.
+  
+  =head2 require
+  
+  Just require the class, don't instantiate (overrides 'instantiate');
+  
+  =head2 inner
+  
+  If set to 0 will B<not> search inner packages. 
+  If set to 1 will override C<require>.
+  
+  =head2 only
+  
+  Takes a string, array ref or regex describing the names of the only plugins to 
+  return. Whilst this may seem perverse ... well, it is. But it also 
+  makes sense. Trust me.
+  
+  =head2 except
+  
+  Similar to C<only> it takes a description of plugins to exclude 
+  from returning. This is slightly less perverse.
+  
+  =head2 package
+  
+  This is for use by extension modules which build on C<Module::Pluggable>:
+  passing a C<package> option allows you to place the plugin method in a
+  different package other than your own.
+  
+  =head2 file_regex
+  
+  By default C<Module::Pluggable> only looks for I<.pm> files.
+  
+  By supplying a new C<file_regex> then you can change this behaviour e.g
+  
+      file_regex => qr/\.plugin$/
+  
+  =head2 include_editor_junk
+  
+  By default C<Module::Pluggable> ignores files that look like they were
+  left behind by editors. Currently this means files ending in F<~> (~),
+  the extensions F<.swp> or F<.swo>, or files beginning with F<.#>.
+  
+  Setting C<include_editor_junk> changes C<Module::Pluggable> so it does
+  not ignore any files it finds.
+  
+  
+  =head1 METHODs
+  
+  =head2 search_path
+  
+  The method C<search_path> is exported into you namespace as well. 
+  You can call that at any time to change or replace the 
+  search_path.
+  
+      $self->search_path( add => "New::Path" ); # add
+      $self->search_path( new => "New::Path" ); # replace
+  
+  
+  
+  =head1 FUTURE PLANS
+  
+  This does everything I need and I can't really think of any other 
+  features I want to add. Famous last words of course
+  
+  Recently tried fixed to find inner packages and to make it 
+  'just work' with PAR but there are still some issues.
+  
+  
+  However suggestions (and patches) are welcome.
+  
+  =head1 AUTHOR
+  
+  Simon Wistow <simon@thegestalt.org>
+  
+  =head1 COPYING
+  
+  Copyright, 2006 Simon Wistow
+  
+  Distributed under the same terms as Perl itself.
+  
+  =head1 BUGS
+  
+  None known.
+  
+  =head1 SEE ALSO
+  
+  L<File::Spec>, L<File::Find>, L<File::Basename>, L<Class::Factory::Util>, L<Module::Pluggable::Ordered>
+  
+  =cut 
+  
+  
+5.10_MODULE_PLUGGABLE
+
+$fatpacked{"5.10/Module/Pluggable/Object.pm"} = <<'5.10_MODULE_PLUGGABLE_OBJECT';
+  package Module::Pluggable::Object;
+  
+  use strict;
+  use File::Find ();
+  use File::Basename;
+  use File::Spec::Functions qw(splitdir catdir curdir catfile abs2rel);
+  use Carp qw(croak carp);
+  use Devel::InnerPackage;
+  use vars qw($VERSION);
+  
+  $VERSION = '3.9';
+  
+  
+  sub new {
+      my $class = shift;
+      my %opts  = @_;
+  
+      return bless \%opts, $class;
+  
+  }
+  
+  ### Eugggh, this code smells 
+  ### This is what happens when you keep adding patches
+  ### *sigh*
+  
+  
+  sub plugins {
+          my $self = shift;
+  
+          # override 'require'
+          $self->{'require'} = 1 if $self->{'inner'};
+  
+          my $filename   = $self->{'filename'};
+          my $pkg        = $self->{'package'};
+  
+          # Get the exception params instantiated
+          $self->_setup_exceptions;
+  
+          # automatically turn a scalar search path or namespace into a arrayref
+          for (qw(search_path search_dirs)) {
+              $self->{$_} = [ $self->{$_} ] if exists $self->{$_} && !ref($self->{$_});
+          }
+  
+          # default search path is '<Module>::<Name>::Plugin'
+          $self->{'search_path'} = ["${pkg}::Plugin"] unless $self->{'search_path'}; 
+  
+  
+          #my %opts = %$self;
+  
+  
+          # check to see if we're running under test
+          my @SEARCHDIR = exists $INC{"blib.pm"} && defined $filename && $filename =~ m!(^|/)blib/! ? grep {/blib/} @INC : @INC;
+  
+          # add any search_dir params
+          unshift @SEARCHDIR, @{$self->{'search_dirs'}} if defined $self->{'search_dirs'};
+  
+  
+          my @plugins = $self->search_directories(@SEARCHDIR);
+          push(@plugins, $self->handle_innerpackages($_)) for @{$self->{'search_path'}};
+  
+          # push @plugins, map { print STDERR "$_\n"; $_->require } list_packages($_) for (@{$self->{'search_path'}});
+          
+          # return blank unless we've found anything
+          return () unless @plugins;
+  
+  
+  
+          # remove duplicates
+          # probably not necessary but hey ho
+          my %plugins;
+          for(@plugins) {
+              next unless $self->_is_legit($_);
+              $plugins{$_} = 1;
+          }
+  
+          # are we instantiating or requring?
+          if (defined $self->{'instantiate'}) {
+              my $method = $self->{'instantiate'};
+              return map { ($_->can($method)) ? $_->$method(@_) : () } keys %plugins;
+          } else { 
+              # no? just return the names
+              return keys %plugins;
+          }
+  
+  
+  }
+  
+  sub _setup_exceptions {
+      my $self = shift;
+  
+      my %only;   
+      my %except; 
+      my $only;
+      my $except;
+  
+      if (defined $self->{'only'}) {
+          if (ref($self->{'only'}) eq 'ARRAY') {
+              %only   = map { $_ => 1 } @{$self->{'only'}};
+          } elsif (ref($self->{'only'}) eq 'Regexp') {
+              $only = $self->{'only'}
+          } elsif (ref($self->{'only'}) eq '') {
+              $only{$self->{'only'}} = 1;
+          }
+      }
+          
+  
+      if (defined $self->{'except'}) {
+          if (ref($self->{'except'}) eq 'ARRAY') {
+              %except   = map { $_ => 1 } @{$self->{'except'}};
+          } elsif (ref($self->{'except'}) eq 'Regexp') {
+              $except = $self->{'except'}
+          } elsif (ref($self->{'except'}) eq '') {
+              $except{$self->{'except'}} = 1;
+          }
+      }
+      $self->{_exceptions}->{only_hash}   = \%only;
+      $self->{_exceptions}->{only}        = $only;
+      $self->{_exceptions}->{except_hash} = \%except;
+      $self->{_exceptions}->{except}      = $except;
+          
+  }
+  
+  sub _is_legit {
+      my $self   = shift;
+      my $plugin = shift;
+      my %only   = %{$self->{_exceptions}->{only_hash}||{}};
+      my %except = %{$self->{_exceptions}->{except_hash}||{}};
+      my $only   = $self->{_exceptions}->{only};
+      my $except = $self->{_exceptions}->{except};
+  
+      return 0 if     (keys %only   && !$only{$plugin}     );
+      return 0 unless (!defined $only || $plugin =~ m!$only!     );
+  
+      return 0 if     (keys %except &&  $except{$plugin}   );
+      return 0 if     (defined $except &&  $plugin =~ m!$except! );
+  
+      return 1;
+  }
+  
+  sub search_directories {
+      my $self      = shift;
+      my @SEARCHDIR = @_;
+  
+      my @plugins;
+      # go through our @INC
+      foreach my $dir (@SEARCHDIR) {
+          push @plugins, $self->search_paths($dir);
+      }
+      return @plugins;
+  }
+  
+  
+  sub search_paths {
+      my $self = shift;
+      my $dir  = shift;
+      my @plugins;
+  
+      my $file_regex = $self->{'file_regex'} || qr/\.pm$/;
+  
+  
+      # and each directory in our search path
+      foreach my $searchpath (@{$self->{'search_path'}}) {
+          # create the search directory in a cross platform goodness way
+          my $sp = catdir($dir, (split /::/, $searchpath));
+  
+          # if it doesn't exist or it's not a dir then skip it
+          next unless ( -e $sp && -d _ ); # Use the cached stat the second time
+  
+          my @files = $self->find_files($sp);
+  
+          # foreach one we've found 
+          foreach my $file (@files) {
+              # untaint the file; accept .pm only
+              next unless ($file) = ($file =~ /(.*$file_regex)$/); 
+              # parse the file to get the name
+              my ($name, $directory, $suffix) = fileparse($file, $file_regex);
+  
+              next if (!$self->{include_editor_junk} && $self->_is_editor_junk($name));
+  
+              $directory = abs2rel($directory, $sp);
+  
+              # If we have a mixed-case package name, assume case has been preserved
+              # correctly.  Otherwise, root through the file to locate the case-preserved
+              # version of the package name.
+              my @pkg_dirs = ();
+              if ( $name eq lc($name) || $name eq uc($name) ) {
+                  my $pkg_file = catfile($sp, $directory, "$name$suffix");
+                  open PKGFILE, "<$pkg_file" or die "search_paths: Can't open $pkg_file: $!";
+                  my $in_pod = 0;
+                  while ( my $line = <PKGFILE> ) {
+                      $in_pod = 1 if $line =~ m/^=\w/;
+                      $in_pod = 0 if $line =~ /^=cut/;
+                      next if ($in_pod || $line =~ /^=cut/);  # skip pod text
+                      next if $line =~ /^\s*#/;               # and comments
+                      if ( $line =~ m/^\s*package\s+(.*::)?($name)\s*;/i ) {
+                          @pkg_dirs = split /::/, $1;
+                          $name = $2;
+                          last;
+                      }
+                  }
+                  close PKGFILE;
+              }
+  
+              # then create the class name in a cross platform way
+              $directory =~ s/^[a-z]://i if($^O =~ /MSWin32|dos/);       # remove volume
+              my @dirs = ();
+              if ($directory) {
+                  ($directory) = ($directory =~ /(.*)/);
+                  @dirs = grep(length($_), splitdir($directory)) 
+                      unless $directory eq curdir();
+                  for my $d (reverse @dirs) {
+                      my $pkg_dir = pop @pkg_dirs; 
+                      last unless defined $pkg_dir;
+                      $d =~ s/\Q$pkg_dir\E/$pkg_dir/i;  # Correct case
+                  }
+              } else {
+                  $directory = "";
+              }
+              my $plugin = join '::', $searchpath, @dirs, $name;
+  
+              next unless $plugin =~ m!(?:[a-z\d]+)[a-z\d]!i;
+  
+              my $err = $self->handle_finding_plugin($plugin);
+              carp "Couldn't require $plugin : $err" if $err;
+               
+              push @plugins, $plugin;
+          }
+  
+          # now add stuff that may have been in package
+          # NOTE we should probably use all the stuff we've been given already
+          # but then we can't unload it :(
+          push @plugins, $self->handle_innerpackages($searchpath);
+      } # foreach $searchpath
+  
+      return @plugins;
+  }
+  
+  sub _is_editor_junk {
+      my $self = shift;
+      my $name = shift;
+  
+      # Emacs (and other Unix-y editors) leave temp files ending in a
+      # tilde as a backup.
+      return 1 if $name =~ /~$/;
+      # Emacs makes these files while a buffer is edited but not yet
+      # saved.
+      return 1 if $name =~ /^\.#/;
+      # Vim can leave these files behind if it crashes.
+      return 1 if $name =~ /\.sw[po]$/;
+  
+      return 0;
+  }
+  
+  sub handle_finding_plugin {
+      my $self   = shift;
+      my $plugin = shift;
+  
+      return unless (defined $self->{'instantiate'} || $self->{'require'}); 
+      return unless $self->_is_legit($plugin);
+      $self->_require($plugin);
+  }
+  
+  sub find_files {
+      my $self         = shift;
+      my $search_path  = shift;
+      my $file_regex   = $self->{'file_regex'} || qr/\.pm$/;
+  
+  
+      # find all the .pm files in it
+      # this isn't perfect and won't find multiple plugins per file
+      #my $cwd = Cwd::getcwd;
+      my @files = ();
+      { # for the benefit of perl 5.6.1's Find, localize topic
+          local $_;
+          File::Find::find( { no_chdir => 1, 
+                             wanted => sub { 
+                               # Inlined from File::Find::Rule C< name => '*.pm' >
+                               return unless $File::Find::name =~ /$file_regex/;
+                               (my $path = $File::Find::name) =~ s#^\\./##;
+                               push @files, $path;
+                             }
+                        }, $search_path );
+      }
+      #chdir $cwd;
+      return @files;
+  
+  }
+  
+  sub handle_innerpackages {
+      my $self = shift;
+      return () if (exists $self->{inner} && !$self->{inner});
+  
+      my $path = shift;
+      my @plugins;
+  
+      foreach my $plugin (Devel::InnerPackage::list_packages($path)) {
+          my $err = $self->handle_finding_plugin($plugin);
+          #next if $err;
+          #next unless $INC{$plugin};
+          push @plugins, $plugin;
+      }
+      return @plugins;
+  
+  }
+  
+  
+  sub _require {
+      my $self = shift;
+      my $pack = shift;
+      local $@;
+      eval "CORE::require $pack";
+      return $@;
+  }
+  
+  
+  1;
+  
+  =pod
+  
+  =head1 NAME
+  
+  Module::Pluggable::Object - automatically give your module the ability to have plugins
+  
+  =head1 SYNOPSIS
+  
+  
+  Simple use Module::Pluggable -
+  
+      package MyClass;
+      use Module::Pluggable::Object;
+      
+      my $finder = Module::Pluggable::Object->new(%opts);
+      print "My plugins are: ".join(", ", $finder->plugins)."\n";
+  
+  =head1 DESCRIPTION
+  
+  Provides a simple but, hopefully, extensible way of having 'plugins' for 
+  your module. Obviously this isn't going to be the be all and end all of
+  solutions but it works for me.
+  
+  Essentially all it does is export a method into your namespace that 
+  looks through a search path for .pm files and turn those into class names. 
+  
+  Optionally it instantiates those classes for you.
+  
+  This object is wrapped by C<Module::Pluggable>. If you want to do something
+  odd or add non-general special features you're probably best to wrap this
+  and produce your own subclass.
+  
+  =head1 OPTIONS
+  
+  See the C<Module::Pluggable> docs.
+  
+  =head1 AUTHOR
+  
+  Simon Wistow <simon@thegestalt.org>
+  
+  =head1 COPYING
+  
+  Copyright, 2006 Simon Wistow
+  
+  Distributed under the same terms as Perl itself.
+  
+  =head1 BUGS
+  
+  None known.
+  
+  =head1 SEE ALSO
+  
+  L<Module::Pluggable>
+  
+  =cut 
+  
+5.10_MODULE_PLUGGABLE_OBJECT
+
+$fatpacked{"5.10/Safe.pm"} = <<'5.10_SAFE';
+  package Safe;
+  
+  use 5.003_11;
+  use strict;
+  use Scalar::Util qw(reftype);
+  
+  $Safe::VERSION = "2.27";
+  
+  # *** Don't declare any lexicals above this point ***
+  #
+  # This function should return a closure which contains an eval that can't
+  # see any lexicals in scope (apart from __ExPr__ which is unavoidable)
+  
+  sub lexless_anon_sub {
+                   # $_[0] is package;
+                   # $_[1] is strict flag;
+      my $__ExPr__ = $_[2];   # must be a lexical to create the closure that
+                              # can be used to pass the value into the safe
+                              # world
+  
+      # Create anon sub ref in root of compartment.
+      # Uses a closure (on $__ExPr__) to pass in the code to be executed.
+      # (eval on one line to keep line numbers as expected by caller)
+      eval sprintf
+      'package %s; %s strict; sub { @_=(); eval q[my $__ExPr__;] . $__ExPr__; }',
+                  $_[0], $_[1] ? 'use' : 'no';
+  }
+  
+  use Carp;
+  BEGIN { eval q{
+      use Carp::Heavy;
+  } }
+  
+  use B ();
+  BEGIN {
+      no strict 'refs';
+      if (defined &B::sub_generation) {
+          *sub_generation = \&B::sub_generation;
+      }
+      else {
+          # fake sub generation changing for perls < 5.8.9
+          my $sg; *sub_generation = sub { ++$sg };
+      }
+  }
+  
+  use Opcode 1.01, qw(
+      opset opset_to_ops opmask_add
+      empty_opset full_opset invert_opset verify_opset
+      opdesc opcodes opmask define_optag opset_to_hex
+  );
+  
+  *ops_to_opset = \&opset;   # Temporary alias for old Penguins
+  
+  # Regular expressions and other unicode-aware code may need to call
+  # utf8->SWASHNEW (via perl's utf8.c).  That will fail unless we share the
+  # SWASHNEW method.
+  # Sadly we can't just add utf8::SWASHNEW to $default_share because perl's
+  # utf8.c code does a fetchmethod on SWASHNEW to check if utf8.pm is loaded,
+  # and sharing makes it look like the method exists.
+  # The simplest and most robust fix is to ensure the utf8 module is loaded when
+  # Safe is loaded. Then we can add utf8::SWASHNEW to $default_share.
+  require utf8;
+  # we must ensure that utf8_heavy.pl, where SWASHNEW is defined, is loaded
+  # but without depending on knowledge of that implementation detail.
+  # This code (//i on a unicode string) ensures utf8 is fully loaded
+  # and also loads the ToFold SWASH.
+  # (Swashes are cached internally by perl in PL_utf8_* variables
+  # independent of being inside/outside of Safe. So once loaded they can be)
+  do { my $a = pack('U',0xC4); my $b = chr 0xE4; utf8::upgrade $b; $a =~ /$b/i };
+  # now we can safely include utf8::SWASHNEW in $default_share defined below.
+  
+  my $default_root  = 0;
+  # share *_ and functions defined in universal.c
+  # Don't share stuff like *UNIVERSAL:: otherwise code from the
+  # compartment can 0wn functions in UNIVERSAL
+  my $default_share = [qw[
+      *_
+      &PerlIO::get_layers
+      &UNIVERSAL::isa
+      &UNIVERSAL::can
+      &UNIVERSAL::VERSION
+      &utf8::is_utf8
+      &utf8::valid
+      &utf8::encode
+      &utf8::decode
+      &utf8::upgrade
+      &utf8::downgrade
+      &utf8::native_to_unicode
+      &utf8::unicode_to_native
+      &utf8::SWASHNEW
+      $version::VERSION
+      $version::CLASS
+      $version::STRICT
+      $version::LAX
+      @version::ISA
+  ], ($] < 5.010 && qw[
+      &utf8::SWASHGET
+  ]), ($] >= 5.008001 && qw[
+      &Regexp::DESTROY
+  ]), ($] >= 5.010 && qw[
+      &re::is_regexp
+      &re::regname
+      &re::regnames
+      &re::regnames_count
+      &Tie::Hash::NamedCapture::FETCH
+      &Tie::Hash::NamedCapture::STORE
+      &Tie::Hash::NamedCapture::DELETE
+      &Tie::Hash::NamedCapture::CLEAR
+      &Tie::Hash::NamedCapture::EXISTS
+      &Tie::Hash::NamedCapture::FIRSTKEY
+      &Tie::Hash::NamedCapture::NEXTKEY
+      &Tie::Hash::NamedCapture::SCALAR
+      &Tie::Hash::NamedCapture::flags
+      &UNIVERSAL::DOES
+      &version::()
+      &version::new
+      &version::(""
+      &version::stringify
+      &version::(0+
+      &version::numify
+      &version::normal
+      &version::(cmp
+      &version::(<=>
+      &version::vcmp
+      &version::(bool
+      &version::boolean
+      &version::(nomethod
+      &version::noop
+      &version::is_alpha
+      &version::qv
+      &version::vxs::declare
+      &version::vxs::qv
+      &version::vxs::_VERSION
+      &version::vxs::stringify
+      &version::vxs::new
+      &version::vxs::parse
+  ]), ($] >= 5.011 && qw[
+      &re::regexp_pattern
+  ])];
+  
+  sub new {
+      my($class, $root, $mask) = @_;
+      my $obj = {};
+      bless $obj, $class;
+  
+      if (defined($root)) {
+          croak "Can't use \"$root\" as root name"
+              if $root =~ /^main\b/ or $root !~ /^\w[:\w]*$/;
+          $obj->{Root}  = $root;
+          $obj->{Erase} = 0;
+      }
+      else {
+          $obj->{Root}  = "Safe::Root".$default_root++;
+          $obj->{Erase} = 1;
+      }
+  
+      # use permit/deny methods instead till interface issues resolved
+      # XXX perhaps new Safe 'Root', mask => $mask, foo => bar, ...;
+      croak "Mask parameter to new no longer supported" if defined $mask;
+      $obj->permit_only(':default');
+  
+      # We must share $_ and @_ with the compartment or else ops such
+      # as split, length and so on won't default to $_ properly, nor
+      # will passing argument to subroutines work (via @_). In fact,
+      # for reasons I don't completely understand, we need to share
+      # the whole glob *_ rather than $_ and @_ separately, otherwise
+      # @_ in non default packages within the compartment don't work.
+      $obj->share_from('main', $default_share);
+  
+      Opcode::_safe_pkg_prep($obj->{Root}) if($Opcode::VERSION > 1.04);
+  
+      return $obj;
+  }
+  
+  sub DESTROY {
+      my $obj = shift;
+      $obj->erase('DESTROY') if $obj->{Erase};
+  }
+  
+  sub erase {
+      my ($obj, $action) = @_;
+      my $pkg = $obj->root();
+      my ($stem, $leaf);
+  
+      no strict 'refs';
+      $pkg = "main::$pkg\::";     # expand to full symbol table name
+      ($stem, $leaf) = $pkg =~ m/(.*::)(\w+::)$/;
+  
+      # The 'my $foo' is needed! Without it you get an
+      # 'Attempt to free unreferenced scalar' warning!
+      my $stem_symtab = *{$stem}{HASH};
+  
+      #warn "erase($pkg) stem=$stem, leaf=$leaf";
+      #warn " stem_symtab hash ".scalar(%$stem_symtab)."\n";
+      # ", join(', ', %$stem_symtab),"\n";
+  
+  #    delete $stem_symtab->{$leaf};
+  
+      my $leaf_glob   = $stem_symtab->{$leaf};
+      my $leaf_symtab = *{$leaf_glob}{HASH};
+  #    warn " leaf_symtab ", join(', ', %$leaf_symtab),"\n";
+      %$leaf_symtab = ();
+      #delete $leaf_symtab->{'__ANON__'};
+      #delete $leaf_symtab->{'foo'};
+      #delete $leaf_symtab->{'main::'};
+  #    my $foo = undef ${"$stem\::"}{"$leaf\::"};
+  
+      if ($action and $action eq 'DESTROY') {
+          delete $stem_symtab->{$leaf};
+      } else {
+          $obj->share_from('main', $default_share);
+      }
+      1;
+  }
+  
+  
+  sub reinit {
+      my $obj= shift;
+      $obj->erase;
+      $obj->share_redo;
+  }
+  
+  sub root {
+      my $obj = shift;
+      croak("Safe root method now read-only") if @_;
+      return $obj->{Root};
+  }
+  
+  
+  sub mask {
+      my $obj = shift;
+      return $obj->{Mask} unless @_;
+      $obj->deny_only(@_);
+  }
+  
+  # v1 compatibility methods
+  sub trap   { shift->deny(@_)   }
+  sub untrap { shift->permit(@_) }
+  
+  sub deny {
+      my $obj = shift;
+      $obj->{Mask} |= opset(@_);
+  }
+  sub deny_only {
+      my $obj = shift;
+      $obj->{Mask} = opset(@_);
+  }
+  
+  sub permit {
+      my $obj = shift;
+      # XXX needs testing
+      $obj->{Mask} &= invert_opset opset(@_);
+  }
+  sub permit_only {
+      my $obj = shift;
+      $obj->{Mask} = invert_opset opset(@_);
+  }
+  
+  
+  sub dump_mask {
+      my $obj = shift;
+      print opset_to_hex($obj->{Mask}),"\n";
+  }
+  
+  
+  sub share {
+      my($obj, @vars) = @_;
+      $obj->share_from(scalar(caller), \@vars);
+  }
+  
+  
+  sub share_from {
+      my $obj = shift;
+      my $pkg = shift;
+      my $vars = shift;
+      my $no_record = shift || 0;
+      my $root = $obj->root();
+      croak("vars not an array ref") unless ref $vars eq 'ARRAY';
+      no strict 'refs';
+      # Check that 'from' package actually exists
+      croak("Package \"$pkg\" does not exist")
+          unless keys %{"$pkg\::"};
+      my $arg;
+      foreach $arg (@$vars) {
+          # catch some $safe->share($var) errors:
+          my ($var, $type);
+          $type = $1 if ($var = $arg) =~ s/^(\W)//;
+          # warn "share_from $pkg $type $var";
+          for (1..2) { # assign twice to avoid any 'used once' warnings
+              *{$root."::$var"} = (!$type)   ? \&{$pkg."::$var"}
+                            : ($type eq '&') ? \&{$pkg."::$var"}
+                            : ($type eq '$') ? \${$pkg."::$var"}
+                            : ($type eq '@') ? \@{$pkg."::$var"}
+                            : ($type eq '%') ? \%{$pkg."::$var"}
+                            : ($type eq '*') ?  *{$pkg."::$var"}
+                            : croak(qq(Can't share "$type$var" of unknown type));
+          }
+      }
+      $obj->share_record($pkg, $vars) unless $no_record or !$vars;
+  }
+  
+  
+  sub share_record {
+      my $obj = shift;
+      my $pkg = shift;
+      my $vars = shift;
+      my $shares = \%{$obj->{Shares} ||= {}};
+      # Record shares using keys of $obj->{Shares}. See reinit.
+      @{$shares}{@$vars} = ($pkg) x @$vars if @$vars;
+  }
+  
+  
+  sub share_redo {
+      my $obj = shift;
+      my $shares = \%{$obj->{Shares} ||= {}};
+      my($var, $pkg);
+      while(($var, $pkg) = each %$shares) {
+          # warn "share_redo $pkg\:: $var";
+          $obj->share_from($pkg,  [ $var ], 1);
+      }
+  }
+  
+  
+  sub share_forget {
+      delete shift->{Shares};
+  }
+  
+  
+  sub varglob {
+      my ($obj, $var) = @_;
+      no strict 'refs';
+      return *{$obj->root()."::$var"};
+  }
+  
+  sub _clean_stash {
+      my ($root, $saved_refs) = @_;
+      $saved_refs ||= [];
+      no strict 'refs';
+      foreach my $hook (qw(DESTROY AUTOLOAD), grep /^\(/, keys %$root) {
+          push @$saved_refs, \*{$root.$hook};
+          delete ${$root}{$hook};
+      }
+  
+      for (grep /::$/, keys %$root) {
+          next if \%{$root.$_} eq \%$root;
+          _clean_stash($root.$_, $saved_refs);
+      }
+  }
+  
+  sub reval {
+      my ($obj, $expr, $strict) = @_;
+      my $root = $obj->{Root};
+  
+      my $evalsub = lexless_anon_sub($root, $strict, $expr);
+      # propagate context
+      my $sg = sub_generation();
+      my @subret = (wantarray)
+                 ?        Opcode::_safe_call_sv($root, $obj->{Mask}, $evalsub)
+                 : scalar Opcode::_safe_call_sv($root, $obj->{Mask}, $evalsub);
+      _clean_stash($root.'::') if $sg != sub_generation();
+      $obj->wrap_code_refs_within(@subret);
+      return (wantarray) ? @subret : $subret[0];
+  }
+  
+  
+  sub wrap_code_refs_within {
+      my $obj = shift;
+  
+      $obj->_find_code_refs('wrap_code_ref', @_);
+  }
+  
+  
+  sub _find_code_refs {
+      my $obj = shift;
+      my $visitor = shift;
+  
+      for my $item (@_) {
+          my $reftype = $item && reftype $item
+              or next;
+          if ($reftype eq 'ARRAY') {
+              $obj->_find_code_refs($visitor, @$item);
+          }
+          elsif ($reftype eq 'HASH') {
+              $obj->_find_code_refs($visitor, values %$item);
+          }
+          # XXX GLOBs?
+          elsif ($reftype eq 'CODE') {
+              $item = $obj->$visitor($item);
+          }
+      }
+  }
+  
+  
+  sub wrap_code_ref {
+      my ($obj, $sub) = @_;
+  
+      # wrap code ref $sub with _safe_call_sv so that, when called, the
+      # execution will happen with the compartment fully 'in effect'.
+  
+      croak "Not a CODE reference"
+          if reftype $sub ne 'CODE';
+  
+      my $ret = sub {
+          my @args = @_; # lexical to close over
+          my $sub_with_args = sub { $sub->(@args) };
+  
+          my @subret;
+          my $error;
+          do {
+              local $@;  # needed due to perl_call_sv(sv, G_EVAL|G_KEEPERR)
+              my $sg = sub_generation();
+              @subret = (wantarray)
+                  ?        Opcode::_safe_call_sv($obj->{Root}, $obj->{Mask}, $sub_with_args)
+                  : scalar Opcode::_safe_call_sv($obj->{Root}, $obj->{Mask}, $sub_with_args);
+              $error = $@;
+              _clean_stash($obj->{Root}.'::') if $sg != sub_generation();
+          };
+          if ($error) { # rethrow exception
+              $error =~ s/\t\(in cleanup\) //; # prefix added by G_KEEPERR
+              die $error;
+          }
+          return (wantarray) ? @subret : $subret[0];
+      };
+  
+      return $ret;
+  }
+  
+  
+  sub rdo {
+      my ($obj, $file) = @_;
+      my $root = $obj->{Root};
+  
+      my $sg = sub_generation();
+      my $evalsub = eval
+              sprintf('package %s; sub { @_ = (); do $file }', $root);
+      my @subret = (wantarray)
+                 ?        Opcode::_safe_call_sv($root, $obj->{Mask}, $evalsub)
+                 : scalar Opcode::_safe_call_sv($root, $obj->{Mask}, $evalsub);
+      _clean_stash($root.'::') if $sg != sub_generation();
+      $obj->wrap_code_refs_within(@subret);
+      return (wantarray) ? @subret : $subret[0];
+  }
+  
+  
+  1;
+  
+  __END__
+  
+  =head1 NAME
+  
+  Safe - Compile and execute code in restricted compartments
+  
+  =head1 SYNOPSIS
+  
+    use Safe;
+  
+    $compartment = new Safe;
+  
+    $compartment->permit(qw(time sort :browse));
+  
+    $result = $compartment->reval($unsafe_code);
+  
+  =head1 DESCRIPTION
+  
+  The Safe extension module allows the creation of compartments
+  in which perl code can be evaluated. Each compartment has
+  
+  =over 8
+  
+  =item a new namespace
+  
+  The "root" of the namespace (i.e. "main::") is changed to a
+  different package and code evaluated in the compartment cannot
+  refer to variables outside this namespace, even with run-time
+  glob lookups and other tricks.
+  
+  Code which is compiled outside the compartment can choose to place
+  variables into (or I<share> variables with) the compartment's namespace
+  and only that data will be visible to code evaluated in the
+  compartment.
+  
+  By default, the only variables shared with compartments are the
+  "underscore" variables $_ and @_ (and, technically, the less frequently
+  used %_, the _ filehandle and so on). This is because otherwise perl
+  operators which default to $_ will not work and neither will the
+  assignment of arguments to @_ on subroutine entry.
+  
+  =item an operator mask
+  
+  Each compartment has an associated "operator mask". Recall that
+  perl code is compiled into an internal format before execution.
+  Evaluating perl code (e.g. via "eval" or "do 'file'") causes
+  the code to be compiled into an internal format and then,
+  provided there was no error in the compilation, executed.
+  Code evaluated in a compartment compiles subject to the
+  compartment's operator mask. Attempting to evaluate code in a
+  compartment which contains a masked operator will cause the
+  compilation to fail with an error. The code will not be executed.
+  
+  The default operator mask for a newly created compartment is
+  the ':default' optag.
+  
+  It is important that you read the L<Opcode> module documentation
+  for more information, especially for detailed definitions of opnames,
+  optags and opsets.
+  
+  Since it is only at the compilation stage that the operator mask
+  applies, controlled access to potentially unsafe operations can
+  be achieved by having a handle to a wrapper subroutine (written
+  outside the compartment) placed into the compartment. For example,
+  
+      $cpt = new Safe;
+      sub wrapper {
+          # vet arguments and perform potentially unsafe operations
+      }
+      $cpt->share('&wrapper');
+  
+  =back
+  
+  
+  =head1 WARNING
+  
+  The authors make B<no warranty>, implied or otherwise, about the
+  suitability of this software for safety or security purposes.
+  
+  The authors shall not in any case be liable for special, incidental,
+  consequential, indirect or other similar damages arising from the use
+  of this software.
+  
+  Your mileage will vary. If in any doubt B<do not use it>.
+  
+  
+  =head1 METHODS
+  
+  To create a new compartment, use
+  
+      $cpt = new Safe;
+  
+  Optional argument is (NAMESPACE), where NAMESPACE is the root namespace
+  to use for the compartment (defaults to "Safe::Root0", incremented for
+  each new compartment).
+  
+  Note that version 1.00 of the Safe module supported a second optional
+  parameter, MASK.  That functionality has been withdrawn pending deeper
+  consideration. Use the permit and deny methods described below.
+  
+  The following methods can then be used on the compartment
+  object returned by the above constructor. The object argument
+  is implicit in each case.
+  
+  
+  =head2 permit (OP, ...)
+  
+  Permit the listed operators to be used when compiling code in the
+  compartment (in I<addition> to any operators already permitted).
+  
+  You can list opcodes by names, or use a tag name; see
+  L<Opcode/"Predefined Opcode Tags">.
+  
+  =head2 permit_only (OP, ...)
+  
+  Permit I<only> the listed operators to be used when compiling code in
+  the compartment (I<no> other operators are permitted).
+  
+  =head2 deny (OP, ...)
+  
+  Deny the listed operators from being used when compiling code in the
+  compartment (other operators may still be permitted).
+  
+  =head2 deny_only (OP, ...)
+  
+  Deny I<only> the listed operators from being used when compiling code
+  in the compartment (I<all> other operators will be permitted, so you probably
+  don't want to use this method).
+  
+  =head2 trap (OP, ...)
+  
+  =head2 untrap (OP, ...)
+  
+  The trap and untrap methods are synonyms for deny and permit
+  respectfully.
+  
+  =head2 share (NAME, ...)
+  
+  This shares the variable(s) in the argument list with the compartment.
+  This is almost identical to exporting variables using the L<Exporter>
+  module.
+  
+  Each NAME must be the B<name> of a non-lexical variable, typically
+  with the leading type identifier included. A bareword is treated as a
+  function name.
+  
+  Examples of legal names are '$foo' for a scalar, '@foo' for an
+  array, '%foo' for a hash, '&foo' or 'foo' for a subroutine and '*foo'
+  for a glob (i.e.  all symbol table entries associated with "foo",
+  including scalar, array, hash, sub and filehandle).
+  
+  Each NAME is assumed to be in the calling package. See share_from
+  for an alternative method (which C<share> uses).
+  
+  =head2 share_from (PACKAGE, ARRAYREF)
+  
+  This method is similar to share() but allows you to explicitly name the
+  package that symbols should be shared from. The symbol names (including
+  type characters) are supplied as an array reference.
+  
+      $safe->share_from('main', [ '$foo', '%bar', 'func' ]);
+  
+  Names can include package names, which are relative to the specified PACKAGE.
+  So these two calls have the same effect:
+  
+      $safe->share_from('Scalar::Util', [ 'reftype' ]);
+      $safe->share_from('main', [ 'Scalar::Util::reftype' ]);
+  
+  =head2 varglob (VARNAME)
+  
+  This returns a glob reference for the symbol table entry of VARNAME in
+  the package of the compartment. VARNAME must be the B<name> of a
+  variable without any leading type marker. For example:
+  
+      ${$cpt->varglob('foo')} = "Hello world";
+  
+  has the same effect as:
+  
+      $cpt = new Safe 'Root';
+      $Root::foo = "Hello world";
+  
+  but avoids the need to know $cpt's package name.
+  
+  
+  =head2 reval (STRING, STRICT)
+  
+  This evaluates STRING as perl code inside the compartment.
+  
+  The code can only see the compartment's namespace (as returned by the
+  B<root> method). The compartment's root package appears to be the
+  C<main::> package to the code inside the compartment.
+  
+  Any attempt by the code in STRING to use an operator which is not permitted
+  by the compartment will cause an error (at run-time of the main program
+  but at compile-time for the code in STRING).  The error is of the form
+  "'%s' trapped by operation mask...".
+  
+  If an operation is trapped in this way, then the code in STRING will
+  not be executed. If such a trapped operation occurs or any other
+  compile-time or return error, then $@ is set to the error message, just
+  as with an eval().
+  
+  If there is no error, then the method returns the value of the last
+  expression evaluated, or a return statement may be used, just as with
+  subroutines and B<eval()>. The context (list or scalar) is determined
+  by the caller as usual.
+  
+  If the return value of reval() is (or contains) any code reference,
+  those code references are wrapped to be themselves executed always
+  in the compartment. See L</wrap_code_refs_within>.
+  
+  The formerly undocumented STRICT argument sets strictness: if true
+  'use strict;' is used, otherwise it uses 'no strict;'. B<Note>: if
+  STRICT is omitted 'no strict;' is the default.
+  
+  Some points to note:
+  
+  If the entereval op is permitted then the code can use eval "..." to
+  'hide' code which might use denied ops. This is not a major problem
+  since when the code tries to execute the eval it will fail because the
+  opmask is still in effect. However this technique would allow clever,
+  and possibly harmful, code to 'probe' the boundaries of what is
+  possible.
+  
+  Any string eval which is executed by code executing in a compartment,
+  or by code called from code executing in a compartment, will be eval'd
+  in the namespace of the compartment. This is potentially a serious
+  problem.
+  
+  Consider a function foo() in package pkg compiled outside a compartment
+  but shared with it. Assume the compartment has a root package called
+  'Root'. If foo() contains an eval statement like eval '$foo = 1' then,
+  normally, $pkg::foo will be set to 1.  If foo() is called from the
+  compartment (by whatever means) then instead of setting $pkg::foo, the
+  eval will actually set $Root::pkg::foo.
+  
+  This can easily be demonstrated by using a module, such as the Socket
+  module, which uses eval "..." as part of an AUTOLOAD function. You can
+  'use' the module outside the compartment and share an (autoloaded)
+  function with the compartment. If an autoload is triggered by code in
+  the compartment, or by any code anywhere that is called by any means
+  from the compartment, then the eval in the Socket module's AUTOLOAD
+  function happens in the namespace of the compartment. Any variables
+  created or used by the eval'd code are now under the control of
+  the code in the compartment.
+  
+  A similar effect applies to I<all> runtime symbol lookups in code
+  called from a compartment but not compiled within it.
+  
+  =head2 rdo (FILENAME)
+  
+  This evaluates the contents of file FILENAME inside the compartment.
+  See above documentation on the B<reval> method for further details.
+  
+  =head2 root (NAMESPACE)
+  
+  This method returns the name of the package that is the root of the
+  compartment's namespace.
+  
+  Note that this behaviour differs from version 1.00 of the Safe module
+  where the root module could be used to change the namespace. That
+  functionality has been withdrawn pending deeper consideration.
+  
+  =head2 mask (MASK)
+  
+  This is a get-or-set method for the compartment's operator mask.
+  
+  With no MASK argument present, it returns the current operator mask of
+  the compartment.
+  
+  With the MASK argument present, it sets the operator mask for the
+  compartment (equivalent to calling the deny_only method).
+  
+  =head2 wrap_code_ref (CODEREF)
+  
+  Returns a reference to an anonymous subroutine that, when executed, will call
+  CODEREF with the Safe compartment 'in effect'.  In other words, with the
+  package namespace adjusted and the opmask enabled.
+  
+  Note that the opmask doesn't affect the already compiled code, it only affects
+  any I<further> compilation that the already compiled code may try to perform.
+  
+  This is particularly useful when applied to code references returned from reval().
+  
+  (It also provides a kind of workaround for RT#60374: "Safe.pm sort {} bug with
+  -Dusethreads". See L<http://rt.perl.org/rt3//Public/Bug/Display.html?id=60374>
+  for I<much> more detail.)
+  
+  =head2 wrap_code_refs_within (...)
+  
+  Wraps any CODE references found within the arguments by replacing each with the
+  result of calling L</wrap_code_ref> on the CODE reference. Any ARRAY or HASH
+  references in the arguments are inspected recursively.
+  
+  Returns nothing.
+  
+  =head1 RISKS
+  
+  This section is just an outline of some of the things code in a compartment
+  might do (intentionally or unintentionally) which can have an effect outside
+  the compartment.
+  
+  =over 8
+  
+  =item Memory
+  
+  Consuming all (or nearly all) available memory.
+  
+  =item CPU
+  
+  Causing infinite loops etc.
+  
+  =item Snooping
+  
+  Copying private information out of your system. Even something as
+  simple as your user name is of value to others. Much useful information
+  could be gleaned from your environment variables for example.
+  
+  =item Signals
+  
+  Causing signals (especially SIGFPE and SIGALARM) to affect your process.
+  
+  Setting up a signal handler will need to be carefully considered
+  and controlled.  What mask is in effect when a signal handler
+  gets called?  If a user can get an imported function to get an
+  exception and call the user's signal handler, does that user's
+  restricted mask get re-instated before the handler is called?
+  Does an imported handler get called with its original mask or
+  the user's one?
+  
+  =item State Changes
+  
+  Ops such as chdir obviously effect the process as a whole and not just
+  the code in the compartment. Ops such as rand and srand have a similar
+  but more subtle effect.
+  
+  =back
+  
+  =head1 AUTHOR
+  
+  Originally designed and implemented by Malcolm Beattie.
+  
+  Reworked to use the Opcode module and other changes added by Tim Bunce.
+  
+  Currently maintained by the Perl 5 Porters, <perl5-porters@perl.org>.
+  
+  =cut
+  
+5.10_SAFE
+
+$fatpacked{"5.10/Scalar/Util.pm"} = <<'5.10_SCALAR_UTIL';
+  # Scalar::Util.pm
+  #
+  # Copyright (c) 1997-2007 Graham Barr <gbarr@pobox.com>. All rights reserved.
+  # This program is free software; you can redistribute it and/or
+  # modify it under the same terms as Perl itself.
+  
+  package Scalar::Util;
+  
+  use strict;
+  use vars qw(@ISA @EXPORT_OK $VERSION @EXPORT_FAIL);
+  require Exporter;
+  require List::Util; # List::Util loads the XS
+  
+  @ISA       = qw(Exporter);
+  @EXPORT_OK = qw(blessed dualvar reftype weaken isweak tainted readonly openhandle refaddr isvstring looks_like_number set_prototype);
+  $VERSION    = "1.23";
+  $VERSION   = eval $VERSION;
+  
+  unless (defined &dualvar) {
+    # Load Pure Perl version if XS not loaded
+    require Scalar::Util::PP;
+    Scalar::Util::PP->import;
+    push @EXPORT_FAIL, qw(weaken isweak dualvar isvstring set_prototype);
+  }
+  
+  sub export_fail {
+    if (grep { /dualvar/ } @EXPORT_FAIL) { # no XS loaded
+      my $pat = join("|", @EXPORT_FAIL);
+      if (my ($err) = grep { /^($pat)$/ } @_ ) {
+        require Carp;
+        Carp::croak("$err is only available with the XS version of Scalar::Util");
+      }
+    }
+  
+    if (grep { /^(weaken|isweak)$/ } @_ ) {
+      require Carp;
+      Carp::croak("Weak references are not implemented in the version of perl");
+    }
+  
+    if (grep { /^(isvstring)$/ } @_ ) {
+      require Carp;
+      Carp::croak("Vstrings are not implemented in the version of perl");
+    }
+  
+    @_;
+  }
+  
+  sub openhandle ($) {
+    my $fh = shift;
+    my $rt = reftype($fh) || '';
+  
+    return defined(fileno($fh)) ? $fh : undef
+      if $rt eq 'IO';
+  
+    if (reftype(\$fh) eq 'GLOB') { # handle  openhandle(*DATA)
+      $fh = \(my $tmp=$fh);
+    }
+    elsif ($rt ne 'GLOB') {
+      return undef;
+    }
+  
+    (tied(*$fh) or defined(fileno($fh)))
+      ? $fh : undef;
+  }
+  
+  1;
+  
+  __END__
+  
+  =head1 NAME
+  
+  Scalar::Util - A selection of general-utility scalar subroutines
+  
+  =head1 SYNOPSIS
+  
+      use Scalar::Util qw(blessed dualvar isweak readonly refaddr reftype tainted
+                          weaken isvstring looks_like_number set_prototype);
+                          # and other useful utils appearing below
+  
+  =head1 DESCRIPTION
+  
+  C<Scalar::Util> contains a selection of subroutines that people have
+  expressed would be nice to have in the perl core, but the usage would
+  not really be high enough to warrant the use of a keyword, and the size
+  so small such that being individual extensions would be wasteful.
+  
+  By default C<Scalar::Util> does not export any subroutines. The
+  subroutines defined are
+  
+  =over 4
+  
+  =item blessed EXPR
+  
+  If EXPR evaluates to a blessed reference the name of the package
+  that it is blessed into is returned. Otherwise C<undef> is returned.
+  
+     $scalar = "foo";
+     $class  = blessed $scalar;           # undef
+  
+     $ref    = [];
+     $class  = blessed $ref;              # undef
+  
+     $obj    = bless [], "Foo";
+     $class  = blessed $obj;              # "Foo"
+  
+  =item dualvar NUM, STRING
+  
+  Returns a scalar that has the value NUM in a numeric context and the
+  value STRING in a string context.
+  
+      $foo = dualvar 10, "Hello";
+      $num = $foo + 2;                    # 12
+      $str = $foo . " world";             # Hello world
+  
+  =item isvstring EXPR
+  
+  If EXPR is a scalar which was coded as a vstring the result is true.
+  
+      $vs   = v49.46.48;
+      $fmt  = isvstring($vs) ? "%vd" : "%s"; #true
+      printf($fmt,$vs);
+  
+  =item isweak EXPR
+  
+  If EXPR is a scalar which is a weak reference the result is true.
+  
+      $ref  = \$foo;
+      $weak = isweak($ref);               # false
+      weaken($ref);
+      $weak = isweak($ref);               # true
+  
+  B<NOTE>: Copying a weak reference creates a normal, strong, reference.
+  
+      $copy = $ref;
+      $weak = isweak($copy);              # false
+  
+  =item looks_like_number EXPR
+  
+  Returns true if perl thinks EXPR is a number. See
+  L<perlapi/looks_like_number>.
+  
+  =item openhandle FH
+  
+  Returns FH if FH may be used as a filehandle and is open, or FH is a tied
+  handle. Otherwise C<undef> is returned.
+  
+      $fh = openhandle(*STDIN);		# \*STDIN
+      $fh = openhandle(\*STDIN);		# \*STDIN
+      $fh = openhandle(*NOTOPEN);		# undef
+      $fh = openhandle("scalar");		# undef
+      
+  =item readonly SCALAR
+  
+  Returns true if SCALAR is readonly.
+  
+      sub foo { readonly($_[0]) }
+  
+      $readonly = foo($bar);              # false
+      $readonly = foo(0);                 # true
+  
+  =item refaddr EXPR
+  
+  If EXPR evaluates to a reference the internal memory address of
+  the referenced value is returned. Otherwise C<undef> is returned.
+  
+      $addr = refaddr "string";           # undef
+      $addr = refaddr \$var;              # eg 12345678
+      $addr = refaddr [];                 # eg 23456784
+  
+      $obj  = bless {}, "Foo";
+      $addr = refaddr $obj;               # eg 88123488
+  
+  =item reftype EXPR
+  
+  If EXPR evaluates to a reference the type of the variable referenced
+  is returned. Otherwise C<undef> is returned.
+  
+      $type = reftype "string";           # undef
+      $type = reftype \$var;              # SCALAR
+      $type = reftype [];                 # ARRAY
+  
+      $obj  = bless {}, "Foo";
+      $type = reftype $obj;               # HASH
+  
+  =item set_prototype CODEREF, PROTOTYPE
+  
+  Sets the prototype of the given function, or deletes it if PROTOTYPE is
+  undef. Returns the CODEREF.
+  
+      set_prototype \&foo, '$$';
+  
+  =item tainted EXPR
+  
+  Return true if the result of EXPR is tainted
+  
+      $taint = tainted("constant");       # false
+      $taint = tainted($ENV{PWD});        # true if running under -T
+  
+  =item weaken REF
+  
+  REF will be turned into a weak reference. This means that it will not
+  hold a reference count on the object it references. Also when the reference
+  count on that object reaches zero, REF will be set to undef.
+  
+  This is useful for keeping copies of references , but you don't want to
+  prevent the object being DESTROY-ed at its usual time.
+  
+      {
+        my $var;
+        $ref = \$var;
+        weaken($ref);                     # Make $ref a weak reference
+      }
+      # $ref is now undef
+  
+  Note that if you take a copy of a scalar with a weakened reference,
+  the copy will be a strong reference.
+  
+      my $var;
+      my $foo = \$var;
+      weaken($foo);                       # Make $foo a weak reference
+      my $bar = $foo;                     # $bar is now a strong reference
+  
+  This may be less obvious in other situations, such as C<grep()>, for instance
+  when grepping through a list of weakened references to objects that may have
+  been destroyed already:
+  
+      @object = grep { defined } @object;
+  
+  This will indeed remove all references to destroyed objects, but the remaining
+  references to objects will be strong, causing the remaining objects to never
+  be destroyed because there is now always a strong reference to them in the
+  @object array.
+  
+  =back
+  
+  =head1 DIAGNOSTICS
+  
+  Module use may give one of the following errors during import.
+  
+  =over
+  
+  =item Weak references are not implemented in the version of perl
+  
+  The version of perl that you are using does not implement weak references, to use
+  C<isweak> or C<weaken> you will need to use a newer release of perl.
+  
+  =item Vstrings are not implemented in the version of perl
+  
+  The version of perl that you are using does not implement Vstrings, to use
+  C<isvstring> you will need to use a newer release of perl.
+  
+  =item C<NAME> is only available with the XS version of Scalar::Util
+  
+  C<Scalar::Util> contains both perl and C implementations of many of its functions
+  so that those without access to a C compiler may still use it. However some of the functions
+  are only available when a C compiler was available to compile the XS version of the extension.
+  
+  At present that list is: weaken, isweak, dualvar, isvstring, set_prototype
+  
+  =back
+  
+  =head1 KNOWN BUGS
+  
+  There is a bug in perl5.6.0 with UV's that are >= 1<<31. This will
+  show up as tests 8 and 9 of dualvar.t failing
+  
+  =head1 SEE ALSO
+  
+  L<List::Util>
+  
+  =head1 COPYRIGHT
+  
+  Copyright (c) 1997-2007 Graham Barr <gbarr@pobox.com>. All rights reserved.
+  This program is free software; you can redistribute it and/or modify it
+  under the same terms as Perl itself.
+  
+  Except weaken and isweak which are
+  
+  Copyright (c) 1999 Tuomas J. Lukka <lukka@iki.fi>. All rights reserved.
+  This program is free software; you can redistribute it and/or modify it
+  under the same terms as perl itself.
+  
+  =cut
+5.10_SCALAR_UTIL
+
+$fatpacked{"5.10/Scalar/Util/PP.pm"} = <<'5.10_SCALAR_UTIL_PP';
+  # Scalar::Util::PP.pm
+  #
+  # Copyright (c) 1997-2009 Graham Barr <gbarr@pobox.com>. All rights reserved.
+  # This program is free software; you can redistribute it and/or
+  # modify it under the same terms as Perl itself.
+  #
+  # This module is normally only loaded if the XS module is not available
+  
+  package Scalar::Util::PP;
+  
+  use strict;
+  use warnings;
+  use vars qw(@ISA @EXPORT $VERSION $recurse);
+  require Exporter;
+  use B qw(svref_2object);
+  
+  @ISA     = qw(Exporter);
+  @EXPORT  = qw(blessed reftype tainted readonly refaddr looks_like_number);
+  $VERSION = "1.23";
+  $VERSION = eval $VERSION;
+  
+  sub blessed ($) {
+    return undef unless length(ref($_[0]));
+    my $b = svref_2object($_[0]);
+    return undef unless $b->isa('B::PVMG');
+    my $s = $b->SvSTASH;
+    return $s->isa('B::HV') ? $s->NAME : undef;
+  }
+  
+  sub refaddr($) {
+    return undef unless length(ref($_[0]));
+  
+    my $addr;
+    if(defined(my $pkg = blessed($_[0]))) {
+      $addr .= bless $_[0], 'Scalar::Util::Fake';
+      bless $_[0], $pkg;
+    }
+    else {
+      $addr .= $_[0]
+    }
+  
+    $addr =~ /0x(\w+)/;
+    local $^W;
+    no warnings 'portable';
+    hex($1);
+  }
+  
+  {
+    my %tmap = qw(
+      B::NULL   SCALAR
+  
+      B::HV     HASH
+      B::AV     ARRAY
+      B::CV     CODE
+      B::IO     IO
+      B::GV     GLOB
+      B::REGEXP REGEXP
+    );
+  
+    sub reftype ($) {
+      my $r = shift;
+  
+      return undef unless length(ref($r));
+  
+      my $t = ref(svref_2object($r));
+  
+      return
+          exists $tmap{$t} ? $tmap{$t}
+        : length(ref($$r)) ? 'REF'
+        :                    'SCALAR';
+    }
+  }
+  
+  sub tainted {
+    local($@, $SIG{__DIE__}, $SIG{__WARN__});
+    local $^W = 0;
+    no warnings;
+    eval { kill 0 * $_[0] };
+    $@ =~ /^Insecure/;
+  }
+  
+  sub readonly {
+    return 0 if tied($_[0]) || (ref(\($_[0])) ne "SCALAR");
+  
+    local($@, $SIG{__DIE__}, $SIG{__WARN__});
+    my $tmp = $_[0];
+  
+    !eval { $_[0] = $tmp; 1 };
+  }
+  
+  sub looks_like_number {
+    local $_ = shift;
+  
+    # checks from perlfaq4
+    return 0 if !defined($_);
+    if (ref($_)) {
+      require overload;
+      return overload::Overloaded($_) ? defined(0 + $_) : 0;
+    }
+    return 1 if (/^[+-]?[0-9]+$/); # is a +/- integer
+    return 1 if (/^([+-]?)(?=[0-9]|\.[0-9])[0-9]*(\.[0-9]*)?([Ee]([+-]?[0-9]+))?$/); # a C float
+    return 1 if ($] >= 5.008 and /^(Inf(inity)?|NaN)$/i) or ($] >= 5.006001 and /^Inf$/i);
+  
+    0;
+  }
+  
+  
+  1;
+5.10_SCALAR_UTIL_PP
+
+$fatpacked{"App/Cmd.pm"} = <<'APP_CMD';
+  use strict;
+  use warnings;
+  use 5.006;
+  
+  package App::Cmd;
+  BEGIN {
+    $App::Cmd::VERSION = '0.310';
+  }
+  use App::Cmd::ArgProcessor;
+  BEGIN { our @ISA = 'App::Cmd::ArgProcessor' };
+  # ABSTRACT: write command line apps with less suffering
+  
+  use File::Basename ();
+  use Module::Pluggable::Object ();
+  use Text::Abbrev ();
+  use Class::Load ();
+  
+  use Sub::Exporter -setup => {
+    collectors => {
+      -command => \'_setup_command',
+      -run     => sub {
+        warn "using -run to run your command is deprecated\n";
+        $_[1]->{class}->run; 1
+      },
+    },
+  };
+  
+  sub _setup_command {
+    my ($self, $val, $data) = @_;
+    my $into = $data->{into};
+  
+    Carp::confess "App::Cmd -command setup requested for already-setup class"
+      if $into->isa('App::Cmd::Command');
+  
+    {
+      my $base = $self->_default_command_base;
+      Class::Load::load_class($base);
+      no strict 'refs';
+      push @{"$into\::ISA"}, $base;
+    }
+  
+    $self->_register_command($into);
+  
+    for my $plugin ($self->_plugin_plugins) {
+      $plugin->import_from_plugin({ into => $into });
+    }
+  
+    1;
+  }
+  
+  sub _plugin_plugins { return }
+  
+  
+  sub new {
+    my ($class, $arg) = @_;
+  
+    my $arg0 = $0;
+    my $base = File::Basename::basename $arg0;
+  
+    my $self = {
+      command   => $class->_command($arg),
+      arg0      => $base,
+      full_arg0 => $arg0,
+    };
+  
+    bless $self => $class;
+  }
+  
+  # effectively, returns the command-to-plugin mapping guts of a Cmd
+  # if called on a class or on a Cmd with no mapping, construct a new hashref
+  # suitable for use as the object's mapping
+  sub _command {
+    my ($self, $arg) = @_;
+    return $self->{command} if ref $self and $self->{command};
+  
+    # TODO _default_command_base can be wrong if people are not using
+    # ::Setup and have no ::Command :(
+    #
+    #  my $want_isa = $self->_default_command_base;
+    # -- kentnl, 2010-12
+     my $want_isa = 'App::Cmd::Command';
+  
+    my %plugin;
+    for my $plugin ($self->_plugins) {
+      Class::Load::load_class($plugin);
+  
+      die "$plugin is not a " . $want_isa
+        unless $plugin->isa($want_isa);
+  
+      next unless $plugin->can("command_names");
+  
+      foreach my $command (map { lc } $plugin->command_names) {
+        die "two plugins for command $command: $plugin and $plugin{$command}\n"
+          if exists $plugin{$command};
+  
+        $plugin{$command} = $plugin;
+      }
+    }
+  
+    $self->_load_default_plugin($_, $arg, \%plugin) for qw(commands help);
+  
+    if ($self->allow_any_unambiguous_abbrev) {
+      # add abbreviations to list of authorized commands
+      my %abbrev = Text::Abbrev::abbrev( keys %plugin );
+      @plugin{ keys %abbrev } = @plugin{ values %abbrev };
+    }
+  
+    return \%plugin;
+  }
+  
+  # ->_plugins won't be called more than once on any given App::Cmd, but since
+  # finding plugins can be a bit expensive, we'll do a lousy cache here.
+  # -- rjbs, 2007-10-09
+  my %plugins_for;
+  sub _plugins {
+    my ($self) = @_;
+    my $class = ref $self || $self;
+  
+    return @{ $plugins_for{$class} } if $plugins_for{$class};
+  
+    my $finder = Module::Pluggable::Object->new(
+      search_path => $self->plugin_search_path,
+      $self->_module_pluggable_options,
+    );
+  
+    my @plugins = $finder->plugins;
+    $plugins_for{$class} = \@plugins;
+  
+    return @plugins;
+  }
+  
+  sub _register_command {
+    my ($self, $cmd_class) = @_;
+    $self->_plugins;
+  
+    my $class = ref $self || $self;
+    push @{ $plugins_for{ $class } }, $cmd_class
+      unless grep { $_ eq $cmd_class } @{ $plugins_for{ $class } };
+  }
+  
+  sub _module_pluggable_options {
+    # my ($self) = @_; # no point in creating these ops, just to toss $self
+    return;
+  }
+  
+  # load one of the stock plugins, unless requested to squash; unlike normal
+  # plugin loading, command-to-plugin mapping conflicts are silently ignored
+  sub _load_default_plugin {
+    my ($self, $plugin_name, $arg, $plugin_href) = @_;
+    unless ($arg->{"no_$plugin_name\_plugin"}) {
+      my $plugin = "App::Cmd::Command::$plugin_name";
+      Class::Load::load_class($plugin);
+      for my $command (map { lc } $plugin->command_names) {
+        $plugin_href->{$command} ||= $plugin;
+      }
+    }
+  }
+  
+  
+  sub run {
+    my ($self) = @_;
+  
+    # We should probably use Class::Default.
+    $self = $self->new unless ref $self;
+  
+    # prepare the command we're going to run...
+    my ($cmd, $opt, @args) = $self->prepare_command(@ARGV);
+  
+    # ...and then run it
+    $self->execute_command($cmd, $opt, @args);
+  }
+  
+  
+  sub arg0      { $_[0]->{arg0} }
+  sub full_arg0 { $_[0]->{full_arg0} }
+  
+  
+  sub prepare_command {
+    my ($self, @args) = @_;
+  
+    # figure out first-level dispatch
+    my ($command, $opt, @sub_args) = $self->get_command(@args);
+  
+    # set up the global options (which we just determined)
+    $self->set_global_options($opt);
+  
+    # find its plugin or else call default plugin (default default is help)
+    if ($command) {
+      $self->_prepare_command($command, $opt, @sub_args);
+    } else {
+      $self->_prepare_default_command($opt, @sub_args);
+    }
+  }
+  
+  sub _prepare_command {
+    my ($self, $command, $opt, @args) = @_;
+    if (my $plugin = $self->plugin_for($command)) {
+      return $plugin->prepare($self, @args);
+    } else {
+      return $self->_bad_command($command, $opt, @args);
+    }
+  }
+  
+  sub _prepare_default_command {
+    my ($self, $opt, @sub_args) = @_;
+    $self->_prepare_command($self->default_command, $opt, @sub_args);
+  }
+  
+  sub _bad_command {
+    my ($self, $command, $opt, @args) = @_;
+    print "Unrecognized command: $command.\n\nUsage:\n" if defined($command);
+  
+    # This should be class data so that, in Bizarro World, two App::Cmds will not
+    # conflict.
+    our $_bad++;
+    $self->prepare_command("commands");
+  }
+  
+  END { exit 1 if our $_bad };
+  
+  
+  sub default_command { "help" }
+  
+  
+  sub execute_command {
+    my ($self, $cmd, $opt, @args) = @_;
+  
+    local our $active_cmd = $cmd;
+  
+    $cmd->validate_args($opt, \@args);
+    $cmd->execute($opt, \@args);
+  }
+  
+  
+  sub _default_command_base {
+    my ($self) = @_;
+    my $class = ref $self || $self;
+    return "$class\::Command";
+  }
+  
+  sub _default_plugin_base {
+    my ($self) = @_;
+    my $class = ref $self || $self;
+    return "$class\::Plugin";
+  }
+  
+  sub plugin_search_path {
+    my ($self) = @_;
+  
+    my $dcb = $self->_default_command_base;
+    my $ccb = $dcb eq 'App::Cmd::Command'
+            ? $self->App::Cmd::_default_command_base
+            : $self->_default_command_base;
+  
+    my @default = ($ccb, $self->_default_plugin_base);
+  
+    if (ref $self) {
+      return $self->{plugin_search_path} ||= \@default;
+    } else {
+      return \@default;
+    }
+  }
+  
+  
+  sub allow_any_unambiguous_abbrev { return 0 }
+  
+  
+  sub global_options {
+  	my $self = shift;
+  	return $self->{global_options} ||= {} if ref $self;
+    return {};
+  }
+  
+  
+  sub set_global_options {
+    my ($self, $opt) = @_;
+    return $self->{global_options} = $opt;
+  }
+  
+  
+  sub command_names {
+    my ($self) = @_;
+    keys %{ $self->_command };
+  }
+  
+  
+  sub command_plugins {
+    my ($self) = @_;
+    my %seen = map {; $_ => 1 } values %{ $self->_command };
+    keys %seen;
+  }
+  
+  
+  sub plugin_for {
+    my ($self, $command) = @_;
+    return unless exists $self->_command->{ $command };
+  
+    return $self->_command->{ $command };
+  }
+  
+  
+  sub get_command {
+    my ($self, @args) = @_;
+  
+    my ($opt, $args, %fields)
+      = $self->_process_args(\@args, $self->_global_option_processing_params);
+  
+    my ($command, $rest) = $self->_cmd_from_args($args);
+  
+    $self->{usage} = $fields{usage};
+  
+    return ($command, $opt, @$rest);
+  }
+  
+  sub _cmd_from_args {
+    my ($self, $args) = @_;
+  
+    my $command = shift @$args;
+    return ($command, $args);
+  }
+  
+  sub _global_option_processing_params {
+    my ($self, @args) = @_;
+  
+    return (
+      $self->usage_desc(@args),
+      $self->global_opt_spec(@args),
+      { getopt_conf => [qw/pass_through/] },
+    );
+  }
+  
+  
+  sub usage { $_[0]{usage} };
+  
+  
+  sub usage_desc {
+    # my ($self) = @_; # no point in creating these ops, just to toss $self
+    return "%c %o <command>";
+  }
+  
+  
+  sub global_opt_spec {
+    # my ($self) = @_; # no point in creating these ops, just to toss $self
+    return;
+  }
+  
+  
+  sub usage_error {
+    my ($self, $error) = @_;
+    die "Error: $error\nUsage: " . $self->_usage_text;
+  }
+  
+  sub _usage_text {
+    my ($self) = @_;
+    my $text = $self->usage->text;
+    $text =~ s/\A(\s+)/!/;
+    return $text;
+  }
+  
+  
+  1;
+  
+  __END__
+  =pod
+  
+  =head1 NAME
+  
+  App::Cmd - write command line apps with less suffering
+  
+  =head1 VERSION
+  
+  version 0.310
+  
+  =head1 SYNOPSIS
+  
+  in F<yourcmd>:
+  
+    use YourApp;
+    YourApp->run;
+  
+  in F<YourApp.pm>:
+  
+    package YourApp;
+    use App::Cmd::Setup -app;
+    1;
+  
+  in F<YourApp/Command/blort.pm>:
+  
+    package YourApp::Command::blort;
+    use YourApp -command;
+    use strict; use warnings;
+  
+    sub opt_spec {
+      return (
+        [ "blortex|X",  "use the blortex algorithm" ],
+        [ "recheck|r",  "recheck all results"       ],
+      );
+    }
+  
+    sub validate_args {
+      my ($self, $opt, $args) = @_;
+  
+      # no args allowed but options!
+      $self->usage_error("No args allowed") if @$args;
+    }
+  
+    sub execute {
+      my ($self, $opt, $args) = @_;
+  
+      my $result = $opt->{blortex} ? blortex() : blort();
+  
+      recheck($result) if $opt->{recheck};
+  
+      print $result;
+    }
+  
+  and, finally, at the command line:
+  
+    knight!rjbs$ yourcmd blort --recheck
+  
+    All blorts successful.
+  
+  =head1 DESCRIPTION
+  
+  App::Cmd is intended to make it easy to write complex command-line applications
+  without having to think about most of the annoying things usually involved.
+  
+  For information on how to start using App::Cmd, see L<App::Cmd::Tutorial>.
+  
+  =head1 METHODS
+  
+  =head2 new
+  
+    my $cmd = App::Cmd->new(\%arg);
+  
+  This method returns a new App::Cmd object.  During initialization, command
+  plugins will be loaded.
+  
+  Valid arguments are:
+  
+    no_commands_plugin - if true, the command list plugin is not added
+  
+    no_help_plugin     - if true, the help plugin is not added
+  
+    plugin_search_path - The path to search for commands in. Defaults to
+                         results of plugin_search_path method
+  
+  If C<no_commands_plugin> is not given, App::Cmd::Command::commands will be
+  required, and it will be registered to handle all of its command names not
+  handled by other plugins.
+  
+  If C<no_help_plugin> is not given, App::Cmd::Command::help will be required,
+  and it will be registered to handle all of its command names not handled by
+  other plugins. B<Note:> "help" is the default command, so if you do not load
+  the default help plugin, you should provide our own or override the
+  C<default_command> method.
+  
+  =head2 run
+  
+    $cmd->run;
+  
+  This method runs the application.  If called the class, it will instantiate a
+  new App::Cmd object to run.
+  
+  It determines the requested command (generally by consuming the first
+  command-line argument), finds the plugin to handle that command, parses the
+  remaining arguments according to that plugin's rules, and runs the plugin.
+  
+  It passes the contents of the global argument array (C<@ARGV>) to
+  L</C<prepare_command>>, but C<@ARGV> is not altered by running an App::Cmd.
+  
+  =head2 arg0
+  
+  =head2 full_arg0
+  
+    my $program_name = $app->arg0;
+  
+    my $full_program_name = $app->full_arg0;
+  
+  These methods return the name of the program invoked to run this application.
+  This is determined by inspecting C<$0> when the App::Cmd object is
+  instantiated, so it's probably correct, but doing weird things with App::Cmd
+  could lead to weird values from these methods.
+  
+  If the program was run like this:
+  
+    knight!rjbs$ ~/bin/rpg dice 3d6
+  
+  Then the methods return:
+  
+    arg0      - rpg
+    full_arg0 - /Users/rjbs/bin/rpg
+  
+  These values are captured when the App::Cmd object is created, so it is safe to
+  assign to C<$0> later.
+  
+  =head2 prepare_command
+  
+    my ($cmd, $opt, @args) = $app->prepare_command(@ARGV);
+  
+  This method will load the plugin for the requested command, use its options to
+  parse the command line arguments, and eventually return everything necessary to
+  actually execute the command.
+  
+  =head2 default_command
+  
+  This method returns the name of the command to run if none is given on the
+  command line.  The default default is "help"
+  
+  =head2 execute_command
+  
+    $app->execute_command($cmd, \%opt, @args);
+  
+  This method will invoke C<validate_args> and then C<run> on C<$cmd>.
+  
+  =head2 plugin_search_path
+  
+  This method returns the plugin_search_path as set.  The default implementation,
+  if called on "YourApp::Cmd" will return "YourApp::Cmd::Command"
+  
+  This is a method because it's fun to override it with, for example:
+  
+    use constant plugin_search_path => __PACKAGE__;
+  
+  =head2 allow_any_unambiguous_abbrev
+  
+  If this method returns true (which, by default, it does I<not>), then any
+  unambiguous abbreviation for a registered command name will be allowed as a
+  means to use that command.  For example, given the following commands:
+  
+    reticulate
+    reload
+    rasterize
+  
+  Then the user could use C<ret> for C<reticulate> or C<ra> for C<rasterize> and
+  so on.
+  
+  =head2 global_options
+  
+    if ($cmd->app->global_options->{verbose}) { ... }
+  
+  This method returns the running application's global options as a hashref.  If
+  there are no options specified, an empty hashref is returend.
+  
+  =head2 set_global_options
+  
+    $app->set_global_options(\%opt);
+  
+  This method sets the global options.
+  
+  =head2 command_names
+  
+    my @names = $cmd->command_names;
+  
+  This returns the commands names which the App::Cmd object will handle.
+  
+  =head2 command_plugins
+  
+    my @plugins = $cmd->command_plugins;
+  
+  This method returns the package names of the plugins that implement the
+  App::Cmd object's commands.
+  
+  =head2 plugin_for
+  
+    my $plugin = $cmd->plugin_for($command);
+  
+  This method returns the plugin (module) for the given command.  If no plugin
+  implements the command, it returns false.
+  
+  =head2 get_command
+  
+    my ($command_name, $opt, @args) = $app->get_command(@args);
+  
+  Process arguments and into a command name and (optional) global options.
+  
+  =head2 usage
+  
+    print $self->app->usage->text;
+  
+  Returns the usage object for the global options.
+  
+  =head2 usage_desc
+  
+  The top level usage line. Looks something like
+  
+    "yourapp [options] <command>"
+  
+  =head2 global_opt_spec
+  
+  Returns an empty list. Can be overridden for pre-dispatch option processing.
+  This is useful for flags like --verbose.
+  
+  =head2 usage_error
+  
+    $self->usage_error("Something's wrong!");
+  
+  Used to die with nice usage output, during C<validate_args>.
+  
+  =head1 TODO
+  
+  =over 4
+  
+  =item *
+  
+  publish and bring in Log::Speak (simple quiet/verbose output)
+  
+  =item *
+  
+  publish and use our internal enhanced describe_options
+  
+  =item *
+  
+  publish and use our improved simple input routines
+  
+  =back
+  
+  =head1 AUTHOR
+  
+  Ricardo Signes <rjbs@cpan.org>
+  
+  =head1 COPYRIGHT AND LICENSE
+  
+  This software is copyright (c) 2010 by Ricardo Signes.
+  
+  This is free software; you can redistribute it and/or modify it under
+  the same terms as the Perl 5 programming language system itself.
+  
+  =cut
+  
+APP_CMD
+
+$fatpacked{"App/Cmd/ArgProcessor.pm"} = <<'APP_CMD_ARGPROCESSOR';
+  use strict;
+  use warnings;
+  
+  package App::Cmd::ArgProcessor;
+  BEGIN {
+    $App::Cmd::ArgProcessor::VERSION = '0.310';
+  }
+  # ABSTRACT: App::Cmd-specific wrapper for Getopt::Long::Descriptive
+  
+  sub _process_args {
+    my ($class, $args, @params) = @_;
+    local @ARGV = @$args;
+  
+    require Getopt::Long::Descriptive;
+    Getopt::Long::Descriptive->VERSION(0.084);
+  
+    my ($opt, $usage) = Getopt::Long::Descriptive::describe_options(@params);
+  
+    return (
+      $opt,
+      [ @ARGV ], # whatever remained
+      usage => $usage,
+    );
+  }
+  
+  1;
+  
+  __END__
+  =pod
+  
+  =head1 NAME
+  
+  App::Cmd::ArgProcessor - App::Cmd-specific wrapper for Getopt::Long::Descriptive
+  
+  =head1 VERSION
+  
+  version 0.310
+  
+  =head1 AUTHOR
+  
+  Ricardo Signes <rjbs@cpan.org>
+  
+  =head1 COPYRIGHT AND LICENSE
+  
+  This software is copyright (c) 2010 by Ricardo Signes.
+  
+  This is free software; you can redistribute it and/or modify it under
+  the same terms as the Perl 5 programming language system itself.
+  
+  =cut
+  
+APP_CMD_ARGPROCESSOR
+
+$fatpacked{"App/Cmd/Command.pm"} = <<'APP_CMD_COMMAND';
+  use strict;
+  use warnings;
+  
+  package App::Cmd::Command;
+  BEGIN {
+    $App::Cmd::Command::VERSION = '0.310';
+  }
+  use App::Cmd::ArgProcessor;
+  BEGIN { our @ISA = 'App::Cmd::ArgProcessor' };
+  
+  # ABSTRACT: a base class for App::Cmd commands
+  
+  use Carp ();
+  
+  
+  sub prepare {
+    my ($class, $app, @args) = @_;
+  
+    my ($opt, $args, %fields)
+      = $class->_process_args(\@args, $class->_option_processing_params($app));
+  
+    return (
+      $class->new({ app => $app, %fields }),
+      $opt,
+      @$args,
+    );
+  }
+  
+  sub _option_processing_params {
+    my ($class, @args) = @_;
+  
+    return (
+      $class->usage_desc(@args),
+      $class->opt_spec(@args),
+    );
+  }
+  
+  
+  sub new {
+    my ($class, $arg) = @_;
+    bless $arg => $class;
+  }
+  
+  
+  sub execute {
+    my $class = shift;
+  
+    if (my $run = $class->can('run')) {
+      warn "App::Cmd::Command subclasses should implement ->execute not ->run"
+        if $ENV{HARNESS_ACTIVE};
+  
+      return $class->$run(@_);
+    }
+  
+    Carp::croak ref($class) . " does not implement mandatory method 'execute'\n";
+  }
+  
+  
+  sub app { $_[0]->{app}; }
+  
+  
+  sub usage { $_[0]->{usage}; }
+  
+  
+  sub command_names {
+    # from UNIVERSAL::moniker
+    (ref( $_[0] ) || $_[0]) =~ /([^:]+)$/;
+    return lc $1;
+  }
+  
+  
+  sub usage_desc {
+    my ($self) = @_;
+  
+    my ($command) = $self->command_names;
+    return "%c $command %o"
+  }
+  
+  
+  sub opt_spec {
+    return;
+  }
+  
+  
+  sub validate_args { }
+  
+  
+  sub usage_error {
+    my ( $self, $error ) = @_;
+    die "Error: $error\nUsage: " . $self->_usage_text;
+  }
+  
+  sub _usage_text {
+    my ($self) = @_;
+    local $@;
+    join "\n", eval { $self->app->_usage_text }, eval { $self->usage->text };
+  }
+  
+  
+  # stolen from ExtUtils::MakeMaker
+  sub abstract {
+    my ($class) = @_;
+    $class = ref $class if ref $class;
+  
+    my $result;
+  
+    (my $pm_file = $class) =~ s!::!/!g;
+    $pm_file .= '.pm';
+    $pm_file = $INC{$pm_file};
+    open my $fh, "<", $pm_file or return "(unknown)";
+  
+    local $/ = "\n";
+    my $inpod;
+  
+    while (local $_ = <$fh>) {
+      $inpod = /^=cut/ ? !$inpod : $inpod || /^=(?!cut)/; # =cut toggles, it doesn't end :-/
+  
+      next unless $inpod;
+      chomp;
+      next unless /^(?:$class\s-\s)(.*)/;
+      $result = $1;
+      last;
+    }
+    return $result || "(unknown)";
+  }
+  
+  
+  sub description { '' }
+  
+  1;
+  
+  __END__
+  =pod
+  
+  =head1 NAME
+  
+  App::Cmd::Command - a base class for App::Cmd commands
+  
+  =head1 VERSION
+  
+  version 0.310
+  
+  =head1 METHODS
+  
+  =head2 prepare
+  
+    my ($cmd, $opt, $args) = $class->prepare($app, @args);
+  
+  This method is the primary way in which App::Cmd::Command objects are built.
+  Given the remaining command line arguments meant for the command, it returns
+  the Command object, parsed options (as a hashref), and remaining arguments (as
+  an arrayref).
+  
+  In the usage above, C<$app> is the App::Cmd object that is invoking the
+  command.
+  
+  =head2 new
+  
+  This returns a new instance of the command plugin.  Probably only C<prepare>
+  should use this.
+  
+  =head2 execute
+  
+  =head2 app
+  
+  This method returns the App::Cmd object into which this command is plugged.
+  
+  =head2 usage
+  
+  This method returns the usage object for this command.  (See
+  L<Getopt::Long::Descriptive>).
+  
+  =head2 command_names
+  
+  This method returns a list of command names handled by this plugin.  If this
+  method is not overridden by a App::Cmd::Command subclass, it will return the
+  last part of the plugin's package name, converted to lowercase.
+  
+  For example, YourApp::Cmd::Command::Init will, by default, handle the command
+  "init"
+  
+  =head2 usage_desc
+  
+  This method should be overridden to provide a usage string.  (This is the first
+  argument passed to C<describe_options> from Getopt::Long::Descriptive.)
+  
+  If not overridden, it returns "%c COMMAND %o";  COMMAND is the first item in
+  the result of the C<command_names> method.
+  
+  =head2 opt_spec
+  
+  This method should be overridden to provide option specifications.  (This is
+  list of arguments passed to C<describe_options> from Getopt::Long::Descriptive,
+  after the first.)
+  
+  If not overridden, it returns an empty list.
+  
+  =head2 validate_args
+  
+    $command_plugin->validate_args(\%opt, \@args);
+  
+  This method is passed a hashref of command line options (as processed by
+  Getopt::Long::Descriptive) and an arrayref of leftover arguments.  It may throw
+  an exception (preferably by calling C<usage_error>, below) if they are invalid,
+  or it may do nothing to allow processing to continue.
+  
+  =head2 usage_error
+  
+    $self->usage_error("This command must not be run by root!");
+  
+  This method should be called to die with human-friendly usage output, during
+  C<validate_args>.
+  
+  =head2 abstract
+  
+  This method returns a short description of the command's purpose.  If this
+  method is not overridden, it will return the abstract from the module's POD.
+  If it can't find the abstract, it will return the string "(unknown")
+  
+  =head2 description
+  
+  This method should be overridden to provide full option description. It
+  is used by the help command.
+  
+  If not overridden, it returns an empty string.
+  
+  =for Pod::Coverage run
+  
+    $command_plugin->execute(\%opt, \@args);
+  
+  This method does whatever it is the command should do!  It is passed a hash
+  reference of the parsed command-line options and an array reference of left
+  over arguments.
+  
+  If no C<execute> method is defined, it will try to call C<run> -- but it will
+  warn about this behavior during testing, to remind you to fix the method name!
+  
+  =head1 AUTHOR
+  
+  Ricardo Signes <rjbs@cpan.org>
+  
+  =head1 COPYRIGHT AND LICENSE
+  
+  This software is copyright (c) 2010 by Ricardo Signes.
+  
+  This is free software; you can redistribute it and/or modify it under
+  the same terms as the Perl 5 programming language system itself.
+  
+  =cut
+  
+APP_CMD_COMMAND
+
+$fatpacked{"App/Cmd/Command/commands.pm"} = <<'APP_CMD_COMMAND_COMMANDS';
+  use strict;
+  use warnings;
+  
+  package App::Cmd::Command::commands;
+  BEGIN {
+    $App::Cmd::Command::commands::VERSION = '0.310';
+  }
+  use App::Cmd::Command;
+  BEGIN { our @ISA = 'App::Cmd::Command' };
+  
+  # ABSTRACT: list the application's commands
+  
+  
+  sub execute {
+    my ($self) = @_;
+  
+    local $@;
+    eval { print $self->app->_usage_text . "\n" };
+  
+    print "Available commands:\n\n";
+  
+    my @primary_commands =
+      map { ($_->command_names)[0] } 
+      $self->app->command_plugins;
+  
+    my @cmd_groups = $self->sort_commands(@primary_commands);
+  
+    my $fmt_width = 0;
+    for (@primary_commands) { $fmt_width = length if length > $fmt_width }
+    $fmt_width += 2; # pretty
+  
+    foreach my $cmd_set (@cmd_groups) {
+      for my $command (@$cmd_set) {
+        my $abstract = $self->app->plugin_for($command)->abstract;
+        printf "%${fmt_width}s: %s\n", $command, $abstract;
+      }
+      print "\n";
+    }
+  }
+  
+  
+  sub sort_commands {
+    my ($self, @commands) = @_;
+  
+    my $float = qr/^(?:help|commands)$/;
+  
+    my @head = sort grep { $_ =~ $float } @commands;
+    my @tail = sort grep { $_ !~ $float } @commands;
+  
+    return (\@head, \@tail);
+  }
+  
+  sub description {
+  "This command will list all of commands available and their abstracts.\n";
+  }
+  
+  
+  1;
+  
+  __END__
+  =pod
+  
+  =head1 NAME
+  
+  App::Cmd::Command::commands - list the application's commands
+  
+  =head1 VERSION
+  
+  version 0.310
+  
+  =head1 DESCRIPTION
+  
+  This command plugin implements a "commands" command.  This command will list
+  all of an App::Cmd's commands and their abstracts.
+  
+  =head1 METHODS
+  
+  =head2 execute
+  
+  This is the command's primary method and raison d'etre.  It prints the
+  application's usage text (if any) followed by a sorted listing of the
+  application's commands and their abstracts.
+  
+  The commands are printed in sorted groups (created by C<sort_commands>); each
+  group is set off by blank lines.
+  
+  =head2 C<sort_commands>
+  
+    my @sorted = $cmd->sort_commands(@unsorted);
+  
+  This method orders the list of commands into sets which it returns as a list of
+  arrayrefs.
+  
+  By default, the first group is for the "help" and "commands" commands, and all
+  other commands are in the second group.
+  
+  =head1 AUTHOR
+  
+  Ricardo Signes <rjbs@cpan.org>
+  
+  =head1 COPYRIGHT AND LICENSE
+  
+  This software is copyright (c) 2010 by Ricardo Signes.
+  
+  This is free software; you can redistribute it and/or modify it under
+  the same terms as the Perl 5 programming language system itself.
+  
+  =cut
+  
+APP_CMD_COMMAND_COMMANDS
+
+$fatpacked{"App/Cmd/Command/help.pm"} = <<'APP_CMD_COMMAND_HELP';
+  use strict;
+  use warnings;
+  
+  package App::Cmd::Command::help;
+  BEGIN {
+    $App::Cmd::Command::help::VERSION = '0.310';
+  }
+  use App::Cmd::Command;
+  BEGIN { our @ISA = 'App::Cmd::Command'; }
+  
+  # ABSTRACT: display a command's help screen
+  
+  
+  sub command_names { qw/help --help -h -?/ }
+  
+  sub description {
+  "This command will either list all of the application commands and their
+  abstracts, or display the usage screen for a subcommand with its
+  description.\n"
+  }
+  
+  sub execute {
+    my ($self, $opts, $args) = @_;
+  
+    if (!@$args) {
+      my $usage = $self->app->usage->text;
+      my $command = $0;
+  
+      # chars normally used to describe options
+      my $opt_descriptor_chars = qr/[\[\]<>\(\)]/;
+  
+      if ($usage =~ /^(.+?) \s* (?: $opt_descriptor_chars | $ )/x) {
+        # try to match subdispatchers too
+        $command = $1;
+      }
+      
+      # evil hack ;-)
+      bless
+        $self->app->{usage} = sub { return "$command help <command>\n" }
+        => "Getopt::Long::Descriptive::Usage";
+  
+      $self->app->execute_command( $self->app->_prepare_command("commands") );
+    } else {
+      my ($cmd, $opt, $args) = $self->app->prepare_command(@$args);
+  
+      local $@;
+      my $desc = $cmd->description;
+      $desc = "\n$desc" if length $desc;
+  
+      my $ut = join "\n",
+        eval { $cmd->usage->leader_text },
+        $desc,
+        eval { $cmd->usage->option_text };
+  
+      print $ut;
+    }
+  }
+  
+  1;
+  
+  __END__
+  =pod
+  
+  =head1 NAME
+  
+  App::Cmd::Command::help - display a command's help screen
+  
+  =head1 VERSION
+  
+  version 0.310
+  
+  =head1 DESCRIPTION
+  
+  This command plugin implements a "help" command.  This command will either list
+  all of an App::Cmd's commands and their abstracts, or display the usage screen
+  for a subcommand with its description.
+  
+  =head1 AUTHOR
+  
+  Ricardo Signes <rjbs@cpan.org>
+  
+  =head1 COPYRIGHT AND LICENSE
+  
+  This software is copyright (c) 2010 by Ricardo Signes.
+  
+  This is free software; you can redistribute it and/or modify it under
+  the same terms as the Perl 5 programming language system itself.
+  
+  =cut
+  
+APP_CMD_COMMAND_HELP
+
+$fatpacked{"App/Cmd/Plugin.pm"} = <<'APP_CMD_PLUGIN';
+  use strict;
+  use warnings;
+  package App::Cmd::Plugin;
+  BEGIN {
+    $App::Cmd::Plugin::VERSION = '0.310';
+  }
+  # ABSTRACT: a plugin for App::Cmd commands
+  
+  sub _faux_curried_method {
+    my ($class, $name, $arg) = @_;
+  
+    return sub {
+      my $cmd = $App::Cmd::active_cmd;
+      $class->$name($cmd, @_);
+    }
+  }
+  
+  1;
+  
+  __END__
+  =pod
+  
+  =head1 NAME
+  
+  App::Cmd::Plugin - a plugin for App::Cmd commands
+  
+  =head1 VERSION
+  
+  version 0.310
+  
+  =head1 AUTHOR
+  
+  Ricardo Signes <rjbs@cpan.org>
+  
+  =head1 COPYRIGHT AND LICENSE
+  
+  This software is copyright (c) 2010 by Ricardo Signes.
+  
+  This is free software; you can redistribute it and/or modify it under
+  the same terms as the Perl 5 programming language system itself.
+  
+  =cut
+  
+APP_CMD_PLUGIN
+
+$fatpacked{"App/Cmd/Setup.pm"} = <<'APP_CMD_SETUP';
+  use strict;
+  use warnings;
+  package App::Cmd::Setup;
+  BEGIN {
+    $App::Cmd::Setup::VERSION = '0.310';
+  }
+  # ABSTRACT: helper for setting up App::Cmd classes
+  
+  
+  use App::Cmd ();
+  use App::Cmd::Command ();
+  use App::Cmd::Plugin ();
+  use Carp ();
+  use Data::OptList ();
+  use String::RewritePrefix ();
+  
+  # 0.06 is needed for load_optional_class
+  use Class::Load 0.06 qw();
+  
+  use Sub::Exporter -setup => {
+    -as     => '_import',
+    exports => [ qw(foo) ],
+    collectors => [
+      -app     => \'_make_app_class',
+      -command => \'_make_command_class',
+      -plugin  => \'_make_plugin_class',
+    ],
+  };
+  
+  sub import {
+    goto &_import;
+  }
+  
+  sub _app_base_class { 'App::Cmd' }
+  
+  sub _make_app_class {
+    my ($self, $val, $data) = @_;
+    my $into = $data->{into};
+  
+    $val ||= {};
+    Carp::confess "invalid argument to -app setup"
+      if grep { $_ ne 'plugins' } keys %$val;
+  
+    Carp::confess "app setup requested on App::Cmd subclass $into"
+      if $into->isa('App::Cmd');
+  
+    $self->_make_x_isa_y($into, $self->_app_base_class);
+  
+    if ( ! Class::Load::load_optional_class( $into->_default_command_base ) ) {
+      my $base = $self->_command_base_class;
+      Sub::Install::install_sub({
+        code => sub { $base },
+        into => $into,
+        as   => '_default_command_base',
+      });
+    }
+  
+    # TODO Check this is right. -- kentnl, 2010-12
+    #
+    #  my $want_plugin_base = $self->_plugin_base_class;
+    my $want_plugin_base = 'App::Cmd::Plugin';
+  
+    my @plugins;
+    for my $plugin (@{ $val->{plugins} || [] }) {
+      $plugin = String::RewritePrefix->rewrite(
+        {
+          ''  => 'App::Cmd::Plugin::',
+          '=' => ''
+        },
+        $plugin,
+      );
+      Class::Load::load_class( $plugin );
+      unless( $plugin->isa( $want_plugin_base ) ){
+          die "$plugin is not a " . $want_plugin_base;
+      }
+      push @plugins, $plugin;
+    }
+  
+    Sub::Install::install_sub({
+      code => sub { @plugins },
+      into => $into,
+      as   => '_plugin_plugins',
+    });
+  
+    return 1;
+  }
+  
+  sub _command_base_class { 'App::Cmd::Command' }
+  
+  sub _make_command_class {
+    my ($self, $val, $data) = @_;
+    my $into = $data->{into};
+  
+    Carp::confess "command setup requested on App::Cmd::Command subclass $into"
+      if $into->isa('App::Cmd::Command');
+  
+    $self->_make_x_isa_y($into, $self->_command_base_class);
+  
+    return 1;
+  }
+  
+  sub _make_x_isa_y {
+    my ($self, $x, $y) = @_;
+  
+    no strict 'refs';
+    push @{"$x\::ISA"}, $y;
+  }
+  
+  sub _plugin_base_class { 'App::Cmd::Plugin' }
+  sub _make_plugin_class {
+    my ($self, $val, $data) = @_;
+    my $into = $data->{into};
+  
+    Carp::confess "plugin setup requested on App::Cmd::Plugin subclass $into"
+      if $into->isa('App::Cmd::Plugin');
+  
+    Carp::confess "plugin setup requires plugin configuration" unless $val;
+  
+    $self->_make_x_isa_y($into, $self->_plugin_base_class);
+  
+    # In this special case, exporting everything by default is the sensible thing
+    # to do. -- rjbs, 2008-03-31
+    $val->{groups} = [ default => [ -all ] ] unless $val->{groups};
+  
+    my @exports;
+    for my $pair (@{ Data::OptList::mkopt($val->{exports}) }) {
+      push @exports, $pair->[0], ($pair->[1] || \'_faux_curried_method');
+    }
+  
+    $val->{exports} = \@exports;
+  
+    Sub::Exporter::setup_exporter({
+      %$val,
+      into => $into,
+      as   => 'import_from_plugin',
+    });
+  
+    return 1;
+  }
+  
+  1;
+  
+  __END__
+  =pod
+  
+  =head1 NAME
+  
+  App::Cmd::Setup - helper for setting up App::Cmd classes
+  
+  =head1 VERSION
+  
+  version 0.310
+  
+  =head1 OVERVIEW
+  
+  App::Cmd::Setup is a helper library, used to set up base classes that will be
+  used as part of an App::Cmd program.  For the most part you should refer to
+  L<the tutorial|App::Cmd::Tutorial> for how you should use this library.
+  
+  This class is useful in three scenarios:
+  
+  =over 4
+  
+  =item when writing your App::Cmd subclass
+  
+  Instead of writing:
+  
+    package MyApp;
+    use base 'App::Cmd';
+  
+  ...you can write:
+  
+    package MyApp;
+    use App::Cmd::Setup -app;
+  
+  The benefits of doing this are mostly minor, and relate to sanity-checking your
+  class.  The significant benefit is that this form allows you to specify
+  plugins, as in:
+  
+    package MyApp;
+    use App::Cmd::Setup -app => { plugins => [ 'Prompt' ] };
+  
+  Plugins are described in L<App::Cmd::Tutorial> and L<App::Cmd::Plugin>.
+  
+  =item when writing abstract base classes for commands
+  
+  That is: when you write a subclass of L<App::Cmd::Command> that is intended for
+  other commands to use as their base class, you should use App::Cmd::Setup.  For
+  example, if you want all the commands in MyApp to inherit from MyApp::Command,
+  you may want to write that package like this:
+  
+    package MyApp::Command;
+    use App::Cmd::Setup -command;
+  
+  Do not confuse this with the way you will write specific commands:
+  
+    package MyApp::Command::mycmd;
+    use MyApp -command;
+  
+  Again, this form mostly performs some validation and setup behind the scenes
+  for you.  You can use C<L<base>> if you prefer.
+  
+  =item when writing App::Cmd plugins
+  
+  L<App::Cmd::Plugin> is a mechanism that allows an App::Cmd class to inject code
+  into all its command classes, providing them with utility routines.
+  
+  To write a plugin, you must use App::Cmd::Setup.  As seen above, you must also
+  use App::Cmd::Setup to set up your App::Cmd subclass if you wish to consume
+  plugins.
+  
+  For more information on writing plugins, see L<App::Cmd::Manual> and
+  L<App::Cmd::Plugin>.
+  
+  =back
+  
+  =head1 AUTHOR
+  
+  Ricardo Signes <rjbs@cpan.org>
+  
+  =head1 COPYRIGHT AND LICENSE
+  
+  This software is copyright (c) 2010 by Ricardo Signes.
+  
+  This is free software; you can redistribute it and/or modify it under
+  the same terms as the Perl 5 programming language system itself.
+  
+  =cut
+  
+APP_CMD_SETUP
+
+$fatpacked{"App/Cmd/Simple.pm"} = <<'APP_CMD_SIMPLE';
+  use strict;
+  use warnings;
+  
+  package App::Cmd::Simple;
+  BEGIN {
+    $App::Cmd::Simple::VERSION = '0.310';
+  }
+  use App::Cmd::Command;
+  BEGIN { our @ISA = 'App::Cmd::Command' }
+  
+  # ABSTRACT: a helper for building one-command App::Cmd applications
+  
+  use App::Cmd;
+  use Sub::Install;
+  
+  
+  # The idea here is that the user will someday replace "Simple" in his ISA with
+  # "Command" and then write a standard App::Cmd package.  To make that possible,
+  # we produce a behind-the-scenes App::Cmd object when the user says 'use
+  # MyApp::Simple' and redirect MyApp::Simple->run to that.
+  my $i;
+  BEGIN { $i = 0 }
+  
+  sub import {
+    my ($class) = @_;
+    return if $class eq __PACKAGE__;
+  
+    # This signals that something has already set the target up.
+    return $class if $class->_cmd_pkg;
+  
+    my $core_execute = App::Cmd::Command->can('execute');
+    my $our_execute  = $class->can('execute');
+    Carp::confess(
+      "App::Cmd::Simple subclasses must implement ->execute, not ->run"
+    ) unless $our_execute and $our_execute != $core_execute;
+  
+    # I doubt the $i will ever be needed, but let's start paranoid.
+    my $generated_name = join('::', $class, '_App_Cmd', $i++);
+  
+    {
+      no strict 'refs';
+      *{$generated_name . '::ISA'} = [ 'App::Cmd' ];
+    }
+  
+    Sub::Install::install_sub({
+      into => $class,
+      as   => '_cmd_pkg',
+      code => sub { $generated_name },
+    });
+  
+    Sub::Install::install_sub({
+      into => $generated_name,
+      as   => '_command',
+      code => sub { { only => $class } },
+    });
+  
+    Sub::Install::install_sub({
+      into => $generated_name,
+      as   => 'default_command',
+      code => sub { 'only' },
+    });
+  
+    Sub::Install::install_sub({
+      into => $generated_name,
+      as   => '_cmd_from_args',
+      code => sub {
+        my ($self, $args) = @_;
+  
+        return ('only', $args);
+      },
+    });
+  
+    Sub::Install::install_sub({
+      into => $class,
+      as   => 'run',
+      code => sub {
+        $generated_name->new({
+          no_help_plugin     => 1,
+          no_commands_plugin => 1,
+        })->run(@_);
+      }
+    });
+  
+    return $class;
+  }
+  
+  sub usage_desc {
+    return "%c %o"
+  }
+  
+  sub _cmd_pkg { }
+  
+  
+  1;
+  
+  __END__
+  =pod
+  
+  =head1 NAME
+  
+  App::Cmd::Simple - a helper for building one-command App::Cmd applications
+  
+  =head1 VERSION
+  
+  version 0.310
+  
+  =head1 SYNOPSIS
+  
+  in F<simplecmd>:
+  
+    use YourApp::Cmd;
+    Your::Cmd->run;
+  
+  in F<YourApp/Cmd.pm>:
+  
+    package YourApp::Cmd;
+    use base qw(App::Cmd::Simple);
+  
+    sub opt_spec {
+      return (
+        [ "blortex|X",  "use the blortex algorithm" ],
+        [ "recheck|r",  "recheck all results"       ],
+      );
+    }
+  
+    sub validate_args {
+      my ($self, $opt, $args) = @_;
+  
+      # no args allowed but options!
+      $self->usage_error("No args allowed") if @$args;
+    }
+  
+    sub execute {
+      my ($self, $opt, $args) = @_;
+  
+      my $result = $opt->{blortex} ? blortex() : blort();
+  
+      recheck($result) if $opt->{recheck};
+  
+      print $result;
+    }
+  
+  and, finally, at the command line:
+  
+    knight!rjbs$ simplecmd --recheck
+  
+    All blorts successful.
+  
+  =head1 SUBCLASSING
+  
+  When writing a subclass of App::Cmd:Simple, there are only a few methods that
+  you might want to implement.  They behave just like the same-named methods in
+  App::Cmd.
+  
+  =head2 opt_spec
+  
+  This method should be overridden to provide option specifications.  (This is
+  list of arguments passed to C<describe_options> from Getopt::Long::Descriptive,
+  after the first.)
+  
+  If not overridden, it returns an empty list.
+  
+  =head2 validate_args
+  
+    $cmd->validate_args(\%opt, \@args);
+  
+  This method is passed a hashref of command line options (as processed by
+  Getopt::Long::Descriptive) and an arrayref of leftover arguments.  It may throw
+  an exception (preferably by calling C<usage_error>) if they are invalid, or it
+  may do nothing to allow processing to continue.
+  
+  =head2 execute
+  
+    Your::App::Cmd::Simple->execute(\%opt, \@args);
+  
+  This method does whatever it is the command should do!  It is passed a hash
+  reference of the parsed command-line options and an array reference of left
+  over arguments.
+  
+  =head1 WARNINGS
+  
+  B<This should be considered experimental!>  Although it is probably not going
+  to change much, don't build your business model around it yet, okay?
+  
+  App::Cmd::Simple is not rich in black magic, but it does do some somewhat
+  gnarly things to make an App::Cmd::Simple look as much like an
+  App::Cmd::Command as possible.  This means that you can't deviate too much from
+  the sort of thing shown in the synopsis as you might like.  If you're doing
+  something other than writing a fairly simple command, and you want to screw
+  around with the App::Cmd-iness of your program, Simple might not be the best
+  choice.
+  
+  B<One specific warning...>  if you are writing a program with the
+  App::Cmd::Simple class embedded in it, you B<must> call import on the class.
+  That's how things work.  You can just do this:
+  
+    YourApp::Cmd->import->run;
+  
+  =head1 AUTHOR
+  
+  Ricardo Signes <rjbs@cpan.org>
+  
+  =head1 COPYRIGHT AND LICENSE
+  
+  This software is copyright (c) 2010 by Ricardo Signes.
+  
+  This is free software; you can redistribute it and/or modify it under
+  the same terms as the Perl 5 programming language system itself.
+  
+  =cut
+  
+APP_CMD_SIMPLE
+
+$fatpacked{"App/Cmd/Subdispatch.pm"} = <<'APP_CMD_SUBDISPATCH';
+  use strict;
+  use warnings;
+  
+  package App::Cmd::Subdispatch;
+  BEGIN {
+    $App::Cmd::Subdispatch::VERSION = '0.310';
+  }
+  
+  use App::Cmd;
+  use App::Cmd::Command;
+  BEGIN { our @ISA = qw(App::Cmd::Command App::Cmd) } 
+  
+  # ABSTRACT: an App::Cmd::Command that is also an App::Cmd
+  
+  
+  sub new {
+  	my ($inv, $fields, @args) = @_;
+  	if (ref $inv) {
+  		@{ $inv }{ keys %$fields } = values %$fields;
+  		return $inv;
+  	} else {
+  		$inv->SUPER::new($fields, @args);
+  	}
+  }
+  
+  
+  sub prepare {
+  	my ($class, $app, @args) = @_;
+  
+  	my $self = $class->new({ app => $app });
+  
+  	my ($subcommand, $opt, @sub_args) = $self->get_command(@args);
+  
+    $self->set_global_options($opt);
+  
+  	if (defined $subcommand) {
+      return $self->_prepare_command($subcommand, $opt, @sub_args);
+    } else {
+      if (@args) {
+        return $self->_bad_command(undef, $opt, @sub_args);
+      } else {
+        return $self->prepare_default_command($opt, @sub_args);
+      }
+    }
+  }
+  
+  sub _plugin_prepare {
+    my ($self, $plugin, @args) = @_;
+    return $plugin->prepare($self->choose_parent_app($self->app, $plugin), @args);
+  }
+  
+  
+  sub app { $_[0]{app} }
+  
+  
+  sub choose_parent_app {
+  	my ( $self, $app, $plugin ) = @_;
+  
+  	if (
+      $plugin->isa("App::Cmd::Command::commands")
+      or $plugin->isa("App::Cmd::Command::help")
+      or scalar keys %{ $self->global_options }
+    ) {
+  		return $self;
+  	} else {
+  		return $app;
+  	}
+  }
+  
+  1;
+  
+  __END__
+  =pod
+  
+  =head1 NAME
+  
+  App::Cmd::Subdispatch - an App::Cmd::Command that is also an App::Cmd
+  
+  =head1 VERSION
+  
+  version 0.310
+  
+  =head1 METHODS
+  
+  =head2 new
+  
+  A hackish new that allows us to have an Command instance before they normally
+  exist.
+  
+  =head2 prepare
+  
+    my $subcmd = $subdispatch->prepare($app, @args);
+  
+  An overridden version of L<App::Cmd::Command/prepare> that performs a new
+  dispatch cycle.
+  
+  =head2 app
+  
+    $subdispatch->app;
+  
+  This method returns the application that this subdispatch is a command of.
+  
+  =head2 choose_parent_app
+  
+    $subcmd->prepare(
+      $subdispatch->choose_parent_app($app, $opt, $plugin),
+      @$args
+    );
+  
+  A method that chooses whether the parent app or the subdispatch is going to be
+  C<< $cmd->app >>.
+  
+  =head1 AUTHOR
+  
+  Ricardo Signes <rjbs@cpan.org>
+  
+  =head1 COPYRIGHT AND LICENSE
+  
+  This software is copyright (c) 2010 by Ricardo Signes.
+  
+  This is free software; you can redistribute it and/or modify it under
+  the same terms as the Perl 5 programming language system itself.
+  
+  =cut
+  
+APP_CMD_SUBDISPATCH
+
+$fatpacked{"App/Cmd/Subdispatch/DashedStyle.pm"} = <<'APP_CMD_SUBDISPATCH_DASHEDSTYLE';
+  use strict;
+  use warnings;
+  
+  package App::Cmd::Subdispatch::DashedStyle;
+  BEGIN {
+    $App::Cmd::Subdispatch::DashedStyle::VERSION = '0.310';
+  }
+  use App::Cmd::Subdispatch;
+  BEGIN { our @ISA = 'App::Cmd::Subdispatch' };
+  
+  # ABSTRACT: "app cmd --subcmd" style subdispatching
+  
+  
+  sub get_command {
+  	my ($self, @args) = @_;
+  
+  	my (undef, $opt, @sub_args)
+      = $self->App::Cmd::Command::prepare($self->app, @args);
+  
+  	if (my $cmd = delete $opt->{subcommand}) {
+  		delete $opt->{$cmd}; # useless boolean
+  		return ($cmd, $opt, @sub_args);
+  	} else {
+      return (undef, $opt, @sub_args);
+    }
+  }
+  
+  
+  sub prepare_default_command {
+    my ( $self, $opt, @args ) = @_;
+    $self->_prepare_command( "help" );
+  }
+  
+  
+  sub opt_spec {
+  	my ($self, $app) = @_;
+  
+  	my $subcommands = $self->_command;
+  	my %plugins = map {
+  		$_ => [ $_->command_names ],
+  	} values %$subcommands;
+  
+  	foreach my $opt_spec (values %plugins) {
+  		$opt_spec = join("|", grep { /^\w/ } @$opt_spec);
+  	}
+  
+  	my @subcommands = map { [ $plugins{$_} =>  $_->abstract ] } keys %plugins;
+  
+  	return (
+  		[ subcommand => hidden => { one_of => \@subcommands } ],
+  		$self->global_opt_spec($app),
+  		{ getopt_conf => [ 'pass_through' ] },
+  	);
+  }
+  
+  1;
+  
+  __END__
+  =pod
+  
+  =head1 NAME
+  
+  App::Cmd::Subdispatch::DashedStyle - "app cmd --subcmd" style subdispatching
+  
+  =head1 VERSION
+  
+  version 0.310
+  
+  =head1 METHODS
+  
+  =head2 get_command
+  
+    my ($subcommand, $opt, $args) = $subdispatch->get_command(@args)
+  
+  A version of get_command that chooses commands as options in the following
+  style:
+  
+    mytool mycommand --mysubcommand
+  
+  =head2 opt_spec
+  
+  A version of C<opt_spec> that calculates the getopt specification from the
+  subcommands.
+  
+  =for Pod::Coverage prepare_default_command
+  
+  =head1 AUTHOR
+  
+  Ricardo Signes <rjbs@cpan.org>
+  
+  =head1 COPYRIGHT AND LICENSE
+  
+  This software is copyright (c) 2010 by Ricardo Signes.
+  
+  This is free software; you can redistribute it and/or modify it under
+  the same terms as the Perl 5 programming language system itself.
+  
+  =cut
+  
+APP_CMD_SUBDISPATCH_DASHEDSTYLE
+
+$fatpacked{"App/Cmd/Tester.pm"} = <<'APP_CMD_TESTER';
+  use strict;
+  use warnings;
+  package App::Cmd::Tester;
+  BEGIN {
+    $App::Cmd::Tester::VERSION = '0.310';
+  }
+  
+  # ABSTRACT: for capturing the result of running an app
+  
+  
+  use Sub::Exporter::Util qw(curry_method);
+  use Sub::Exporter -setup => {
+    exports => { test_app => curry_method },
+    groups  => { default  => [ qw(test_app) ] },
+  };
+  
+  our $TEST_IN_PROGRESS;
+  BEGIN {
+    *CORE::GLOBAL::exit = sub {
+      return CORE::exit(@_) unless $TEST_IN_PROGRESS;
+      App::Cmd::Tester::Exited->throw($_[0]);
+    };
+  }
+  
+  
+  sub result_class { 'App::Cmd::Tester::Result' }
+  
+  sub test_app {
+    my ($class, $app, $argv) = @_;
+  
+    require IO::TieCombine;
+    my $hub = IO::TieCombine->new;
+  
+    my $stdout = tie local *STDOUT, $hub, 'stdout';
+    my $stderr = tie local *STDERR, $hub, 'stderr';
+  
+    my $run_rv;
+  
+    $app = $app->new unless ref($app) or $app->isa('App::Cmd::Simple');
+  
+    my $ok = eval {
+      local $TEST_IN_PROGRESS = 1;
+      local @ARGV = @$argv;
+      $run_rv = $app->run;
+      1;
+    };
+  
+    my $error = $ok ? undef : $@;
+  
+    my $exit_code = defined $error ? ((0+$!)||-1) : 0;
+  
+    if ($error and eval { $error->isa('App::Cmd::Tester::Exited') }) {
+      $exit_code = $$error;
+    }
+  
+    $class->result_class->new({
+      app    => $app,
+      stdout => $hub->slot_contents('stdout'),
+      stderr => $hub->slot_contents('stderr'),
+      output => $hub->combined_contents,
+      error  => $error,
+      run_rv => $run_rv,
+      exit_code => $exit_code
+    });
+  }
+  
+  {
+    package App::Cmd::Tester::Result;
+  BEGIN {
+    $App::Cmd::Tester::Result::VERSION = '0.310';
+  }
+  
+    sub new {
+      my ($class, $arg) = @_;
+      bless $arg => $class;
+    }
+  
+    for my $attr (qw(app stdout stderr output error run_rv exit_code)) {
+      Sub::Install::install_sub({
+        code => sub { $_[0]->{$attr} },
+        as   => $attr,
+      });
+    }
+  }
+  
+  {
+    package App::Cmd::Tester::Exited;
+  BEGIN {
+    $App::Cmd::Tester::Exited::VERSION = '0.310';
+  }
+    sub throw {
+      my ($class, $code) = @_;
+      my $self = (bless \$code => $class);
+      die $self;
+    }
+  }
+  
+  1;
+  
+  __END__
+  =pod
+  
+  =head1 NAME
+  
+  App::Cmd::Tester - for capturing the result of running an app
+  
+  =head1 VERSION
+  
+  version 0.310
+  
+  =head1 SYNOPSIS
+  
+    use Test::More tests => 4;
+    use App::Cmd::Tester;
+  
+    use YourApp;
+  
+    my $result = test_app(YourApp => [ qw(command --opt value) ]);
+  
+    like($result->stdout, qr/expected output/, 'printed what we expected');
+  
+    is($result->stderr, '', 'nothing sent to sderr');
+  
+    is($result->error, undef, 'threw no exceptions');
+  
+    my $result = test_app(YourApp => [ qw(command --opt value --quiet) ]);
+  
+    is($result->output, '', 'absolutely no output with --quiet');
+  
+  =head1 DESCRIPTION
+  
+  One of the reasons that user-executed programs are so often poorly tested is
+  that they are hard to test.  App::Cmd::Tester is one of the tools App-Cmd
+  provides to help make it easy to test App::Cmd-based programs.
+  
+  It provides one routine: test_app.
+  
+  =head1 METHODS
+  
+  =head2 test_app
+  
+  B<Note>: while C<test_app> is a method, it is by default exported as a
+  subroutine into the namespace that uses App::Cmd::Tester.  In other words: you
+  probably don't need to think about this as a method unless you want to subclass
+  App::Cmd::Tester.
+  
+    my $result = test_app($app_class => \@argv_contents);
+  
+  This will locally set C<@ARGV> to simulate command line arguments, and will
+  then call the C<run> method on the given application class (or application).
+  Output to the standard output and standard error filehandles  will be captured.
+  
+  C<$result> is an App::Cmd::Tester::Result object, which has methods to access
+  the following data:
+  
+    stdout - the output sent to stdout
+    stderr - the output sent to stderr
+    output - the combined output of stdout and stderr
+    error  - the exception thrown by running the application, or undef
+    run_rv - the return value of the run method (generally irrelevant)
+    exit_code - the numeric exit code that would've been issued (0 is 'okay')
+  
+  =for Pod::Coverage result_class
+  
+  =head1 AUTHOR
+  
+  Ricardo Signes <rjbs@cpan.org>
+  
+  =head1 COPYRIGHT AND LICENSE
+  
+  This software is copyright (c) 2010 by Ricardo Signes.
+  
+  This is free software; you can redistribute it and/or modify it under
+  the same terms as the Perl 5 programming language system itself.
+  
+  =cut
+  
+APP_CMD_TESTER
+
+$fatpacked{"App/Mist.pm"} = <<'APP_MIST';
+  package App::Mist;
   
   use strict;
   use warnings;
@@ -15,14 +4491,14 @@ $fatpacked{"App/mist.pm"} = <<'APP_MIST';
   
   use App::Cmd::Setup -app;
   
-  use App::mist::Command::build;
-  use App::mist::Command::index;
+  use App::Mist::Command::build;
+  use App::Mist::Command::index;
   
   1;
 APP_MIST
 
-$fatpacked{"App/mist/Command.pm"} = <<'APP_MIST_COMMAND';
-  # package App::mist::Command;
+$fatpacked{"App/Mist/Command.pm"} = <<'APP_MIST_COMMAND';
+  # package App::Mist::Command;
   #
   # use strict;
   # use warnings;
@@ -49,13 +4525,13 @@ $fatpacked{"App/mist/Command.pm"} = <<'APP_MIST_COMMAND';
   # 1;
 APP_MIST_COMMAND
 
-$fatpacked{"App/mist/Command/build.pm"} = <<'APP_MIST_COMMAND_BUILD';
-  package App::mist::Command::build;
+$fatpacked{"App/Mist/Command/build.pm"} = <<'APP_MIST_COMMAND_BUILD';
+  package App::Mist::Command::build;
   
   use strict;
   use warnings;
   
-  use App::mist -command;
+  use App::Mist -command;
   
   use Try::Tiny;
   use File::Which;
@@ -79,9 +4555,15 @@ $fatpacked{"App/mist/Command/build.pm"} = <<'APP_MIST_COMMAND_BUILD';
       or die "Can't find project root";
   
     my $mpan      = $home->subdir( $ENV{MIST_DIST_DIR}  || 'mpan-dist' );
+    my $mpan_conf = $mpan->subdir( 'mist' );
     my $local_lib = $home->subdir( $ENV{MIST_LOCAL_LIB} || 'perl5' );
   
+    my $dist_prepend = $mpan_conf->file(qw/ 01.prepend.txt /);
+    my $dist_notest  = $mpan_conf->file(qw/ 02.notest.txt /);
+  
     chdir $home->stringify;
+    $mpan_conf->mkpath;
+    $_->touch for grep{ not -r $_->stringify } $dist_prepend, $dist_notest;
   
     try {
   
@@ -95,30 +4577,76 @@ $fatpacked{"App/mist/Command/build.pm"} = <<'APP_MIST_COMMAND_BUILD';
           last if /# END OF FATPACK CODE\s*$/;
       }
   
+      my $slurp_file = sub{
+        my $file = shift;
+        my @lines;
+        printf STDERR "Reading: %s\n", $file;
+  
+        return () unless -f -r $file->stringify;
+        my $fh = $file->openr;
+        @lines = readline $fh;
+        chomp for @lines;
+        @lines = grep{ $_ } @lines;
+        return @lines;
+      };
+  
+      my @prepend = $slurp_file->( $dist_prepend );
+      my @notest  = $slurp_file->( $dist_notest );
+  
       my @prereqs = qx{ dzil listdeps };
       chomp for @prereqs;
+      @prereqs = grep{ $_ } @prereqs;
   
       my @args = (
-        $local_lib->relative( $home ),
         $mpan->relative( $home ),
-        sprintf( qq{'%s'}, join qq{',\n    '}, @prereqs ),
+        $local_lib->relative( $home ),
+        @prepend ? sprintf( qq{'%s'}, join qq{',\n    '}, @prepend ) : '',
+        @notest  ? sprintf( qq{'%s'}, join qq{',\n    '}, @notest  ) : '',
+        @prereqs ? sprintf( qq{'%s'}, join qq{',\n    '}, @prereqs ) : '',
       );
   
       printf $out <<'INSTALLER', @args;
   
-      use App::cpanminus::script;
-      use FindBin qw/$RealBin/;
+  use App::cpanminus::script;
+  use FindBin qw/$RealBin/;
+  use Path::Class qw/file dir/;
   
-      unless (caller) {
-        my $app = App::cpanminus::script->new;
-        $app->parse_options(
-          "--local-lib-contained=${RealBin}/%s",
-          "--mirror=file://${RealBin}/%s",
-          '--mirror-only',
-          %s
-        );
-        $app->doit or exit(1);
-      }
+  my $mpan      = dir( $RealBin, '%s' );
+  my $local_lib = dir( $RealBin, '%s' );
+  
+  sub run_cpanm {
+    my $app       = App::cpanminus::script->new;
+    my @options   = (
+      "--quiet",
+      "--local-lib-contained=${local_lib}",
+      "--mirror=file://${mpan}",
+      '--mirror-only',
+    );
+  
+    # use Data::Dumper::Concise;
+    # printf STDERR '@Options: %%s%%s', Dumper( \@options ), "\n";
+  
+    $app->parse_options( @options, @_ );
+    $app->doit or exit(1);
+  }
+  
+  unless (caller) {
+    my @prepend = (
+      %s
+    );
+    my @notest  = (
+      %s
+    );
+    my @prereqs = (
+      %s
+    );
+  
+    run_cpanm( @prepend ) if @prepend;
+    run_cpanm( '--installdeps', @notest ) if @notest;
+    run_cpanm( '--notest', @notest ) if @notest;
+    run_cpanm( @prereqs ) if @prereqs;
+  }
+  
   INSTALLER
   
       close $out;
@@ -127,6 +4655,8 @@ $fatpacked{"App/mist/Command/build.pm"} = <<'APP_MIST_COMMAND_BUILD';
       rename "mist-install.tmp", "mist-install";
       chmod 0755, "mist-install";
   
+    } catch {
+      warn "$_\n";
     } finally {
   
       unlink "mist-install.tmp"
@@ -140,13 +4670,13 @@ $fatpacked{"App/mist/Command/build.pm"} = <<'APP_MIST_COMMAND_BUILD';
   1;
 APP_MIST_COMMAND_BUILD
 
-$fatpacked{"App/mist/Command/index.pm"} = <<'APP_MIST_COMMAND_INDEX';
-  package App::mist::Command::index;
+$fatpacked{"App/Mist/Command/index.pm"} = <<'APP_MIST_COMMAND_INDEX';
+  package App::Mist::Command::index;
   
   use strict;
   use warnings;
   
-  use App::mist -command;
+  use App::Mist -command;
   
   use CPAN::ParseDistribution;
   use CPAN::DistnameInfo;
@@ -188,6 +4718,15 @@ $fatpacked{"App/mist/Command/index.pm"} = <<'APP_MIST_COMMAND_INDEX';
       my $dist    = CPAN::ParseDistribution->new( $d->pathname );
       my $modules = $dist->modules;
   
+      {
+        ( my $dist_pkg = $dist->dist ) =~ s/-/::/g;
+        $package_details->add_entry(
+          package_name => $dist_pkg,
+          version      => $dist->distversion,
+          path         => $mpath,
+        );
+      }
+  
       while ( my ( $pkg, $version ) = each %$modules ) {
         $package_details->add_entry(
           package_name => $pkg,
@@ -222,6 +4761,65 @@ $fatpacked{"App/mist/Command/index.pm"} = <<'APP_MIST_COMMAND_INDEX';
   
   1;
 APP_MIST_COMMAND_INDEX
+
+$fatpacked{"App/Mist/Command/install.pm"} = <<'APP_MIST_COMMAND_INSTALL';
+  package App::Mist::Command::install;
+  
+  use strict;
+  use warnings;
+  
+  use App::Mist -command;
+  
+  use Try::Tiny;
+  use File::Which;
+  use File::Find::Upwards;
+  use Path::Class qw/dir/;
+  use Cwd;
+  
+  use File::Temp qw/ tempfile tempdir /;
+  
+  
+  sub execute {
+    my ( $self, $opt, $args ) = @_;
+  
+    die "No module to install" unless $args and ref $args eq 'ARRAY' and @$args;
+  
+    my $cpanm = which( 'cpanm' )
+      or die "cpanm not found";
+  
+    do $cpanm;
+    require App::cpanminus::script;
+  
+    my $home = find_containing_dir_upwards( 'dist.ini' )
+      or die "Can't find project root";
+  
+    my $workspace = tempdir( CLEANUP => 1 );
+    my $mpan      = $home->subdir( $ENV{MIST_DIST_DIR}  || 'mpan-dist' );
+    my $mpan_conf = $mpan->subdir( 'mist' );
+    my $local_lib = $home->subdir( $ENV{MIST_LOCAL_LIB} || 'perl5' );
+  
+    my @options   = (
+      "--quiet",
+      "--local-lib-contained=${workspace}",
+      "--mirror=file://${mpan}",
+      "--mirror=http://search.cpan.org/CPAN",
+      "--save-dists=${mpan}",
+    );
+  
+    my $app1 = App::cpanminus::script->new;
+    $app1->parse_options( @options, '--installdeps', @$args );
+    $app1->doit or exit(1);
+  
+    my $app2 = App::cpanminus::script->new;
+    $app2->parse_options( @options, '--reinstall', @$args );
+    $app2->doit or exit(1);
+  
+  }
+  
+  
+  
+  1;
+APP_MIST_COMMAND_INSTALL
 
 $fatpacked{"Archive/Zip.pm"} = <<'ARCHIVE_ZIP';
   package Archive::Zip;
@@ -8367,6 +12965,290 @@ $fatpacked{"CPAN/ParseDistribution.pm"} = <<'CPAN_PARSEDISTRIBUTION';
   1;
 CPAN_PARSEDISTRIBUTION
 
+$fatpacked{"Class/Load.pm"} = <<'CLASS_LOAD';
+  package Class::Load;
+  use strict;
+  use warnings;
+  use base 'Exporter';
+  use File::Spec;
+  use Scalar::Util 'reftype';
+  
+  our $VERSION = '0.06';
+  
+  our @EXPORT_OK = qw/load_class load_optional_class try_load_class is_class_loaded/;
+  our %EXPORT_TAGS = (
+      all => \@EXPORT_OK,
+  );
+  
+  our $ERROR;
+  
+  BEGIN {
+      *IS_RUNNING_ON_5_10 = ($] < 5.009_005)
+          ? sub () { 0 }
+          : sub () { 1 };
+  }
+  
+  sub load_class {
+      my $class = shift;
+  
+      my ($res, $e) = try_load_class($class);
+      return 1 if $res;
+  
+      require Carp;
+      Carp::croak $e;
+  }
+  
+  sub load_optional_class {
+      my $class = shift;
+      # If success, then we report "Its there"
+      return 1 if try_load_class($class);
+  
+      # My testing says that if its in INC, the file definately exists
+      # on disk. In all versions of Perl. The value isn't reliable,
+      # but it existing is.
+      my $file = _mod2pm( $class );
+      return 0 unless exists $INC{$file};
+  
+      require Carp;
+      Carp::croak $ERROR;
+  }
+  
+  sub _mod2pm {
+      my $class = shift;
+      # see rt.perl.org #19213
+      my @parts = split '::', $class;
+      my $file = $^O eq 'MSWin32'
+               ? join '/', @parts
+               : File::Spec->catfile(@parts);
+      $file .= '.pm';
+      return $file;
+  }
+  
+  sub try_load_class {
+      my $class = shift;
+  
+      local $@;
+      undef $ERROR;
+  
+      return 1 if is_class_loaded($class);
+  
+      my $file = _mod2pm($class);
+      # This says "our diagnostics of the package
+      # say perl's INC status about the file being loaded are
+      # wrong", so we delete it from %INC, so when we call require(),
+      # perl will *actually* try reloading the file.
+      #
+      # If the file is already in %INC, it won't retry,
+      # And on 5.8, it won't fail either!
+      #
+      # The extra benefit of this trick, is it helps even on
+      # 5.10, as instead of dying with "Compilation failed",
+      # it will die with the actual error, and thats a win-win.
+      delete $INC{$file};
+      return 1 if eval {
+          local $SIG{__DIE__} = 'DEFAULT';
+          require $file;
+          1;
+      };
+  
+      $ERROR = $@;
+      return 0 unless wantarray;
+      return 0, $@;
+  }
+  
+  sub _is_valid_class_name {
+      my $class = shift;
+  
+      return 0 if ref($class);
+      return 0 unless defined($class);
+      return 0 unless length($class);
+  
+      return 1 if $class =~ /^\w+(?:::\w+)*$/;
+  
+      return 0;
+  }
+  
+  sub is_class_loaded {
+      my $class = shift;
+  
+      return 0 unless _is_valid_class_name($class);
+  
+      # walk the symbol table tree to avoid autovififying
+      # \*{${main::}{"Foo::"}} == \*main::Foo::
+  
+      my $pack = \*::;
+      foreach my $part (split('::', $class)) {
+          return 0 unless exists ${$$pack}{"${part}::"};
+          $pack = \*{${$$pack}{"${part}::"}};
+      }
+  
+      # We used to check in the package stash, but it turns out that
+      # *{${$$package}{VERSION}{SCALAR}} can end up pointing to a
+      # reference to undef. It looks
+  
+      my $version = do {
+          no strict 'refs';
+          ${$class . '::VERSION'};
+      };
+  
+      return 1 if ! ref $version && defined $version;
+      # Sometimes $VERSION ends up as a reference to undef (weird)
+      return 1 if ref $version && reftype $version eq 'SCALAR' && defined ${$version};
+  
+      return 1 if exists ${$$pack}{ISA}
+               && defined *{${$$pack}{ISA}}{ARRAY};
+  
+      # check for any method
+      foreach ( keys %{$$pack} ) {
+          next if substr($_, -2, 2) eq '::';
+  
+          my $glob = ${$$pack}{$_} || next;
+  
+          # constant subs
+          if ( IS_RUNNING_ON_5_10 ) {
+              my $ref = ref($glob);
+              return 1 if $ref eq 'SCALAR' || $ref eq 'REF';
+          }
+  
+          # stubs
+          my $refref = ref(\$glob);
+          return 1 if $refref eq 'SCALAR';
+  
+          return 1 if defined *{$glob}{CODE};
+      }
+  
+      # fail
+      return 0;
+  }
+  
+  1;
+  
+  __END__
+  
+  =head1 NAME
+  
+  Class::Load - a working (require "Class::Name") and more
+  
+  =head1 SYNOPSIS
+  
+      use Class::Load ':all';
+  
+      try_load_class('Class::Name')
+          or plan skip_all => "Class::Name required to run these tests";
+  
+      load_class('Class::Name');
+  
+      is_class_loaded('Class::Name');
+  
+      my $baseclass = load_optional_class('Class::Name::MightExist')
+          ? 'Class::Name::MightExist'
+          : 'Class::Name::Default';
+  
+  =head1 DESCRIPTION
+  
+  C<require EXPR> only accepts C<Class/Name.pm> style module names, not
+  C<Class::Name>. How frustrating! For that, we provide
+  C<load_class 'Class::Name'>.
+  
+  It's often useful to test whether a module can be loaded, instead of throwing
+  an error when it's not available. For that, we provide
+  C<try_load_class 'Class::Name'>.
+  
+  Finally, sometimes we need to know whether a particular class has been loaded.
+  Asking C<%INC> is an option, but that will miss inner packages and any class
+  for which the filename does not correspond to the package name. For that, we
+  provide C<is_class_loaded 'Class::Name'>.
+  
+  =head1 FUNCTIONS
+  
+  =head2 load_class Class::Name
+  
+  C<load_class> will load C<Class::Name> or throw an error, much like C<require>.
+  
+  If C<Class::Name> is already loaded (checked with C<is_class_loaded>) then it
+  will not try to load the class. This is useful when you have inner packages
+  which C<require> does not check.
+  
+  =head2 try_load_class Class::Name -> 0|1
+  =head2 try_load_class Class::Name -> (0|1, error message)
+  
+  Returns 1 if the class was loaded, 0 if it was not. If the class was not
+  loaded, the error will be returned as a second return value in list context.
+  
+  Again, if C<Class::Name> is already loaded (checked with C<is_class_loaded>)
+  then it will not try to load the class. This is useful when you have inner
+  packages which C<require> does not check.
+  
+  =head2 is_class_loaded Class::Name -> 0|1
+  
+  This uses a number of heuristics to determine if the class C<Class::Name> is
+  loaded. There heuristics were taken from L<Class::MOP>'s old pure-perl
+  implementation.
+  
+  =head2 load_optional_class Class::Name -> 0|1
+  
+  C<load_optional_class> is a lot like C<try_load_class>, but also a lot like
+  C<load_class>.
+  
+  If the class exists, and it works, then it will return 1.
+  
+  If the class doesn't exist, and it appears to not exist on disk either, it
+  will return 0.
+  
+  If the class exists on disk, but loading from disk results in an error
+  ( ie: a syntax error ), then it will C<croak> with that error.
+  
+  This is useful for using if you want a fallback module system, ie:
+  
+      my $class = load_optional_class($foo) ? $foo : $default;
+  
+  That way, if $foo does exist, but can't be loaded due to error, you won't
+  get the behaviour of it simply not existing.
+  
+  =head1 SEE ALSO
+  
+  =over 4
+  
+  =item L<UNIVERSAL::require>
+  
+  Adds a C<require> method to C<UNIVERSAL> so that you can say
+  C<< Class::Name->require >>. I personally dislike the pollution.
+  
+  =item L<Module::Load>
+  
+  Supports C<Class::Name> and C<< Class/Name.pm >> formats, no C<try_to_load> or
+  C<is_class_loaded>.
+  
+  =item L<Moose>, L<Jifty>, L<Prophet>, etc
+  
+  This module was designed to be used anywhere you have
+  C<if (eval "require $module"; 1)>, which occurs in many large projects.
+  
+  =back
+  
+  =head1 AUTHOR
+  
+  Shawn M Moore, C<< <sartak at bestpractical.com> >>
+  
+  The implementation of C<is_class_loaded> has been taken from L<Class::MOP>.
+  
+  =head1 BUGS
+  
+  Please report any bugs or feature requests to
+  C<bug-class-load at rt.cpan.org>, or through the web interface at
+  L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Class-Load>.
+  
+  =head1 COPYRIGHT & LICENSE
+  
+  Copyright 2008-2009 Best Practical Solutions.
+  
+  This program is free software; you can redistribute it and/or modify it
+  under the same terms as Perl itself.
+  
+  =cut
+  
+CLASS_LOAD
+
 $fatpacked{"Data/OptList.pm"} = <<'DATA_OPTLIST';
   
   package Data::OptList;
@@ -9798,6 +14680,560 @@ $fatpacked{"File/Which.pm"} = <<'FILE_WHICH';
   =cut
 FILE_WHICH
 
+$fatpacked{"IO/String.pm"} = <<'IO_STRING';
+  package IO::String;
+  
+  # Copyright 1998-2005 Gisle Aas.
+  #
+  # This library is free software; you can redistribute it and/or
+  # modify it under the same terms as Perl itself.
+  
+  require 5.005_03;
+  use strict;
+  use vars qw($VERSION $DEBUG $IO_CONSTANTS);
+  $VERSION = "1.08";  # $Date: 2005/12/05 12:00:47 $
+  
+  use Symbol ();
+  
+  sub new
+  {
+      my $class = shift;
+      my $self = bless Symbol::gensym(), ref($class) || $class;
+      tie *$self, $self;
+      $self->open(@_);
+      return $self;
+  }
+  
+  sub open
+  {
+      my $self = shift;
+      return $self->new(@_) unless ref($self);
+  
+      if (@_) {
+  	my $bufref = ref($_[0]) ? $_[0] : \$_[0];
+  	$$bufref = "" unless defined $$bufref;
+  	*$self->{buf} = $bufref;
+      }
+      else {
+  	my $buf = "";
+  	*$self->{buf} = \$buf;
+      }
+      *$self->{pos} = 0;
+      *$self->{lno} = 0;
+      return $self;
+  }
+  
+  sub pad
+  {
+      my $self = shift;
+      my $old = *$self->{pad};
+      *$self->{pad} = substr($_[0], 0, 1) if @_;
+      return "\0" unless defined($old) && length($old);
+      return $old;
+  }
+  
+  sub dump
+  {
+      require Data::Dumper;
+      my $self = shift;
+      print Data::Dumper->Dump([$self], ['*self']);
+      print Data::Dumper->Dump([*$self{HASH}], ['$self{HASH}']);
+      return;
+  }
+  
+  sub TIEHANDLE
+  {
+      print "TIEHANDLE @_\n" if $DEBUG;
+      return $_[0] if ref($_[0]);
+      my $class = shift;
+      my $self = bless Symbol::gensym(), $class;
+      $self->open(@_);
+      return $self;
+  }
+  
+  sub DESTROY
+  {
+      print "DESTROY @_\n" if $DEBUG;
+  }
+  
+  sub close
+  {
+      my $self = shift;
+      delete *$self->{buf};
+      delete *$self->{pos};
+      delete *$self->{lno};
+      undef *$self if $] eq "5.008";  # workaround for some bug
+      return 1;
+  }
+  
+  sub opened
+  {
+      my $self = shift;
+      return defined *$self->{buf};
+  }
+  
+  sub binmode
+  {
+      my $self = shift;
+      return 1 unless @_;
+      # XXX don't know much about layers yet :-(
+      return 0;
+  }
+  
+  sub getc
+  {
+      my $self = shift;
+      my $buf;
+      return $buf if $self->read($buf, 1);
+      return undef;
+  }
+  
+  sub ungetc
+  {
+      my $self = shift;
+      $self->setpos($self->getpos() - 1);
+      return 1;
+  }
+  
+  sub eof
+  {
+      my $self = shift;
+      return length(${*$self->{buf}}) <= *$self->{pos};
+  }
+  
+  sub print
+  {
+      my $self = shift;
+      if (defined $\) {
+  	if (defined $,) {
+  	    $self->write(join($,, @_).$\);
+  	}
+  	else {
+  	    $self->write(join("",@_).$\);
+  	}
+      }
+      else {
+  	if (defined $,) {
+  	    $self->write(join($,, @_));
+  	}
+  	else {
+  	    $self->write(join("",@_));
+  	}
+      }
+      return 1;
+  }
+  *printflush = \*print;
+  
+  sub printf
+  {
+      my $self = shift;
+      print "PRINTF(@_)\n" if $DEBUG;
+      my $fmt = shift;
+      $self->write(sprintf($fmt, @_));
+      return 1;
+  }
+  
+  
+  my($SEEK_SET, $SEEK_CUR, $SEEK_END);
+  
+  sub _init_seek_constants
+  {
+      if ($IO_CONSTANTS) {
+  	require IO::Handle;
+  	$SEEK_SET = &IO::Handle::SEEK_SET;
+  	$SEEK_CUR = &IO::Handle::SEEK_CUR;
+  	$SEEK_END = &IO::Handle::SEEK_END;
+      }
+      else {
+  	$SEEK_SET = 0;
+  	$SEEK_CUR = 1;
+  	$SEEK_END = 2;
+      }
+  }
+  
+  
+  sub seek
+  {
+      my($self,$off,$whence) = @_;
+      my $buf = *$self->{buf} || return 0;
+      my $len = length($$buf);
+      my $pos = *$self->{pos};
+  
+      _init_seek_constants() unless defined $SEEK_SET;
+  
+      if    ($whence == $SEEK_SET) { $pos = $off }
+      elsif ($whence == $SEEK_CUR) { $pos += $off }
+      elsif ($whence == $SEEK_END) { $pos = $len + $off }
+      else                         { die "Bad whence ($whence)" }
+      print "SEEK(POS=$pos,OFF=$off,LEN=$len)\n" if $DEBUG;
+  
+      $pos = 0 if $pos < 0;
+      $self->truncate($pos) if $pos > $len;  # extend file
+      *$self->{pos} = $pos;
+      return 1;
+  }
+  
+  sub pos
+  {
+      my $self = shift;
+      my $old = *$self->{pos};
+      if (@_) {
+  	my $pos = shift || 0;
+  	my $buf = *$self->{buf};
+  	my $len = $buf ? length($$buf) : 0;
+  	$pos = $len if $pos > $len;
+  	*$self->{pos} = $pos;
+      }
+      return $old;
+  }
+  
+  sub getpos { shift->pos; }
+  
+  *sysseek = \&seek;
+  *setpos  = \&pos;
+  *tell    = \&getpos;
+  
+  
+  
+  sub getline
+  {
+      my $self = shift;
+      my $buf  = *$self->{buf} || return;
+      my $len  = length($$buf);
+      my $pos  = *$self->{pos};
+      return if $pos >= $len;
+  
+      unless (defined $/) {  # slurp
+  	*$self->{pos} = $len;
+  	return substr($$buf, $pos);
+      }
+  
+      unless (length $/) {  # paragraph mode
+  	# XXX slow&lazy implementation using getc()
+  	my $para = "";
+  	my $eol = 0;
+  	my $c;
+  	while (defined($c = $self->getc)) {
+  	    if ($c eq "\n") {
+  		$eol++;
+  		next if $eol > 2;
+  	    }
+  	    elsif ($eol > 1) {
+  		$self->ungetc($c);
+  		last;
+  	    }
+  	    else {
+  		$eol = 0;
+  	    }
+  	    $para .= $c;
+  	}
+  	return $para;   # XXX wantarray
+      }
+  
+      my $idx = index($$buf,$/,$pos);
+      if ($idx < 0) {
+  	# return rest of it
+  	*$self->{pos} = $len;
+  	$. = ++ *$self->{lno};
+  	return substr($$buf, $pos);
+      }
+      $len = $idx - $pos + length($/);
+      *$self->{pos} += $len;
+      $. = ++ *$self->{lno};
+      return substr($$buf, $pos, $len);
+  }
+  
+  sub getlines
+  {
+      die "getlines() called in scalar context\n" unless wantarray;
+      my $self = shift;
+      my($line, @lines);
+      push(@lines, $line) while defined($line = $self->getline);
+      return @lines;
+  }
+  
+  sub READLINE
+  {
+      goto &getlines if wantarray;
+      goto &getline;
+  }
+  
+  sub input_line_number
+  {
+      my $self = shift;
+      my $old = *$self->{lno};
+      *$self->{lno} = shift if @_;
+      return $old;
+  }
+  
+  sub truncate
+  {
+      my $self = shift;
+      my $len = shift || 0;
+      my $buf = *$self->{buf};
+      if (length($$buf) >= $len) {
+  	substr($$buf, $len) = '';
+  	*$self->{pos} = $len if $len < *$self->{pos};
+      }
+      else {
+  	$$buf .= ($self->pad x ($len - length($$buf)));
+      }
+      return 1;
+  }
+  
+  sub read
+  {
+      my $self = shift;
+      my $buf = *$self->{buf};
+      return undef unless $buf;
+  
+      my $pos = *$self->{pos};
+      my $rem = length($$buf) - $pos;
+      my $len = $_[1];
+      $len = $rem if $len > $rem;
+      return undef if $len < 0;
+      if (@_ > 2) { # read offset
+  	substr($_[0],$_[2]) = substr($$buf, $pos, $len);
+      }
+      else {
+  	$_[0] = substr($$buf, $pos, $len);
+      }
+      *$self->{pos} += $len;
+      return $len;
+  }
+  
+  sub write
+  {
+      my $self = shift;
+      my $buf = *$self->{buf};
+      return unless $buf;
+  
+      my $pos = *$self->{pos};
+      my $slen = length($_[0]);
+      my $len = $slen;
+      my $off = 0;
+      if (@_ > 1) {
+  	$len = $_[1] if $_[1] < $len;
+  	if (@_ > 2) {
+  	    $off = $_[2] || 0;
+  	    die "Offset outside string" if $off > $slen;
+  	    if ($off < 0) {
+  		$off += $slen;
+  		die "Offset outside string" if $off < 0;
+  	    }
+  	    my $rem = $slen - $off;
+  	    $len = $rem if $rem < $len;
+  	}
+      }
+      substr($$buf, $pos, $len) = substr($_[0], $off, $len);
+      *$self->{pos} += $len;
+      return $len;
+  }
+  
+  *sysread = \&read;
+  *syswrite = \&write;
+  
+  sub stat
+  {
+      my $self = shift;
+      return unless $self->opened;
+      return 1 unless wantarray;
+      my $len = length ${*$self->{buf}};
+  
+      return (
+       undef, undef,  # dev, ino
+       0666,          # filemode
+       1,             # links
+       $>,            # user id
+       $),            # group id
+       undef,         # device id
+       $len,          # size
+       undef,         # atime
+       undef,         # mtime
+       undef,         # ctime
+       512,           # blksize
+       int(($len+511)/512)  # blocks
+      );
+  }
+  
+  sub FILENO {
+      return undef;   # XXX perlfunc says this means the file is closed
+  }
+  
+  sub blocking {
+      my $self = shift;
+      my $old = *$self->{blocking} || 0;
+      *$self->{blocking} = shift if @_;
+      return $old;
+  }
+  
+  my $notmuch = sub { return };
+  
+  *fileno    = $notmuch;
+  *error     = $notmuch;
+  *clearerr  = $notmuch; 
+  *sync      = $notmuch;
+  *flush     = $notmuch;
+  *setbuf    = $notmuch;
+  *setvbuf   = $notmuch;
+  
+  *untaint   = $notmuch;
+  *autoflush = $notmuch;
+  *fcntl     = $notmuch;
+  *ioctl     = $notmuch;
+  
+  *GETC   = \&getc;
+  *PRINT  = \&print;
+  *PRINTF = \&printf;
+  *READ   = \&read;
+  *WRITE  = \&write;
+  *SEEK   = \&seek;
+  *TELL   = \&getpos;
+  *EOF    = \&eof;
+  *CLOSE  = \&close;
+  *BINMODE = \&binmode;
+  
+  
+  sub string_ref
+  {
+      my $self = shift;
+      return *$self->{buf};
+  }
+  *sref = \&string_ref;
+  
+  1;
+  
+  __END__
+  
+  =head1 NAME
+  
+  IO::String - Emulate file interface for in-core strings
+  
+  =head1 SYNOPSIS
+  
+   use IO::String;
+   $io = IO::String->new;
+   $io = IO::String->new($var);
+   tie *IO, 'IO::String';
+  
+   # read data
+   <$io>;
+   $io->getline;
+   read($io, $buf, 100);
+  
+   # write data
+   print $io "string\n";
+   $io->print(@data);
+   syswrite($io, $buf, 100);
+  
+   select $io;
+   printf "Some text %s\n", $str;
+  
+   # seek
+   $pos = $io->getpos;
+   $io->setpos(0);        # rewind
+   $io->seek(-30, -1);
+   seek($io, 0, 0);
+  
+  =head1 DESCRIPTION
+  
+  The C<IO::String> module provides the C<IO::File> interface for in-core
+  strings.  An C<IO::String> object can be attached to a string, and
+  makes it possible to use the normal file operations for reading or
+  writing data, as well as for seeking to various locations of the string.
+  This is useful when you want to use a library module that only
+  provides an interface to file handles on data that you have in a string
+  variable.
+  
+  Note that perl-5.8 and better has built-in support for "in memory"
+  files, which are set up by passing a reference instead of a filename
+  to the open() call. The reason for using this module is that it
+  makes the code backwards compatible with older versions of Perl.
+  
+  The C<IO::String> module provides an interface compatible with
+  C<IO::File> as distributed with F<IO-1.20>, but the following methods
+  are not available: new_from_fd, fdopen, format_write,
+  format_page_number, format_lines_per_page, format_lines_left,
+  format_name, format_top_name.
+  
+  The following methods are specific to the C<IO::String> class:
+  
+  =over 4
+  
+  =item $io = IO::String->new
+  
+  =item $io = IO::String->new( $string )
+  
+  The constructor returns a newly-created C<IO::String> object.  It
+  takes an optional argument, which is the string to read from or write
+  into.  If no $string argument is given, then an internal buffer
+  (initially empty) is allocated.
+  
+  The C<IO::String> object returned is tied to itself.  This means
+  that you can use most Perl I/O built-ins on it too: readline, <>, getc,
+  print, printf, syswrite, sysread, close.
+  
+  =item $io->open
+  
+  =item $io->open( $string )
+  
+  Attaches an existing IO::String object to some other $string, or
+  allocates a new internal buffer (if no argument is given).  The
+  position is reset to 0.
+  
+  =item $io->string_ref
+  
+  Returns a reference to the string that is attached to
+  the C<IO::String> object.  Most useful when you let the C<IO::String>
+  create an internal buffer to write into.
+  
+  =item $io->pad
+  
+  =item $io->pad( $char )
+  
+  Specifies the padding to use if
+  the string is extended by either the seek() or truncate() methods.  It
+  is a single character and defaults to "\0".
+  
+  =item $io->pos
+  
+  =item $io->pos( $newpos )
+  
+  Yet another interface for reading and setting the current read/write
+  position within the string (the normal getpos/setpos/tell/seek
+  methods are also available).  The pos() method always returns the
+  old position, and if you pass it an argument it sets the new
+  position.
+  
+  There is (deliberately) a difference between the setpos() and seek()
+  methods in that seek() extends the string (with the specified
+  padding) if you go to a location past the end, whereas setpos()
+  just snaps back to the end.  If truncate() is used to extend the string,
+  then it works as seek().
+  
+  =back
+  
+  =head1 BUGS
+  
+  In Perl versions < 5.6, the TIEHANDLE interface was incomplete.
+  If you use such a Perl, then seek(), tell(), eof(), fileno(), binmode() will
+  not do anything on an C<IO::String> handle.  See L<perltie> for
+  details.
+  
+  =head1 SEE ALSO
+  
+  L<IO::File>, L<IO::Stringy>, L<perlfunc/open>
+  
+  =head1 COPYRIGHT
+  
+  Copyright 1998-2005 Gisle Aas.
+  
+  This library is free software; you can redistribute it and/or
+  modify it under the same terms as Perl itself.
+  
+  =cut
+IO_STRING
+
 $fatpacked{"Number/Compare.pm"} = <<'NUMBER_COMPARE';
   # $Id: Compare.pm 846 2002-10-25 15:46:01Z richardc $
   package Number::Compare;
@@ -11220,6 +16656,130 @@ $fatpacked{"Path/Class/File.pm"} = <<'PATH_CLASS_FILE';
   
   =cut
 PATH_CLASS_FILE
+
+$fatpacked{"String/RewritePrefix.pm"} = <<'STRING_REWRITEPREFIX';
+  use strict;
+  use warnings;
+  package String::RewritePrefix;
+  BEGIN {
+    $String::RewritePrefix::VERSION = '0.006';
+  }
+  use Carp ();
+  # ABSTRACT: rewrite strings based on a set of known prefixes
+  
+  # 0.972 allows \'method_name' form -- rjbs, 2010-10-25
+  use Sub::Exporter 0.972 -setup => {
+    exports => [ rewrite => \'_new_rewriter' ],
+  };
+  
+  
+  sub rewrite {
+    my ($self, $arg, @rest) = @_;
+    return $self->_new_rewriter(rewrite => { prefixes => $arg })->(@rest);
+  }
+  
+  sub _new_rewriter {
+    my ($self, $name, $arg) = @_;
+    my $rewrites = $arg->{prefixes} || {};
+  
+    my @rewrites;
+    for my $prefix (sort { length $b <=> length $a } keys %$rewrites) {
+      push @rewrites, ($prefix, $rewrites->{$prefix});
+    }
+  
+    return sub {
+      my @result;
+  
+      Carp::cluck("string rewriter invoked in void context")
+        unless defined wantarray;
+  
+      Carp::croak("attempt to rewrite multiple strings outside of list context")
+        if @_ > 1 and ! wantarray;
+  
+      STRING: for my $str (@_) {
+        for (my $i = 0; $i < @rewrites; $i += 2) {
+          if (index($str, $rewrites[$i]) == 0) {
+            if (ref $rewrites[$i+1]) {
+              my $rest = substr $str, length($rewrites[$i]);
+              my $str  = $rewrites[ $i+1 ]->($rest);
+              push @result, (defined $str ? $str : '') . $rest;
+            } else {
+              push @result, $rewrites[$i+1] . substr $str, length($rewrites[$i]);
+            }
+            next STRING;
+          }
+        }
+  
+        push @result, $str;
+      }
+      
+      return wantarray ? @result : $result[0];
+    };
+  }
+  
+  1;
+  
+  __END__
+  =pod
+  
+  =head1 NAME
+  
+  String::RewritePrefix - rewrite strings based on a set of known prefixes
+  
+  =head1 VERSION
+  
+  version 0.006
+  
+  =head1 SYNOPSIS
+  
+    use String::RewritePrefix;
+    my @to_load = String::RewritePrefix->rewrite(
+      { '' => 'MyApp::', '+' => '' },
+      qw(Plugin Mixin Addon +Corporate::Thinger),
+    );
+  
+    # now you have:
+    qw(MyApp::Plugin MyApp::Mixin MyApp::Addon Corporate::Thinger)
+  
+  You can also import a rewrite routine:
+  
+    use String::RewritePrefix rewrite => {
+      -as => 'rewrite_dt_prefix',
+      prefixes => { '' => 'MyApp::', '+' => '' },
+    };
+  
+    my @to_load = rewrite_dt_prefix( qw(Plugin Mixin Addon +Corporate::Thinger));
+  
+    # now you have:
+    qw(MyApp::Plugin MyApp::Mixin MyApp::Addon Corporate::Thinger)
+  
+  =head1 METHODS
+  
+  =head2 rewrite
+  
+    String::RewritePrefix->rewrite(\%prefix, @strings);
+  
+  This rewrites all the given strings using the rules in C<%prefix>.  Its keys
+  are known prefixes for which its values will be substituted.  This is performed
+  in longest-first order, and only one prefix will be rewritten.
+  
+  If the prefix value is a coderef, it will be executed with the remaining string
+  as its only argument.  The return value will be used as the prefix.
+  
+  =head1 AUTHOR
+  
+  Ricardo Signes <rjbs@cpan.org>
+  
+  =head1 COPYRIGHT AND LICENSE
+  
+  This software is copyright (c) 2010 by Ricardo Signes.
+  
+  This is free software; you can redistribute it and/or modify it under
+  the same terms as the Perl 5 programming language system itself.
+  
+  =cut
+  
+STRING_REWRITEPREFIX
 
 $fatpacked{"Sub/Exporter.pm"} = <<'SUB_EXPORTER';
   use 5.006;
@@ -13490,6 +19050,582 @@ $fatpacked{"Text/Glob.pm"} = <<'TEXT_GLOB';
   
   =cut
 TEXT_GLOB
+
+$fatpacked{"Try/Tiny.pm"} = <<'TRY_TINY';
+  package Try::Tiny;
+  
+  use strict;
+  #use warnings;
+  
+  use vars qw(@EXPORT @EXPORT_OK $VERSION @ISA);
+  
+  BEGIN {
+  	require Exporter;
+  	@ISA = qw(Exporter);
+  }
+  
+  $VERSION = "0.09";
+  
+  $VERSION = eval $VERSION;
+  
+  @EXPORT = @EXPORT_OK = qw(try catch finally);
+  
+  $Carp::Internal{+__PACKAGE__}++;
+  
+  # Need to prototype as @ not $$ because of the way Perl evaluates the prototype.
+  # Keeping it at $$ means you only ever get 1 sub because we need to eval in a list
+  # context & not a scalar one
+  
+  sub try (&;@) {
+  	my ( $try, @code_refs ) = @_;
+  
+  	# we need to save this here, the eval block will be in scalar context due
+  	# to $failed
+  	my $wantarray = wantarray;
+  
+  	my ( $catch, @finally );
+  
+  	# find labeled blocks in the argument list.
+  	# catch and finally tag the blocks by blessing a scalar reference to them.
+  	foreach my $code_ref (@code_refs) {
+  		next unless $code_ref;
+  
+  		my $ref = ref($code_ref);
+  
+  		if ( $ref eq 'Try::Tiny::Catch' ) {
+  			$catch = ${$code_ref};
+  		} elsif ( $ref eq 'Try::Tiny::Finally' ) {
+  			push @finally, ${$code_ref};
+  		} else {
+  			use Carp;
+  			confess("Unknown code ref type given '${ref}'. Check your usage & try again");
+  		}
+  	}
+  
+  	# save the value of $@ so we can set $@ back to it in the beginning of the eval
+  	my $prev_error = $@;
+  
+  	my ( @ret, $error, $failed );
+  
+  	# FIXME consider using local $SIG{__DIE__} to accumulate all errors. It's
+  	# not perfect, but we could provide a list of additional errors for
+  	# $catch->();
+  
+  	{
+  		# localize $@ to prevent clobbering of previous value by a successful
+  		# eval.
+  		local $@;
+  
+  		# failed will be true if the eval dies, because 1 will not be returned
+  		# from the eval body
+  		$failed = not eval {
+  			$@ = $prev_error;
+  
+  			# evaluate the try block in the correct context
+  			if ( $wantarray ) {
+  				@ret = $try->();
+  			} elsif ( defined $wantarray ) {
+  				$ret[0] = $try->();
+  			} else {
+  				$try->();
+  			};
+  
+  			return 1; # properly set $fail to false
+  		};
+  
+  		# copy $@ to $error; when we leave this scope, local $@ will revert $@
+  		# back to its previous value
+  		$error = $@;
+  	}
+  
+  	# set up a scope guard to invoke the finally block at the end
+  	my @guards =
+      map { Try::Tiny::ScopeGuard->_new($_, $failed ? $error : ()) }
+      @finally;
+  
+  	# at this point $failed contains a true value if the eval died, even if some
+  	# destructor overwrote $@ as the eval was unwinding.
+  	if ( $failed ) {
+  		# if we got an error, invoke the catch block.
+  		if ( $catch ) {
+  			# This works like given($error), but is backwards compatible and
+  			# sets $_ in the dynamic scope for the body of C<$catch>
+  			for ($error) {
+  				return $catch->($error);
+  			}
+  
+  			# in case when() was used without an explicit return, the C<for>
+  			# loop will be aborted and there's no useful return value
+  		}
+  
+  		return;
+  	} else {
+  		# no failure, $@ is back to what it was, everything is fine
+  		return $wantarray ? @ret : $ret[0];
+  	}
+  }
+  
+  sub catch (&;@) {
+  	my ( $block, @rest ) = @_;
+  
+  	return (
+  		bless(\$block, 'Try::Tiny::Catch'),
+  		@rest,
+  	);
+  }
+  
+  sub finally (&;@) {
+  	my ( $block, @rest ) = @_;
+  
+  	return (
+  		bless(\$block, 'Try::Tiny::Finally'),
+  		@rest,
+  	);
+  }
+  
+  {
+    package # hide from PAUSE
+      Try::Tiny::ScopeGuard;
+  
+    sub _new {
+      shift;
+      bless [ @_ ];
+    }
+  
+    sub DESTROY {
+      my @guts = @{ shift() };
+      my $code = shift @guts;
+      $code->(@guts);
+    }
+  }
+  
+  __PACKAGE__
+  
+  __END__
+  
+  =pod
+  
+  =head1 NAME
+  
+  Try::Tiny - minimal try/catch with proper localization of $@
+  
+  =head1 SYNOPSIS
+  
+  	# handle errors with a catch handler
+  	try {
+  		die "foo";
+  	} catch {
+  		warn "caught error: $_"; # not $@
+  	};
+  
+  	# just silence errors
+  	try {
+  		die "foo";
+  	};
+  
+  =head1 DESCRIPTION
+  
+  This module provides bare bones C<try>/C<catch>/C<finally> statements that are designed to
+  minimize common mistakes with eval blocks, and NOTHING else.
+  
+  This is unlike L<TryCatch> which provides a nice syntax and avoids adding
+  another call stack layer, and supports calling C<return> from the try block to
+  return from the parent subroutine. These extra features come at a cost of a few
+  dependencies, namely L<Devel::Declare> and L<Scope::Upper> which are
+  occasionally problematic, and the additional catch filtering uses L<Moose>
+  type constraints which may not be desirable either.
+  
+  The main focus of this module is to provide simple and reliable error handling
+  for those having a hard time installing L<TryCatch>, but who still want to
+  write correct C<eval> blocks without 5 lines of boilerplate each time.
+  
+  It's designed to work as correctly as possible in light of the various
+  pathological edge cases (see L<BACKGROUND>) and to be compatible with any style
+  of error values (simple strings, references, objects, overloaded objects, etc).
+  
+  If the try block dies, it returns the value of the last statement executed in
+  the catch block, if there is one. Otherwise, it returns C<undef> in scalar
+  context or the empty list in list context. The following two examples both
+  assign C<"bar"> to C<$x>.
+  
+  	my $x = try { die "foo" } catch { "bar" };
+  
+  	my $x = eval { die "foo" } || "bar";
+  
+  You can add finally blocks making the following true.
+  
+  	my $x;
+  	try { die 'foo' } finally { $x = 'bar' };
+  	try { die 'foo' } catch { warn "Got a die: $_" } finally { $x = 'bar' };
+  
+  Finally blocks are always executed making them suitable for cleanup code
+  which cannot be handled using local.  You can add as many finally blocks to a
+  given try block as you like.
+  
+  =head1 EXPORTS
+  
+  All functions are exported by default using L<Exporter>.
+  
+  If you need to rename the C<try>, C<catch> or C<finally> keyword consider using
+  L<Sub::Import> to get L<Sub::Exporter>'s flexibility.
+  
+  =over 4
+  
+  =item try (&;@)
+  
+  Takes one mandatory try subroutine, an optional catch subroutine & finally
+  subroutine.
+  
+  The mandatory subroutine is evaluated in the context of an C<eval> block.
+  
+  If no error occurred the value from the first block is returned, preserving
+  list/scalar context.
+  
+  If there was an error and the second subroutine was given it will be invoked
+  with the error in C<$_> (localized) and as that block's first and only
+  argument.
+  
+  C<$@> does B<not> contain the error. Inside the C<catch> block it has the same
+  value it had before the C<try> block was executed.
+  
+  Note that the error may be false, but if that happens the C<catch> block will
+  still be invoked.
+  
+  Once all execution is finished then the finally block if given will execute.
+  
+  =item catch (&;$)
+  
+  Intended to be used in the second argument position of C<try>.
+  
+  Returns a reference to the subroutine it was given but blessed as
+  C<Try::Tiny::Catch> which allows try to decode correctly what to do
+  with this code reference.
+  
+  	catch { ... }
+  
+  Inside the catch block the caught error is stored in C<$_>, while previous
+  value of C<$@> is still available for use.  This value may or may not be
+  meaningful depending on what happened before the C<try>, but it might be a good
+  idea to preserve it in an error stack.
+  
+  For code that captures C<$@> when throwing new errors (i.e.
+  L<Class::Throwable>), you'll need to do:
+  
+  	local $@ = $_;
+  
+  =item finally (&;$)
+  
+    try     { ... }
+    catch   { ... }
+    finally { ... };
+  
+  Or
+  
+    try     { ... }
+    finally { ... };
+  
+  Or even
+  
+    try     { ... }
+    finally { ... }
+    catch   { ... };
+  
+  Intended to be the second or third element of C<try>. Finally blocks are always
+  executed in the event of a successful C<try> or if C<catch> is run. This allows
+  you to locate cleanup code which cannot be done via C<local()> e.g. closing a file
+  handle.
+  
+  When invoked, the finally block is passed the error that was caught.  If no
+  error was caught, it is passed nothing.  In other words, the following code
+  does just what you would expect:
+  
+    try {
+      die_sometimes();
+    } catch {
+      # ...code run in case of error
+    } finally {
+      if (@_) {
+        print "The try block died with: @_\n";
+      } else {
+        print "The try block ran without error.\n";
+      }
+    };
+  
+  B<You must always do your own error handling in the finally block>. C<Try::Tiny> will
+  not do anything about handling possible errors coming from code located in these
+  blocks.
+  
+  In the same way C<catch()> blesses the code reference this subroutine does the same
+  except it bless them as C<Try::Tiny::Finally>.
+  
+  =back
+  
+  =head1 BACKGROUND
+  
+  There are a number of issues with C<eval>.
+  
+  =head2 Clobbering $@
+  
+  When you run an eval block and it succeeds, C<$@> will be cleared, potentially
+  clobbering an error that is currently being caught.
+  
+  This causes action at a distance, clearing previous errors your caller may have
+  not yet handled.
+  
+  C<$@> must be properly localized before invoking C<eval> in order to avoid this
+  issue.
+  
+  More specifically, C<$@> is clobbered at the beginning of the C<eval>, which
+  also makes it impossible to capture the previous error before you die (for
+  instance when making exception objects with error stacks).
+  
+  For this reason C<try> will actually set C<$@> to its previous value (before
+  the localization) in the beginning of the C<eval> block.
+  
+  =head2 Localizing $@ silently masks errors
+  
+  Inside an eval block C<die> behaves sort of like:
+  
+  	sub die {
+  		$@ = $_[0];
+  		return_undef_from_eval();
+  	}
+  
+  This means that if you were polite and localized C<$@> you can't die in that
+  scope, or your error will be discarded (printing "Something's wrong" instead).
+  
+  The workaround is very ugly:
+  
+  	my $error = do {
+  		local $@;
+  		eval { ... };
+  		$@;
+  	};
+  
+  	...
+  	die $error;
+  
+  =head2 $@ might not be a true value
+  
+  This code is wrong:
+  
+  	if ( $@ ) {
+  		...
+  	}
+  
+  because due to the previous caveats it may have been unset.
+  
+  C<$@> could also be an overloaded error object that evaluates to false, but
+  that's asking for trouble anyway.
+  
+  The classic failure mode is:
+  
+  	sub Object::DESTROY {
+  		eval { ... }
+  	}
+  
+  	eval {
+  		my $obj = Object->new;
+  
+  		die "foo";
+  	};
+  
+  	if ( $@ ) {
+  
+  	}
+  
+  In this case since C<Object::DESTROY> is not localizing C<$@> but still uses
+  C<eval>, it will set C<$@> to C<"">.
+  
+  The destructor is called when the stack is unwound, after C<die> sets C<$@> to
+  C<"foo at Foo.pm line 42\n">, so by the time C<if ( $@ )> is evaluated it has
+  been cleared by C<eval> in the destructor.
+  
+  The workaround for this is even uglier than the previous ones. Even though we
+  can't save the value of C<$@> from code that doesn't localize, we can at least
+  be sure the eval was aborted due to an error:
+  
+  	my $failed = not eval {
+  		...
+  
+  		return 1;
+  	};
+  
+  This is because an C<eval> that caught a C<die> will always return a false
+  value.
+  
+  =head1 SHINY SYNTAX
+  
+  Using Perl 5.10 you can use L<perlsyn/"Switch statements">.
+  
+  The C<catch> block is invoked in a topicalizer context (like a C<given> block),
+  but note that you can't return a useful value from C<catch> using the C<when>
+  blocks without an explicit C<return>.
+  
+  This is somewhat similar to Perl 6's C<CATCH> blocks. You can use it to
+  concisely match errors:
+  
+  	try {
+  		require Foo;
+  	} catch {
+  		when (/^Can't locate .*?\.pm in \@INC/) { } # ignore
+  		default { die $_ }
+  	};
+  
+  =head1 CAVEATS
+  
+  =over 4
+  
+  =item *
+  
+  C<@_> is not available within the C<try> block, so you need to copy your
+  arglist. In case you want to work with argument values directly via C<@_>
+  aliasing (i.e. allow C<$_[1] = "foo">), you need to pass C<@_> by reference:
+  
+  	sub foo {
+  		my ( $self, @args ) = @_;
+  		try { $self->bar(@args) }
+  	}
+  
+  or
+  
+  	sub bar_in_place {
+  		my $self = shift;
+  		my $args = \@_;
+  		try { $_ = $self->bar($_) for @$args }
+  	}
+  
+  =item *
+  
+  C<return> returns from the C<try> block, not from the parent sub (note that
+  this is also how C<eval> works, but not how L<TryCatch> works):
+  
+  	sub bar {
+  		try { return "foo" };
+  		return "baz";
+  	}
+  
+  	say bar(); # "baz"
+  
+  =item *
+  
+  C<try> introduces another caller stack frame. L<Sub::Uplevel> is not used. L<Carp>
+  will not report this when using full stack traces, though, because
+  C<%Carp::Internal> is used. This lack of magic is considered a feature.
+  
+  =item *
+  
+  The value of C<$_> in the C<catch> block is not guaranteed to be the value of
+  the exception thrown (C<$@>) in the C<try> block.  There is no safe way to
+  ensure this, since C<eval> may be used unhygenically in destructors.  The only
+  guarantee is that the C<catch> will be called if an exception is thrown.
+  
+  =item *
+  
+  The return value of the C<catch> block is not ignored, so if testing the result
+  of the expression for truth on success, be sure to return a false value from
+  the C<catch> block:
+  
+  	my $obj = try {
+  		MightFail->new;
+  	} catch {
+  		...
+  
+  		return; # avoid returning a true value;
+  	};
+  
+  	return unless $obj;
+  
+  =item *
+  
+  C<$SIG{__DIE__}> is still in effect.
+  
+  Though it can be argued that C<$SIG{__DIE__}> should be disabled inside of
+  C<eval> blocks, since it isn't people have grown to rely on it. Therefore in
+  the interests of compatibility, C<try> does not disable C<$SIG{__DIE__}> for
+  the scope of the error throwing code.
+  
+  =item *
+  
+  Lexical C<$_> may override the one set by C<catch>.
+  
+  For example Perl 5.10's C<given> form uses a lexical C<$_>, creating some
+  confusing behavior:
+  
+  	given ($foo) {
+  		when (...) {
+  			try {
+  				...
+  			} catch {
+  				warn $_; # will print $foo, not the error
+  				warn $_[0]; # instead, get the error like this
+  			}
+  		}
+  	}
+  
+  =back
+  
+  =head1 SEE ALSO
+  
+  =over 4
+  
+  =item L<TryCatch>
+  
+  Much more feature complete, more convenient semantics, but at the cost of
+  implementation complexity.
+  
+  =item L<autodie>
+  
+  Automatic error throwing for builtin functions and more. Also designed to
+  work well with C<given>/C<when>.
+  
+  =item L<Throwable>
+  
+  A lightweight role for rolling your own exception classes.
+  
+  =item L<Error>
+  
+  Exception object implementation with a C<try> statement. Does not localize
+  C<$@>.
+  
+  =item L<Exception::Class::TryCatch>
+  
+  Provides a C<catch> statement, but properly calling C<eval> is your
+  responsibility.
+  
+  The C<try> keyword pushes C<$@> onto an error stack, avoiding some of the
+  issues with C<$@>, but you still need to localize to prevent clobbering.
+  
+  =back
+  
+  =head1 LIGHTNING TALK
+  
+  I gave a lightning talk about this module, you can see the slides (Firefox
+  only):
+  
+  L<http://nothingmuch.woobling.org/talks/takahashi.xul?data=yapc_asia_2009/try_tiny.txt>
+  
+  Or read the source:
+  
+  L<http://nothingmuch.woobling.org/talks/yapc_asia_2009/try_tiny.yml>
+  
+  =head1 VERSION CONTROL
+  
+  L<http://github.com/nothingmuch/try-tiny/>
+  
+  =head1 AUTHOR
+  
+  Yuval Kogman E<lt>nothingmuch@woobling.orgE<gt>
+  
+  =head1 COPYRIGHT
+  
+  	Copyright (c) 2009 Yuval Kogman. All rights reserved.
+  	This program is free software; you can redistribute
+  	it and/or modify it under the terms of the MIT license.
+  
+  =cut
+  
+TRY_TINY
 
 $fatpacked{"YAML.pm"} = <<'YAML';
   package YAML;
@@ -17270,7 +23406,7 @@ $fatpacked{"YAML/Types.pm"} = <<'YAML_TYPES';
   =cut
 YAML_TYPES
 
-$fatpacked{"x86_64-linux-gnu-thread-multi/Params/Util.pm"} = <<'X86_64-LINUX-GNU-THREAD-MULTI_PARAMS_UTIL';
+$fatpacked{"i686-linux-gnu-thread-multi/Params/Util.pm"} = <<'I686-LINUX-GNU-THREAD-MULTI_PARAMS_UTIL';
   package Params::Util;
   
   =pod
@@ -18083,7 +24219,7 @@ $fatpacked{"x86_64-linux-gnu-thread-multi/Params/Util.pm"} = <<'X86_64-LINUX-GNU
   LICENSE file included with this module.
   
   =cut
-X86_64-LINUX-GNU-THREAD-MULTI_PARAMS_UTIL
+I686-LINUX-GNU-THREAD-MULTI_PARAMS_UTIL
 
 s/^  //mg for values %fatpacked;
 
@@ -18102,5 +24238,5 @@ unshift @INC, sub {
 use FindBin qw/$Bin/;
 use lib "$Bin/../lib";
 
-use App::mist;
-App::mist->run;
+use App::Mist;
+App::Mist->run;
