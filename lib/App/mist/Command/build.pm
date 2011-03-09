@@ -54,19 +54,20 @@ sub execute {
 
     printf $out <<'INSTALLER', @args;
 
-    use App::cpanminus::script;
-    use FindBin qw/$RealBin/;
+use App::cpanminus::script;
+use FindBin qw/$RealBin/;
 
-    unless (caller) {
-      my $app = App::cpanminus::script->new;
-      $app->parse_options(
-        "--local-lib-contained=${RealBin}/%s",
-        "--mirror=file://${RealBin}/%s",
-        '--mirror-only',
-        %s
-      );
-      $app->doit or exit(1);
-    }
+unless (caller) {
+  my $app = App::cpanminus::script->new;
+  $app->parse_options(
+    "--local-lib-contained=${RealBin}/%s",
+    "--mirror=file://${RealBin}/%s",
+    '--mirror-only',
+    %s
+  );
+  $app->doit or exit(1);
+}
+
 INSTALLER
 
     close $out;
