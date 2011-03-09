@@ -113,10 +113,10 @@ unless (caller) {
     %s
   );
 
-  run_cpanm( @prepend ) if @prepend;
-  run_cpanm( '--installdeps', @notest ) if @notest;
-  run_cpanm( '--notest', @notest ) if @notest;
-  run_cpanm( @prereqs ) if @prereqs;
+  run_cpanm( @ARGV, @prepend ) if @prepend;
+  run_cpanm( @ARGV, '--installdeps', @notest ) if @notest;
+  run_cpanm( @ARGV, '--notest', @notest ) if @notest;
+  run_cpanm( @ARGV, @prereqs ) if @prereqs;
 }
 
 INSTALLER
