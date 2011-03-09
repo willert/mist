@@ -1,1 +1,27 @@
-Repository for mist
+_mist_ is intended to help with the quasi-deployment of uninstalled
+(or uninstallable) Perl applications. The most common applications for
+this are [cat]: http://www.catalystframework.org/ "Catalyst"  
+applications, but it might prove useful in other scenarios, too.
+
+_mist_ works with [dzil]: http://dzil.org/ "Dist::Zilla" and
+[cpanm]: http://xrl.us/cpanm "App::cpanminus" to create and maintain a
+stable CPAN mirror in your distributions path that only includes the
+needed distributions.
+
+The benefits of this approach are:
+
+1. You always have a stable set of known-good modules available.
+
+2. These modules can easily be installed in a _local::lib_ container
+   and won't interfere with any other applications on this machine
+	 or the system perl installation.
+
+3. _mist_ creates a self-contained executable based on [cpanm] so
+   no system-wide installation whatever apart from _local::lib_ is
+   required on target machines and even this can be localized.
+
+4. Your applications dependencies can easily be put under version
+	 control with all the benefits that brings.
+
+_mist_ is in the earliest stages of development so any input is more
+than welcome.
