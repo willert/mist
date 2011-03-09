@@ -1,10 +1,10 @@
 _mist_ is intended to help with the quasi-deployment of uninstalled
 (or uninstallable) Perl applications. The most common applications for
-this are [cat]: http://www.catalystframework.org/ "Catalyst"  
+this are [Catalyst][cat]
 applications, but it might prove useful in other scenarios, too.
 
-_mist_ works with [dzil]: http://dzil.org/ "Dist::Zilla" and
-[cpanm]: http://xrl.us/cpanm "App::cpanminus" to create and maintain a
+_mist_ works with [Dist::Zilla][dzil] and
+[cpanm] to create and maintain a
 stable CPAN mirror in your distributions path that only includes the
 needed distributions.
 
@@ -25,3 +25,7 @@ The benefits of this approach are:
 
 _mist_ is in the earliest stages of development so any input is more
 than welcome.
+
+[dzil]: http://dzil.org/ "Dist::Zilla homepage"
+[cpanm]: http://xrl.us/cpanm "Download App::cpanminus"
+[cat]: http://www.catalystframework.org/ "Catalyst Framework"  
