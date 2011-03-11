@@ -61,24 +61,30 @@ sub execute {
     no warnings 'redefine';
     local *App::cpanminus::script::dump_scandeps = sub {
       my $self = shift;
-      use Data::Visitor::Callback;
+
       my %deps;
-      my $v = Data::Visitor::Callback->new(
-        ignore_return_values => 1,
-        hash => sub {
-          my ( $visitor, $meta ) = @_;
+      my $visit;
+      $visit = sub {
+        my $this = shift;
+        return unless ref $this;
+        if ( ref $this eq 'ARRAY' ) {
+          $visit->( $_ ) for @$this;
+          return;
+        }
+        if ( ref $this eq 'HASH' ) {
           my @reqs = map{ "${_}requires" } '', 'build_', 'config_';
-          @reqs = grep{ exists $meta->{$_} } @reqs;
-          return unless @reqs;
-          for ( map{ $meta->{$_} } @reqs ) {
+          @reqs = grep{ exists $this->{$_} } @reqs;
+          if ( not @reqs ) { $visit->( $_ ) for values %$this; }
+          for ( map{ $this->{$_} } @reqs ) {
             while ( my ( $pkg, $ver ) = each %$_ ) {
               next if exists $deps{$pkg} and $deps{$pkg} >= $ver;
               $deps{$pkg} = $ver;
             }
           }
-        },
-      );
-      $v->visit( $self->{scandeps_tree} );
+        }
+      };
+      $visit->( $self->{scandeps_tree} );
+      undef( $visit );
 
       my %core_deps = map{
         printf STDERR "%s v%s is core in %s\n",
@@ -92,7 +98,9 @@ sub execute {
       printf STDERR 'Core deps: %s%s', Dumper( \%core_deps ), "\n";
     };
     my $app = App::cpanminus::script->new;
-    $app->parse_options( @options, @cpanm_args, '--scandeps', '--format=yaml', @$args );
+    $app->parse_options(
+      @options, @cpanm_args, '--scandeps', '--format=yaml', @$args
+    );
     $app->doit or exit(1);
   }
 
