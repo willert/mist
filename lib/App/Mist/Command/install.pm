@@ -35,19 +35,20 @@ sub execute {
 
   my @options   = (
     "--quiet",
+    "--reinstall",
     "--local-lib-contained=${workspace}",
     "--mirror=file://${mpan}",
     "--mirror=http://search.cpan.org/CPAN",
     "--save-dists=${mpan}",
   );
 
-  my $app1 = App::cpanminus::script->new;
-  $app1->parse_options( @options, '--installdeps', @$args );
-  $app1->doit or exit(1);
+  require Module::CoreList;
+  $Module::CoreList::version{$]+0} =
+    $Module::CoreList::version{5.008001};
 
-  my $app2 = App::cpanminus::script->new;
-  $app2->parse_options( @options, '--reinstall', @$args );
-  $app2->doit or exit(1);
+  my $app = App::cpanminus::script->new;
+  $app->parse_options( @options, '--reinstall', @$args );
+  $app->doit or exit(1);
 
 }
 
