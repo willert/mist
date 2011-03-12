@@ -1,4 +1,4 @@
-package App::Mist::Command::scan;
+package App::Mist::Command::corelibs;
 
 use strict;
 use warnings;

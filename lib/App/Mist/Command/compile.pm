@@ -1,4 +1,4 @@
-package App::Mist::Command::build;
+package App::Mist::Command::compile;
 
 use strict;
 use warnings;
@@ -62,16 +62,6 @@ PREAMBLE
 
   try {
 
-    open my $in,  "<", "$cpanm" or die $!;
-    open my $out, ">", "mist-install.tmp" or die $!;
-
-    print STDERR "Generating mist-installer\n";
-
-    while (<$in>) {
-        print $out $_;
-        last if /# END OF FATPACK CODE\s*$/;
-    }
-
     my $slurp_file = sub{
       my $file = shift;
       my @lines;
@@ -103,9 +93,16 @@ PREAMBLE
       @prereqs ? sprintf( qq{'%s'}, join qq{',\n    '}, @prereqs ) : '',
     );
 
-    # use Data::Dumper::Concise;
-    # printf STDERR '@Args: %s%s', Dumper( \@args ), "\n";
 
+    print STDERR "Generating mist-install\n";
+
+    open my $in,  "<", "$cpanm" or die $!;
+    open my $out, ">", "mist-install.tmp" or die $!;
+
+    while (<$in>) {
+        print $out $_;
+        last if /# END OF FATPACK CODE\s*$/;
+    }
 
     printf $out <<'INSTALLER', @args;
 

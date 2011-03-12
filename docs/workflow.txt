@@ -1,0 +1,29 @@
+On the build-master:
+---
+
+- mist init [unimplemented]
+  Initialize a mist repository
+
+- mist update [unimplemented]
+  Runs `dzil listdeps` against the current local lib
+  and install all missing modules, recreating the index afterwards.
+
+- mist index
+  Rebuild mpan package index
+
+- mist cleanup [unimplemented]
+  Removes all obsolete packages from mpan
+
+- mist inject [PACKAGE]
+  Force install of a package. Package can be any package spec that
+  is understood by cpanm
+
+- mist compile
+  Builds the `mist-install` scripts that can be used on host systems
+
+
+On the host:
+---
+
+- mist-install
+	Create or update a local lib with all needed modules

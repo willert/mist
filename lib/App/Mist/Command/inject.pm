@@ -1,4 +1,4 @@
-package App::Mist::Command::install;
+package App::Mist::Command::inject;
 
 use strict;
 use warnings;
