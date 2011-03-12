@@ -7,8 +7,7 @@ use Carp;
 use Scalar::Util qw/looks_like_number blessed/;
 
 use App::Cmd::Setup -app;
+use Module::Pluggable search_path => [ 'App::Mist::Command' ];
 
-use App::Mist::Command::build;
-use App::Mist::Command::index;
 
 1;
