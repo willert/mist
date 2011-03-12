@@ -1,10 +1,9 @@
 _mist_ is intended to help with the quasi-deployment of uninstalled
 (or uninstallable) Perl applications. The most common applications for
-this are [Catalyst][cat]
-applications, but it might prove useful in other scenarios, too.
+this are [Catalyst][cat] applications, but it might prove useful in other
+scenarios, too.
 
-_mist_ works with [Dist::Zilla][dzil] and
-[cpanm] to create and maintain a
+_mist_ works with [Dist::Zilla][dzil] and [cpanm] to create and maintain a
 stable CPAN mirror in your distributions path that only includes the
 needed distributions.
 
@@ -17,8 +16,8 @@ The benefits of this approach are:
 	 or the system perl installation.
 
 3. _mist_ creates a self-contained executable based on [cpanm] so
-   no system-wide installation whatever apart from _local::lib_ is
-   required on target machines and even this can be localized.
+   no system-wide installation whatsoever (not even _local::lib_)
+   is required on target machines.
 
 4. Your applications dependencies can easily be put under version
 	 control with all the benefits that brings.
