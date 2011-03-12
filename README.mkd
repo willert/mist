@@ -4,8 +4,8 @@ this are [Catalyst][cat] applications, but it might prove useful in other
 scenarios, too.
 
 _mist_ works with [Dist::Zilla][dzil] and [cpanm] to create and maintain a
-stable CPAN mirror in your distributions path that only includes the
-needed distributions.
+stable CPAN mirror in your project path that only includes the
+needed CPAN or DarkPAN distributions.
 
 The benefits of this approach are:
 
