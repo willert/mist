@@ -89,6 +89,7 @@ PREAMBLE
       $mpan->relative( $home ),
       $local_lib->relative( $home ),
       $prereqs,
+      @prepend ? sprintf( qq{'%s'}, join qq{',\n    '}, @prepend ) : '',
       @notest  ? sprintf( qq{'%s'}, join qq{',\n    '}, @notest  ) : '',
       @prereqs ? sprintf( qq{'%s'}, join qq{',\n    '}, @prereqs ) : '',
     );
@@ -175,10 +176,15 @@ CHECK_PREREQS
   my @notest  = (
     %s
   );
+  my @prereqs = (
+    %s
+  );
+
 
   run_cpanm( @ARGV, @prepend ) if @prepend;
   run_cpanm( @ARGV, '--installdeps', @notest ) if @notest;
   run_cpanm( @ARGV, '--notest', @notest ) if @notest;
+  run_cpanm( @ARGV, @prereqs ) if @prereqs;
 
   require local::lib;
   print $env local::lib->environment_vars_string_for( "${local_lib}" );
