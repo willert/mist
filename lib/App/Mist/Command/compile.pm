@@ -151,6 +151,14 @@ unless (caller) {
   $mist_rc->dir->mkpath;
   my $env = $mist_rc->openw; # to catch write errors early on
 
+  my $mist_run = $local_lib->file(qw/ bin mist-run /);
+  $mist_run->dir->mkpath;
+  my $wrapper = $mist_run->openw; # to catch write errors early on
+  {
+     my $perm = ( stat $mist_run )[2] & 07777;
+     chmod( $perm | 0755, $mist_run );
+  }
+
   local $ENV{HOME} = $workspace;
 
   eval <<'CHECK_PREREQS';
@@ -176,11 +184,32 @@ CHECK_PREREQS
   print $env local::lib->environment_vars_string_for( "${local_lib}" );
   close $env;
 
+  printf $wrapper <<'WRAPPER', $Bin, $mist_rc;
+#!/bin/bash
+
+MIST_ROOT="%%s"
+MIST_ENV="%%s"
+
+if [ ! -r $MIST_ENV ] ; then
+    echo "FATAL: Could not load env from $MIST_ENV"
+    exit 1
+fi
+
+source $MIST_ENV
+export PATH="$MIST_ROOT/bin:$MIST_ROOT/sbin:$PATH"
+
+exec "$@"
+WRAPPER
+
   print <<"SUCCESS";
 
 Successfully created a mist environment for this distribution.
 To enable it put the following line in your scripts:
   source $mist_rc
+
+To run binaries from this distribution (\$HOME/bin and \$HOME/sbin are in
+automatically prepended to \$PATH) you can also use this wrapper script:
+  $mist_run my_script.pl [OPTIONS ..]
 
 SUCCESS
 }
