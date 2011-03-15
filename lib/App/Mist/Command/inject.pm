@@ -25,13 +25,12 @@ sub execute {
   do $cpanm;
   require App::cpanminus::script;
 
-  my $home = find_containing_dir_upwards( 'dist.ini' )
-    or die "Can't find project root";
-
-  my $workspace = tempdir( CLEANUP => 1 );
+  my $home      = $self->app->project_root;
   my $mpan      = $home->subdir( $ENV{MIST_DIST_DIR}  || 'mpan-dist' );
-  my $mpan_conf = $mpan->subdir( 'mist' );
   my $local_lib = $home->subdir( $ENV{MIST_LOCAL_LIB} || 'perl5' );
+
+  my $mpan_conf = $mpan->subdir( 'mist' );
+  my $workspace = $self->app->workspace_lib;
 
   my @options   = (
     "--quiet",
