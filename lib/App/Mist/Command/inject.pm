@@ -34,7 +34,6 @@ sub execute {
 
   my @options   = (
     "--quiet",
-    "--reinstall",
     "--local-lib-contained=${workspace}",
     "--mirror=file://${mpan}",
     "--mirror=http://search.cpan.org/CPAN",
@@ -46,7 +45,7 @@ sub execute {
     $Module::CoreList::version{5.008001};
 
   my $app = App::cpanminus::script->new;
-  $app->parse_options( @options, '--reinstall', @$args );
+  $app->parse_options( @options, @$args );
   $app->doit or exit(1);
 
 }
