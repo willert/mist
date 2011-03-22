@@ -47,19 +47,19 @@ sub execute {
 
     {
       ( my $dist_pkg = $dist->dist ) =~ s/-/::/g;
-      $package_details->add_entry(
+      eval{ $package_details->add_entry(
         package_name => $dist_pkg,
         version      => $dist->distversion,
         path         => $mpath,
-      );
+      )} or warn "[WARNING] $@\n";
     }
 
     while ( my ( $pkg, $version ) = each %$modules ) {
-      $package_details->add_entry(
+      eval{ $package_details->add_entry(
         package_name => $pkg,
         version      => $version,
         path         => $mpath,
-      );
+      )} or warn "[WARNING] $@\n";
     }
   };
 
