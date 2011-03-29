@@ -14,6 +14,8 @@ use File::Find::Upwards;
 use Path::Class qw/dir file/;
 use Cwd;
 
+use version 0.74;
+
 sub execute {
   my ( $self, $opt, $args ) = @_;
 
@@ -47,20 +49,27 @@ sub execute {
 
     {
       ( my $dist_pkg = $dist->dist ) =~ s/-/::/g;
-      eval{ $package_details->add_entry(
-        package_name => $dist_pkg,
-        version      => $dist->distversion,
-        path         => $mpath,
-      )} or warn "[WARNING] $@\n";
+      eval{
+        version->parse( $dist->distversion );
+        $package_details->add_entry(
+          package_name => $dist_pkg,
+          version      => $dist->distversion,
+          path         => $mpath,
+        );
+      } or warn "[WARNING] $@\n";
     }
 
     while ( my ( $pkg, $version ) = each %$modules ) {
-      eval{ $package_details->add_entry(
-        package_name => $pkg,
-        version      => $version,
-        path         => $mpath,
-      )} or warn "[WARNING] $@\n";
+      eval{
+        version->parse( $version );
+        $package_details->add_entry(
+          package_name => $pkg,
+          version      => $version,
+          path         => $mpath,
+        );
+      } or warn "[WARNING] $@\n";
     }
+
   };
 
   $package_details = CPAN::PackageDetails->new(
