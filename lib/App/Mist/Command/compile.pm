@@ -72,6 +72,8 @@ PREAMBLE
         @lines = readline $fh;
         chomp for @lines;
         @lines = grep{ $_ } @lines;
+        s/^\s+// for @lines;
+        s/\s+$// for @lines;
       }
 
       return wantarray ? @lines : join( "\n", @lines, '' );
