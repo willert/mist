@@ -1,0 +1,90 @@
+# POST-ID: 1609
+# TITLE: How I manage the distribution of Perl5 projects
+# TAGS: mist, deployment, distribution
+
+=head1 DESCRIPTION
+
+If you are working like me (which is unlikely) distributing and
+deploying your Perl5 projects poses a significant challenge. Managing
+self–contained projects has become vastly easier since the advent of
+L<local::lib>, L<Dist::Zilla> and L<App::cpanminus> but the ever
+changing (and sometimes incompatible) nature of CPAN has bitten
+me more than once in my life as a coder. Here is how I try to solve
+this, judge for yourself if this approach has any merit and encourage
+me to go further down this path if you think it does.
+
+=head1 BODY
+
+L<App::cpanminus> included the C<––save–dists> option for the first
+time in version 1.4 that was released this month. It might not seem
+like a big deal at first, but it got me thinking. I was always looking
+for a nice and hassle–free way to manage a mini–cpan that is localized
+to a project and could easily be managed by source control. Using a
+full mini–cpan for this simply couldn't be done due to size
+constraints. A gig here and a gig there amounts to real space
+requirements when needed in dozens of projects. Not to mention the
+pain of uploading and syncing this stuff.
+
+Why would I want to do this? Its simple: most of my work is done for a
+smallish web–shop with a grown infrastructure and tons of
+freelancers. Every C<Ubuntu> version from 8.04 to 11.04 beta can be
+found on our development machines and servers, you can never be sure
+which packages are installed (especially on the dev machines) and if
+you are working with a 32–bit or a 64–bit variant of the OS, nor which
+C<perl> version is installed (although I would kick any of our
+freelancers that couldn't manage to get hold of at least
+5.10.1). L<Dist::Zilla> and L<local::lib> brought some improvements to
+this non–existing process, but you are still at the whims of CPAN when
+installing from scratch. Not to mention that local libs are not
+portable between different versions of C<perl> and different host
+environments.
+
+Don't get me wrong, I don't want to lay any blame here. In fact In am
+more than impressed how stable and glitch–free the installation of
+modules like L<Catalyst> and L<DBIx::Class> is, given that they have
+zillions of dependencies they don't control. But being on the road,
+having only your netbook available and getting a call to urgently fix
+something in a project you haven't touched for months (and thus no dev
+environment ready to dive into) sucks. The last thing you need right
+then is the fun of working around a temporarily broken toolchain
+or framework of choice that makes installing from CPAN a nightmare.
+
+Even more fun, if the bug you are hunting is caused by a bug in a
+dependency that has since be fixed and the version of this library you
+are using in production has vanished from CPAN (you know, some people
+clean up their authors directory) ...
+
+Maybe I am trying to solve problems no one but me has. Or there is any
+solution to this that I have missed that is not as complicated as
+L<Shipwright> seems to be. The usual recommendations (fixed dev
+environment with company wide mini–cpan, custom apt–repositories, you
+name it) just don't cut it for me.
+
+...
+
+I've exhausted my blogging tuits (and probably your patience) for today,
+but the good news is that I've managed to weave L<local::lib>,
+L<Dist::Zilla>, L<App::cpanminus> and some fragments of mini–cpan
+style repository management into a nice small package that allows for
+easy tarball or VCS distribution of projects with no more requirements
+than a working perl and the theoretical ability to install from CPAN
+(C<cpanm> is fat–packed into the deployment script) on the target
+machine.
+
+Without further ado, if you are interested in a distribution
+management package that can do this for you, without requiring more
+than writing the usual C<dist.ini> for L<Dist::Zilla>, check out
+L<the github repository for App::Mist|https://github.com/willert/mist>
+and especially the
+L<workflow document|https://github.com/willert/mist/blob/master/docs/workflow.txt>
+and tell me what you think.
+
+Cheers & have fun,
+
+Sebastian
+
+P.S. Prepending distributions needed by others that fail to list those
+dependencies (I'm looking at you, L<DBD::mysql>) or simply fail some
+unimportant tests (L<Test::WWW::Mechanize>, anyone?) is fully
+supported. Writing some checks to ensure the environment confirms to
+your expectations (pkg–config, C compiler, whatever ..) also is.
