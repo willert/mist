@@ -15,9 +15,9 @@ sub execute {
   my ( $self, $opt, $args ) = @_;
   my $app = $self->app;
 
-  $self->app->execute_command(
-    $app->prepare_command( 'inject', $app->run_dzil( 'listdeps' ))
-  );
+  $self->app->execute_command( $app->prepare_command(
+    'inject', '--reinstall', $app->run_dzil( 'listdeps' )
+  ));
 
   return;
 }
