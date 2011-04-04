@@ -6,29 +6,17 @@ use warnings;
 use App::Mist -command;
 
 use Try::Tiny;
-use File::Which;
-use File::Find::Upwards;
 use Path::Class qw/dir/;
 use Cwd;
 
 sub execute {
   my ( $self, $opt, $args ) = @_;
 
-  my $cpanm = which( 'cpanm' )
-    or die "cpanm not found";
-
-  do $cpanm;
-  require App::cpanminus;
-
-  die "cpanm v$App::cpanminus::VERSION is too old, v1.4 needed"
-    if $App::cpanminus::VERSION < 1.4;
-
-  my $home = find_containing_dir_upwards( 'dist.ini' )
-    or die "Can't find project root";
-
-  my $mpan      = $home->subdir( $ENV{MIST_DIST_DIR}  || 'mpan-dist' );
-  my $mpan_conf = $mpan->subdir( 'mist' );
-  my $local_lib = $home->subdir( $ENV{MIST_LOCAL_LIB} || 'perl5' );
+  my $cpanm     = $self->app->cpanm_executable;
+  my $home      = $self->app->project_root;
+  my $mpan      = $self->app->mpan_dist;
+  my $mpan_conf = $self->app->mpan_conf;
+  my $local_lib = $self->app->local_lib;
 
   my $dist_prereqs = $mpan_conf->file(qw/ 00.prereqs.pl /);
   my $dist_prepend = $mpan_conf->file(qw/ 01.prepend.txt /);
@@ -97,10 +85,10 @@ PREAMBLE
     );
 
 
-    print STDERR "Generating mist-install\n";
+    print STDERR "Generating mpan-install\n";
 
     open my $in,  "<", "$cpanm" or die $!;
-    open my $out, ">", "mist-install.tmp" or die $!;
+    open my $out, ">", "mpan-install.tmp" or die $!;
 
     while (<$in>) {
         print $out $_;
@@ -135,7 +123,7 @@ sub run_cpanm {
 
 unless (caller) {
 
-  die "mist-install can not run as root\n" if $> == 0;
+  die "mpan-install can not run as root\n" if $> == 0;
 
   my $workspace = tempdir();
   $local_lib->mkpath;
@@ -226,15 +214,15 @@ INSTALLER
 
     close $out;
 
-    unlink "mist-install";
-    rename "mist-install.tmp", "mist-install";
-    chmod 0755, "mist-install";
+    unlink "mpan-install";
+    rename "mpan-install.tmp", "mpan-install";
+    chmod 0755, "mpan-install";
 
   } catch {
     warn "$_\n";
   } finally {
 
-    unlink "mist-install.tmp"
+    unlink "mpan-install.tmp"
 
   };
 
