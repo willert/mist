@@ -12,11 +12,12 @@ use Cwd;
 sub execute {
   my ( $self, $opt, $args ) = @_;
 
-  my $cpanm     = $self->app->cpanm_executable;
-  my $home      = $self->app->project_root;
-  my $mpan      = $self->app->mpan_dist;
-  my $mpan_conf = $self->app->mpan_conf;
-  my $local_lib = $self->app->local_lib;
+  my $app       = $self->app;
+  my $cpanm     = $app->cpanm_executable;
+  my $home      = $app->project_root;
+  my $mpan      = $app->mpan_dist;
+  my $mpan_conf = $app->mpan_conf;
+  my $local_lib = $app->local_lib;
 
   my $dist_prereqs = $mpan_conf->file(qw/ 00.prereqs.pl /);
   my $dist_prepend = $mpan_conf->file(qw/ 01.prepend.txt /);
@@ -70,10 +71,7 @@ PREAMBLE
     my $prereqs = $slurp_file->( $dist_prereqs );
     my @prepend = $slurp_file->( $dist_prepend );
     my @notest  = $slurp_file->( $dist_notest );
-
-    my @prereqs = qx{ dzil listdeps };
-    chomp for @prereqs;
-    @prereqs = grep{ $_ } @prereqs;
+    my @prereqs = $app->run_dzil( 'listdeps' );
 
     my @args = (
       $mpan->relative( $home ),

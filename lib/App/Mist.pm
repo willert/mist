@@ -128,4 +128,14 @@ sub run_cpanm {
 }
 
 
+sub run_dzil {
+  my ( $self, @opts ) = @_;
+
+  my $dzil   = $self->dzil_executable;
+  my @output = qx{ $dzil @opts };
+  chomp for @output;
+
+  return grep{ $_ } @output;
+}
+
 1;
