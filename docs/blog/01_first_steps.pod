@@ -5,19 +5,19 @@
 =head1 DESCRIPTION
 
 My last posting seems to have whet the appetite of a few people, 
-or at least interested one or two enough to follow for this project
-on GitHub. Today I'd like to delve deeper in how you can use
+or at least interested one or two enough to follow this project
+on GitHub. Today I'd like to delve deeper into how you can use
 L<App::Mist|https://github.com/willert/mist>
-to deploy or distribute an application. This hopefully illustrates
-what this is all about then the last posting on this did.
+to deploy or distribute an application. 
 
 =head1 BODY
 
+I will use L<App::Mist|https://github.com/willert/mist> itself as
+example for this mini-tutorial on how to use it.
 L<App::Mist|https://github.com/willert/mist> is self-hosting and has
-few dependencies on its own so we will use it here as basis for the 
-mini-tutorial that follows. Make sure, that L<Dist::Zilla> and L<App::cpanminus>
-are present on your build system, but they are not marked as
-package level dependencies, so our own chain is really light-weight.
+few dependencies on its own, but you have to make sure that
+L<Dist::Zilla> and L<App::cpanminus> are present on your build system,
+otherwise everything will fail miserably.
 
 In an ideal world, every package you depend on lives on
 L<CPAN|http://search.cpan.org>, correctly lists its dependencies and
@@ -26,7 +26,7 @@ is no such place, especially when viewed from the trenches, but
 for this post and for the installation of
 L<App::Mist|https://github.com/willert/mist> we can make this
 assumption. How to deal with the inevitable hiccups in the
-dependency chain will be a topic for another one to ten blog posts
+dependency chain will be a topic for another two (or ten) blog posts
 down the road.
 
 =head2 Installing mist from github.com
@@ -38,49 +38,79 @@ is included. For the rest of this post it is assumed that this script
 is available as C<mist> in your path (e.g. C<~/bin/mist>) and you have
 adjusted the C<CHECKOUT> variable according to your local conditions.
 
-When you first clone L<App::Mist|https://github.com/willert/mist>,
+First clone L<App::Mist|https://github.com/willert/mist>,
 e.g. via
+
+=begin sh
 
   git clone git://github.com/willert/mist.git
 
-you will notice the, for a Perl5 distribution, unusual entries
-C<mpan-dist> and C<mpan-install>. The directory C<mpan-dist> contains
-a stable copy of all distributions needed to run the application, and
-the script C<mpan-install> is a fat-packed script derived from
-C<cpanm> that can install those without any external dependencies but
-C<perl> itself. Go ahead, try it (as normal user,
-L<App::Mist|https://github.com/willert/mist> won't run as root to
-protect you from accidentally modifying your system-wide perl installation):
+=end sh
+
+You will notice the unusual entries C<mpan-dist> and C<mpan-install>.
+The directory C<mpan-dist> contains a stable copy of all distributions
+needed to run the application, and the script C<mpan-install> is a
+fat-packed script directly derived from your (or mine in this case)
+C<cpanm> that can install those distributions without any external
+dependencies. Go ahead, try it: 
+
+=begin sh
 
   cd mist
   ./mpan-install
 
-This will generate a local lib under C<./perl5> and together with the
-script from above, your copy of
-L<App::Mist|https://github.com/willert/mist> is ready to run
-(hopefully, this is alpha software, after all). You can check if
+=end sh
+
+Run that command as normal user, because
+L<App::Mist|https://github.com/willert/mist> will refuse to run with
+root privileges to protect you from accidentally modifying your
+system-wide perl installation.
+
+This will install all dependencies from C<mpan-dist> into the local lib
+(named C<perl5> by default as that seems to be the emerging naming 
+convention) for this project. If you created a C<mist> script
+as mentioned above, your copy of
+L<App::Mist|https://github.com/willert/mist> is now ready to run.
+Hopefully at least, this is still alpha quality software.
+
+You can check if
 everything is configured correctly with running
 
+=begin sh
+
   mist
+
+=end sh
 
 without any parameters and be wow'ed by my skills at writing useful
 help messages!
 
 =head2 Using mist to rebuild the distribution package
 
-I promised that mist is self hosting, so now its time to show
-you. First of all, delete C<mpan-dist> and C<mpan-install>, they are
-not needed at run-time but leave C<perl5> untouched, or your C<mist>
-installation won't run anymore because of missing libraries.
+I promised that L<App::Mist|https://github.com/willert/mist>
+is self hosting, so now its time to show you how to use your
+freshly installed C<mist> to create its own distribution package.
+
+First of all, delete C<mpan-dist> and C<mpan-install>, they are
+not needed at run-time. Leave C<perl5> untouched for now, or
+your C<mist> script won't run anymore because of missing libraries:
+
+=begin sh
 
   rm -Rf mpan-dist
   rm mpan-install
 
+=end sh
+
 To recreate the distribution run the following commands:
+
+=begin sh
 
   mist init    # scan dist.ini and pick up all deps from cpan.org
   mist index   # reindex the local mpan directory
   mist compile # build the ./mpan-install script
+
+=end sh
 
 If everything works as expected, you should have created your first
 full-fledged mist environment! And if you ignore my long-winded
@@ -89,10 +119,15 @@ ramblings, it was surprisingly fast and straight-forward, wasn't it ;)
 To verify the distribution you can now throw away your local lib and
 created it anew:
 
+=begin sh
+
   rm -Rf perl5
   # 'mist' is unlikely to work between those two steps
   ./mpan-install
 
-Good luck, and please submit a bug report if anything went amiss.
+=end sh
 
-Sebastian
+Good luck, and please submit a bug report in the 
+L<github issue tracker|https://github.com/willert/mist/issues>
+if anything went amiss.
+
