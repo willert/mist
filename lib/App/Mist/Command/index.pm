@@ -10,22 +10,16 @@ use CPAN::DistnameInfo;
 use CPAN::PackageDetails;
 
 use File::Find;
-use File::Find::Upwards;
 use Path::Class qw/dir file/;
-use Cwd;
 
 use version 0.74;
 
 sub execute {
   my ( $self, $opt, $args ) = @_;
 
-  my $home = find_containing_dir_upwards( 'dist.ini' )
-    or die "Can't find project root";
-
-  my $mpan      = $home->subdir( $ENV{MIST_DIST_DIR}  || 'mpan-dist' );
-  my $local_lib = $home->subdir( $ENV{MIST_LOCAL_LIB} || 'perl5' );
-
-  chdir $home->stringify;
+  my $home      = $self->app->project_root;
+  my $mpan      = $self->app->mpan_dist;
+  my $local_lib = $self->app->local_lib;
 
   my $mpan_modules = $mpan->subdir( 'modules' );
   my $mpan_authors = $mpan->subdir( 'authors' );
@@ -43,6 +37,9 @@ sub execute {
     my $mpath = file( $d->pathname )->relative( $mpan_authors->subdir('id'));
 
     printf "Indexing %s ...\n", $mpath;
+
+    $mpath = "./${mpath}"       # qualify path to module if
+      if $mpath->parent eq dir(); # it's parent directory is unspecified
 
     my $dist    = CPAN::ParseDistribution->new( $d->pathname );
     my $modules = $dist->modules;

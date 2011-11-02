@@ -27,8 +27,8 @@ sub execute {
     "--quiet",
     "--local-lib-contained=${workspace}",
     "--mirror-only",
-    "--mirror=file://${mpan}",
     "--mirror=http://search.cpan.org/CPAN",
+    "--mirror=file://${mpan}",
     "--save-dists=${mpan}",
   );
 

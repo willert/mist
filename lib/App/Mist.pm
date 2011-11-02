@@ -2,6 +2,9 @@ package App::Mist;
 
 use strict;
 use warnings;
+use 5.010;
+
+use mro;
 
 use Carp;
 use Scalar::Util qw/looks_like_number blessed/;
@@ -13,6 +16,13 @@ use Path::Class qw/dir file/;
 use File::HomeDir;
 use File::Which;
 use File::Find::Upwards;
+
+sub new {
+  my $class = shift;
+  my $self  = $class->next::method( @_ );
+  chdir $self->project_root->stringify;
+  return $self;
+}
 
 {
   my $project_root;
