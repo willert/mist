@@ -46,10 +46,10 @@ sub execute {
   chdir $mpan->stringify;
   find({ wanted => sub{
     return unless -f $_;
-    my $from = dir( cwd() )->subdir( 'authors', 'id' );
-    ( my $path = $_ ) =~ s|${from}/||;
+    my $from = dir( cwd() )->subdir( 'authors', 'id', '__PLACEHOLDER__' );
+    $from =~ s/__PLACEHOLDER__//;
+    ( my $path = $_ ) =~ s|${from}||;
     unlink $_ unless $dist_package{ $path };
-    # printf "%s\n", $path;
   }, no_chdir => 1 }, $mpan_authors->stringify );
 
 
