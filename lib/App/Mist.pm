@@ -5,6 +5,7 @@ use warnings;
 use 5.010;
 
 use mro;
+use version 0.74;
 
 use Carp;
 use Scalar::Util qw/looks_like_number blessed/;
@@ -16,6 +17,12 @@ use Path::Class qw/dir file/;
 use File::HomeDir;
 use File::Which;
 use File::Find::Upwards;
+
+use CPAN::ParseDistribution;
+use CPAN::DistnameInfo;
+use CPAN::PackageDetails;
+
+use Data::Dumper;
 
 sub new {
   my $class = shift;
@@ -115,15 +122,132 @@ sub new {
   }
 }
 
-sub load_cpanm {
-  my $self = shift;
-  my $pkg = $self->cpanm_executable;
+{
+  my $cpanm_loaded;
+  sub load_cpanm {
+    my $self = shift;
+    my $pkg = $self->cpanm_executable;
 
-  do $pkg;
-  require App::cpanminus;
+    $cpanm_loaded = do $pkg;
+    require App::cpanminus;
 
-  die "$0: cpanm v$App::cpanminus::VERSION is too old, v1.4 needed\n"
-    if $App::cpanminus::VERSION < 1.4;
+    die "$0: cpanm v$App::cpanminus::VERSION is too old, v1.4 needed\n"
+      if $App::cpanminus::VERSION < 1.4;
+
+    return;
+  }
+}
+
+{
+  my $package_details;
+  sub mpan_package_details {
+    my $self = shift;
+    $package_details ||= do{
+      my $packages = $self->mpan_dist->file(
+        'modules', '02packages.details.txt.gz'
+      );
+
+      if ( not -f $packages->stringify ) {
+        my $empty_package_file = CPAN::PackageDetails->new(
+          file        => "02packages.details.txt",
+          description => "Package names for my private CPAN",
+          columns     => "package name, version, path",
+          line_count  => 0,
+
+          allow_packages_only_once => 0,
+
+          intended_for =>
+            "My private CPAN",
+          url          =>
+            "http://example.com/MyCPAN/modules/02packages.details.txt",
+          written_by   =>
+            "$0 using CPAN::PackageDetails $CPAN::PackageDetails::VERSION",
+        );
+        $empty_package_file->write_file( $packages->stringify );
+      }
+
+      CPAN::PackageDetails->read( $packages->stringify );
+    };
+  }
+}
+
+sub parse_distribution {
+  my ( $self, $dist ) = @_;
+
+  my $base_path = $self->mpan_dist->subdir( 'authors' )->subdir('id');
+
+  my $file = $base_path->file(
+    $dist->{pathname} ? split( '/', $dist->{pathname} ) :
+      file( $dist->{local_path} )->basename
+  );
+
+  return unless -r -f $file;
+
+  my $d = CPAN::DistnameInfo->new( $file );
+
+  warn "$0: skipping $_\n" and return
+    unless $d->distvname;
+
+  my $dist_info = CPAN::ParseDistribution->new( $d->pathname );
+  $dist_info->modules; # force vivification of module hash
+
+  $dist_info->{pathname} = do{
+    my $mpath = file( $d->pathname )->relative(
+      $self->mpan_dist->subdir( 'authors' )->subdir('id')
+    );
+
+    $mpath = "./${mpath}"       # qualify path to module if
+      if $mpath->parent eq dir(); # it's parent directory is unspecified
+
+    $mpath;
+  };
+
+  # printf STDERR "Dist info: %s\n", Dumper( $dist_info );
+
+  return $dist_info;
+}
+
+sub add_distribution_to_index {
+  my ( $self, $dist ) = @_;
+
+  my $dist_info = $self->parse_distribution( $dist );
+
+  printf "Indexing %s ...\n", $dist_info->{pathname};
+
+  my $modules = $dist_info->modules;
+
+  while ( my ( $pkg, $version ) = each %$modules ) {
+    printf STDERR "  Added module %s %s\n", $pkg, $version;
+
+    eval{
+      version->parse( $version );
+      $self->mpan_package_details->add_entry(
+        package_name => $pkg,
+        version      => $version,
+        path         => $dist_info->{pathname},
+      );
+    };
+
+    if ( my $err = $@ ) {
+      $err =~ s/(.*) at .*/$1/s;
+      print STDERR "  [WARNING] ${err}\n";
+    }
+  }
+
+  return;
+}
+
+sub commit_mpan_package_index {
+  my ( $self, $dist ) = @_;
+
+  # CPAN::PackageDetails seems to pick up empty header lines somehow
+  # force-delete them to avoid warnings and unsightly index files
+  delete $self->mpan_package_details->header->{''};
+
+  my $packages = $self->mpan_dist->file(
+    'modules', '02packages.details.txt.gz'
+  );
+  $self->mpan_package_details->write_file( $packages->stringify );
 
   return;
 }

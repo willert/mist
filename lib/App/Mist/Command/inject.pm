@@ -5,13 +5,15 @@ use warnings;
 
 use App::Mist -command;
 
+use Hook::LexWrap;
 use Try::Tiny;
 use File::Which;
 use File::Find::Upwards;
-use Path::Class qw/dir/;
+use Path::Class qw/file dir/;
 use Cwd;
 
 use File::Temp qw/ tempfile tempdir /;
+use Data::Dumper;
 
 sub execute {
   my ( $self, $opt, $args ) = @_;
@@ -32,9 +34,26 @@ sub execute {
     "--save-dists=${mpan}",
   );
 
-  $self->app->run_cpanm( @options, @$args );
+  my $installed_packages = 0;
+
+  $self->app->load_cpanm;
+
+  CPANM_AUTO_INDEXER: {
+
+    my $guard = wrap 'App::cpanminus::script::build_stuff', post => sub{
+      my ( $cpanm, $module, $dist ) = @_;
+
+      if ( my $success = !! $_[-1]  ) {
+        $self->app->add_distribution_to_index( $dist );
+        $installed_packages += 1;
+      }
+    };
+
+    $self->app->run_cpanm( @options, @$args );
+  }
+
+  $self->app->commit_mpan_package_index if $installed_packages;
+
 }
-
-
 
 1;
