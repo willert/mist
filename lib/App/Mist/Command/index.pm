@@ -44,17 +44,17 @@ sub execute {
     my $dist    = CPAN::ParseDistribution->new( $d->pathname );
     my $modules = $dist->modules;
 
-    {
-      ( my $dist_pkg = $dist->dist ) =~ s/-/::/g;
-      eval{
-        version->parse( $dist->distversion );
-        $package_details->add_entry(
-          package_name => $dist_pkg,
-          version      => $dist->distversion,
-          path         => $mpath,
-        );
-      } or warn "[WARNING] $@\n";
-    }
+#    {
+#      ( my $dist_pkg = $dist->dist ) =~ s/-/::/g;
+#      eval{
+#        version->parse( $dist->distversion );
+#        $package_details->add_entry(
+#          package_name => $dist_pkg,
+#          version      => $dist->distversion,
+#          path         => $mpath,
+#        );
+#      } or warn "[WARNING] $@\n";
+#    }
 
     while ( my ( $pkg, $version ) = each %$modules ) {
       eval{
