@@ -23,6 +23,9 @@ use CPAN::DistnameInfo;
 use CPAN::PackageDetails;
 
 use Data::Dumper;
+use Capture::Tiny qw/capture/;
+
+my $verbose = 0;
 
 sub new {
   my $class = shift;
@@ -131,10 +134,24 @@ sub new {
     $cpanm_loaded = do $pkg;
     require App::cpanminus;
 
-    die "$0: cpanm v$App::cpanminus::VERSION is too old, v1.4 needed\n"
-      if $App::cpanminus::VERSION < 1.4;
+    die "$0: cpanm v$App::cpanminus::VERSION is too old, v1.5 needed\n"
+      if $App::cpanminus::VERSION < 1.5;
 
     return;
+  }
+}
+
+{
+  my $package_file;
+  sub mpan_package_index {
+    my $self = shift;
+    if ( not $package_file ) {
+      $package_file = $self->mpan_dist->file(
+        'modules', '02packages.details.txt.gz'
+      );
+      $package_file->parent->mkpath;
+    }
+    return $package_file;
   }
 }
 
@@ -143,9 +160,7 @@ sub new {
   sub mpan_package_details {
     my $self = shift;
     $package_details ||= do{
-      my $packages = $self->mpan_dist->file(
-        'modules', '02packages.details.txt.gz'
-      );
+      my $packages = $self->mpan_package_index;
 
       if ( not -f $packages->stringify ) {
         my $empty_package_file = CPAN::PackageDetails->new(
@@ -217,7 +232,6 @@ sub add_distribution_to_index {
   my $modules = $dist_info->modules;
 
   while ( my ( $pkg, $version ) = each %$modules ) {
-    printf STDERR "  Added module %s %s\n", $pkg, $version;
 
     eval{
       version->parse( $version );
@@ -226,11 +240,12 @@ sub add_distribution_to_index {
         version      => $version,
         path         => $dist_info->{pathname},
       );
+      printf STDERR "  Added module %s %s\n", $pkg, $version // 'N/A';
     };
 
     if ( my $err = $@ ) {
       $err =~ s/(.*) at .*/$1/s;
-      print STDERR "  [WARNING] ${err}\n";
+      print STDERR "  [WARNING] ${err}\n" if $verbose;
     }
   }
 
@@ -244,9 +259,7 @@ sub commit_mpan_package_index {
   # force-delete them to avoid warnings and unsightly index files
   delete $self->mpan_package_details->header->{''};
 
-  my $packages = $self->mpan_dist->file(
-    'modules', '02packages.details.txt.gz'
-  );
+  my $packages = $self->mpan_package_index;
   $self->mpan_package_details->write_file( $packages->stringify );
 
   return;
@@ -270,6 +283,29 @@ sub run_dzil {
   chomp for @output;
 
   return grep{ $_ } @output;
+}
+
+sub fetch_prereqs {
+  my $self = shift;
+
+  require Dist::Zilla::App;
+  my $dzil = Dist::Zilla::App->new;
+  capture {
+    # force Dist::Zilla to load everything we need
+    $dzil->execute_command( $dzil->prepare_command('listdeps'));
+  };
+
+  my $prereqs = $dzil->zilla->prereqs->requirements_for(
+    runtime => 'requires'
+  );
+
+  my @reqs;
+  while ( my ( $module, $req ) = each %{ $prereqs->{requirements} }) {
+    my $version = $req->{minimum} ? '~'.$req->{minimum} : '';
+    push @reqs, $module . $version ;
+  }
+
+  return @reqs;
 }
 
 1;

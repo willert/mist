@@ -71,7 +71,7 @@ PREAMBLE
     my $prereqs = $slurp_file->( $dist_prereqs );
     my @prepend = $slurp_file->( $dist_prepend );
     my @notest  = $slurp_file->( $dist_notest );
-    my @prereqs = $app->run_dzil( 'listdeps' );
+    my @prereqs = $self->app->fetch_prereqs; # $app->run_dzil( 'listdeps' );
 
     my @args = (
       $mpan->relative( $home ),

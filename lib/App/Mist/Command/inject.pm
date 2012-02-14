@@ -40,14 +40,20 @@ sub execute {
 
   CPANM_AUTO_INDEXER: {
 
-    my $guard = wrap 'App::cpanminus::script::build_stuff', post => sub{
-      my ( $cpanm, $module, $dist ) = @_;
+    my $guard = wrap 'App::cpanminus::script::build_stuff',
+      pre  => sub{
+        my ( $cpanm, $module, $dist ) = @_;
+        printf STDERR "Building: %s\n", $module;
 
-      if ( my $success = !! $_[-1]  ) {
-        $self->app->add_distribution_to_index( $dist );
-        $installed_packages += 1;
-      }
-    };
+      },
+      post => sub{
+        my ( $cpanm, $module, $dist ) = @_;
+
+        if ( my $success = !! $_[-1]  ) {
+          $self->app->add_distribution_to_index( $dist );
+          $installed_packages += 1;
+        }
+      };
 
     $self->app->run_cpanm( @options, @$args );
   }
