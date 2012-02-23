@@ -186,6 +186,24 @@ sub new {
   }
 }
 
+sub slurp_file {
+  my ( $self, $file ) = @_;
+
+  my @lines;
+  printf STDERR "Reading: %s\n", $file;
+
+  if ( -f -r $file->stringify ) {
+    my $fh = $file->openr;
+    @lines = readline $fh;
+    chomp for @lines;
+    @lines = grep{ $_ } @lines;
+    s/^\s+// for @lines;
+    s/\s+$// for @lines;
+  }
+
+  return wantarray ? @lines : join( "\n", @lines, '' );
+}
+
 sub parse_distribution {
   my ( $self, $dist ) = @_;
 
@@ -230,6 +248,9 @@ sub add_distribution_to_index {
   printf "Indexing %s ...\n", $dist_info->{pathname};
 
   my $modules = $dist_info->modules;
+
+  $modules->{ $dist->{module} } = $dist->{module_version}
+    if exists $dist->{module_version};
 
   while ( my ( $pkg, $version ) = each %$modules ) {
 

@@ -51,27 +51,10 @@ PREAMBLE
 
   try {
 
-    my $slurp_file = sub{
-      my $file = shift;
-      my @lines;
-      printf STDERR "Reading: %s\n", $file;
-
-      if ( -f -r $file->stringify ) {
-        my $fh = $file->openr;
-        @lines = readline $fh;
-        chomp for @lines;
-        @lines = grep{ $_ } @lines;
-        s/^\s+// for @lines;
-        s/\s+$// for @lines;
-      }
-
-      return wantarray ? @lines : join( "\n", @lines, '' );
-    };
-
-    my $prereqs = $slurp_file->( $dist_prereqs );
-    my @prepend = $slurp_file->( $dist_prepend );
-    my @notest  = $slurp_file->( $dist_notest );
-    my @prereqs = $self->app->fetch_prereqs; # $app->run_dzil( 'listdeps' );
+    my $prereqs = $self->app->slurp_file->( $dist_prereqs );
+    my @prepend = $self->app->slurp_file->( $dist_prepend );
+    my @notest  = $self->app->slurp_file->( $dist_notest );
+    my @prereqs = $self->app->fetch_prereqs;
 
     my @args = (
       $mpan->relative( $home ),
