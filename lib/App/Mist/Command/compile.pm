@@ -51,9 +51,9 @@ PREAMBLE
 
   try {
 
-    my $prereqs = $self->app->slurp_file->( $dist_prereqs );
-    my @prepend = $self->app->slurp_file->( $dist_prepend );
-    my @notest  = $self->app->slurp_file->( $dist_notest );
+    my $prereqs = $self->app->slurp_file( $dist_prereqs );
+    my @prepend = $self->app->slurp_file( $dist_prepend );
+    my @notest  = $self->app->slurp_file( $dist_notest );
     my @prereqs = $self->app->fetch_prereqs;
 
     my @args = (
