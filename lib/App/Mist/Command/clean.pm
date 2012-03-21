@@ -34,14 +34,16 @@ sub execute {
 
   my %dist_package;
 
-  print "Scanning package details ..\n", ;
+  print "Scanning package details\n";
 
   while ( my ( $pkg, $versions ) = each %{ $records->entries } ) {
-    # printf qq{%s:\n  %s\n\n}, $pkg, join( q{, }, keys %$versions );
-    $dist_package{ $_->path } = 1 for values %$versions;
+    for ( values %$versions ) {
+      ( my $rel_path = $_->path ) =~ s{ ^ \. [/\\] }{}x;
+      $dist_package{ $rel_path } = 1;
+    }
   }
 
-  print "Removing obsolete distributions ..\n", ;
+  my $rm_count = 0;
 
   chdir $mpan->stringify;
   find({ wanted => sub{
@@ -49,9 +51,15 @@ sub execute {
     my $from = dir( cwd() )->subdir( 'authors', 'id', '__PLACEHOLDER__' );
     $from =~ s/__PLACEHOLDER__//;
     ( my $path = $_ ) =~ s|${from}||;
-    unlink $_ unless $dist_package{ $path };
+    if ( not $dist_package{ $path } ) {
+      printf "Removing %s ...\n", $path;
+      unlink $_;
+      $rm_count += 1;
+    }
   }, no_chdir => 1 }, $mpan_authors->stringify );
 
+  print "No stale distributions found\n"
+    unless $rm_count;
 
 }
 
