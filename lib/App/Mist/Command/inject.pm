@@ -27,7 +27,7 @@ sub execute {
 
   my @options   = (
     "--quiet",
-    "--local-lib-contained=${workspace}",
+    "--local-lib-contained=${local_lib}",
     "--mirror-only",
     "--mirror=http://search.cpan.org/CPAN",
     "--mirror=file://${mpan}",
