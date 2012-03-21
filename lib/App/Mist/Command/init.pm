@@ -28,21 +28,17 @@ sub execute {
     } ( @prepend, @notest );
   } $self->app->fetch_prereqs;
 
-  $app->execute_command( $app->prepare_command(
-    'inject', '--skip-satisfied', @prepend
-  )) if @prepend;
+  my @inject = (
+    'inject',
+    '--skip-satisfied',
+  );
 
-  $app->execute_command( $app->prepare_command(
-    'inject', '--skip-satisfied', '--notest', @notest
-  )) if @notest;
+  my $do = sub{ $app->execute_command( $app->prepare_command( @_ )) };
 
-  $app->execute_command( $app->prepare_command(
-    'inject', '--skip-satisfied', @prereqs
-  )) if @prereqs;
-
-  $app->execute_command( $app->prepare_command(
-    'compile'
-  ));
+  $do->( @inject, @prepend            ) if @prepend;
+  $do->( @inject, '--notest', @notest ) if @notest;
+  $do->( @inject, @prereqs            ) if @prereqs;
+  $do->( 'compile' );
 
   system( file('mpan-install')->absolute->stringify );
 
