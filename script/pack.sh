@@ -6,7 +6,7 @@ echo Build tree
 perl -Mlocal::lib=perl5 -Ilib `which fatpack` tree `cat packlists`
 echo Fat-packing
 (
-		echo '#!/usr/bin/perl' >&2;
+		echo '#!/usr/bin/env perl' >&2;
 		perl -Mlocal::lib=perl5 -Ilib `which fatpack` file 3>&1 1>&2 2>&3 |
 		  grep -v "\.pod isn't a .pm file" |
 		  grep -v "auto/List/Util/Util" |
