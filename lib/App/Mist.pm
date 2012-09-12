@@ -93,7 +93,93 @@ sub new {
     my $conf_dir = $self->mpan_dist->subdir('mist');
     return @_ ? $conf_dir->file( @_ ) : $conf_dir;
   }
+}
 
+{
+  my $perlbrew_root;
+  sub perlbrew_root {
+    my $self = shift;
+    $perlbrew_root ||= do{
+      $ENV{PERLBREW_ROOT} ? dir( $ENV{PERLBREW_ROOT} ) :
+        dir( '', 'opt', 'perl5' );
+    };
+  }
+
+
+  sub perlbrew_home {
+    my $self = shift;
+    $self->mpan_dist->subdir('perlbrew');
+  }
+
+}
+
+{
+  my $perlbrew_version;
+
+  sub perlbrew_version {
+    my $self = shift;
+    return $perlbrew_version ||= do{
+      my $mpan_conf = $self->mpan_conf;
+      my $dist_perlbrew = $mpan_conf->file(qw/ 00.perlbrew.txt /);
+      my $pb_version = $self->slurp_file( $dist_perlbrew );
+      $pb_version =~ s/[\s\n\r]//g;
+      $pb_version;
+    };
+  }
+
+  sub ensure_correct_perlbrew_context {
+    my $self = shift;
+
+    my $pb_root    = $self->perlbrew_root;
+    my $pb_home    = $self->perlbrew_home;
+    my $pb_version = $self->perlbrew_version || return;
+
+    my $pb_exec = qx{ which perlbrew } || "${pb_root}/bin/perlbrew";
+    chomp $pb_exec;
+
+    system( "$pb_exec version >/dev/null" ) == 0 or die <<"MSG";
+No local installation of perlbrew was found ($?). You can install it
+as root via:
+  export PERLBREW_ROOT=${pb_root}
+  curl -kL http://install.perlbrew.pl | sudo -E bash
+or just for this account simply via:
+  curl -kL http://install.perlbrew.pl | bash
+MSG
+
+    my @pb_versions = qx# bash -c '
+      export PERLBREW_ROOT=${pb_root}
+      export PERLBREW_HOME=${pb_home}
+
+      echo Root: \${PERLBREW_ROOT}
+
+      if ( ! . \${PERLBREW_ROOT}/etc/bashrc ) ; then
+        perlbrew init 2>/dev/null
+        if ( ! . \${PERLBREW_ROOT}/etc/bashrc ) ; then
+          echo "Cannot create perlbrew environment in \${PERLBREW_ROOT}"
+          exit 127
+        fi
+      fi
+
+      $pb_exec list
+    '#;
+
+    my ( $pb_installed ) = grep{ / \b $pb_version \b /x } @pb_versions;
+    die "FATAL: $pb_version not found and can't write to $pb_root\n" .
+      "Try\n  sudo -E perlbrew install $pb_version\nto install it as root\n"
+        unless $pb_installed or -w $pb_root;
+
+    my @pb_call = ( $pb_exec, 'install', $pb_version );
+    system( @pb_call ) == 0 or die "`@pb_call` failed" unless $pb_installed;
+
+    if ( not $ENV{PERLBREW_PERL} || '' eq $pb_version ) {
+      print "Restarting $0 under $pb_version\n\n";
+      $ENV{PERLBREW_ROOT} = $pb_root;
+      printf STDERR "Deactivating local lib\n", ;
+
+      local::lib->import('--deactivate-allss');
+      exec $pb_exec, 'exec', '--with', $pb_version, $0, @ARGV;
+    }
+  }
 }
 
 {
@@ -102,6 +188,8 @@ sub new {
     my $self = shift;
     $local_lib ||= $self->project_root->subdir(
       $ENV{MIST_LOCAL_LIB} || 'perl5'
+    )->subdir(
+      $self->perlbrew_version ? $self->perlbrew_version : 'system'
     );
   }
 }
