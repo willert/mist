@@ -1,4 +1,5 @@
 /perl5/
 /dists/
 /fatlib/
-
+*~
+/.bash_history_local
