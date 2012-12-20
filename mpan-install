@@ -9149,11 +9149,68 @@ use File::Spec;
 use Cwd qw/realpath/;
 
 my $mpan      = File::Spec->catdir( $Bin, 'mpan-dist' );
-my $local_lib = File::Spec->catdir( $Bin, 'perl5/system' );
+my $local_lib = File::Spec->catdir( $Bin, 'perl5/perl-5.14.2' );
 
 my $pb_root;
 my $pb_home;
 my $pb_version;
+
+  use FindBin ();
+  use File::Spec ();
+
+  $tmp_base_dir = File::Spec->catdir( $FindBin::Bin, 'tmp' );
+  $tmp_base_dir = File::Spec->catdir(
+    File::Spec->tmpdir, ( File::Spec->splitdir( $Bin ))[ -1 ]
+  ) unless -d $tmp_base_dir and -w $tmp_base_dir;
+
+  $pb_root    = $ENV{PERLBREW_ROOT} || '/opt/perl5';
+  $pb_home    = File::Spec->catdir( $tmp_base_dir, 'perlbrew' );
+  $pb_version = 'perl-5.14.2';
+
+  print "Using perlbrew root $pb_root\n";
+  print "Using temporary perlbrew home $pb_home\n";
+
+  my $pb_exec = qx{ which perlbrew } || "${pb_root}/bin/perlbrew";
+  chomp $pb_exec;
+
+  system( "$pb_exec version >/dev/null" ) == 0 or die <<"MSG";
+No local installation of perlbrew was found ($?). You can install it
+as root via:
+  export PERLBREW_ROOT=${pb_root}
+  curl -kL http://install.perlbrew.pl | sudo -E bash
+or just for this account simply via:
+  curl -kL http://install.perlbrew.pl | bash
+MSG
+
+  my @pb_installed_versions = qx# bash -c '
+    export PERLBREW_ROOT=${pb_root}
+    export PERLBREW_HOME=${pb_home}
+
+    if ( ! . \${PERLBREW_ROOT}/etc/bashrc ) ; then
+      perlbrew init 2>/dev/null
+      if ( ! . \${PERLBREW_ROOT}/etc/bashrc ) ; then
+        echo "Cannot create perlbrew environment in \${PERLBREW_ROOT}"
+        exit 127
+      fi
+    fi
+
+    $pb_exec list
+  '#;
+
+  my ( $pb_installed ) = grep{ / \b $pb_version \b /x } @pb_installed_versions;
+  die "FATAL: $pb_version not found and can't write to $pb_root\n" .
+    "Try\n  sudo -E perlbrew install $pb_version\nto install it as root\n"
+      unless $pb_installed or -w $pb_root;
+
+  my @pb_call = ( $pb_exec, 'install', $pb_version );
+  system( @pb_call ) == 0 or die "`@pb_call` failed" unless $pb_installed;
+
+  if ( not $ENV{PERLBREW_PERL} eq $pb_version ) {
+    print "Restarting $0 under $pb_version\n\n";
+    $ENV{PERLBREW_ROOT} = $pb_root;
+    $ENV{PERLBREW_HOME} = $pb_home;
+    exec $pb_exec, 'exec', '--with', $pb_version, $0;
+  }
 
 
 
@@ -9252,8 +9309,10 @@ CHECK_PREREQS
 
 
   run_cpanm( @ARGV, @prepend ) if @prepend;
-  run_cpanm( @ARGV, '--installdeps', @notest ) if @notest;
-  run_cpanm( @ARGV, '--notest', @notest ) if @notest;
+  for my $module ( @notest ) {
+    run_cpanm( @ARGV, '--installdeps', $module );
+    run_cpanm( @ARGV, '--notest', $module );
+  }
   run_cpanm( @ARGV, @prereqs ) if @prereqs;
 
   printf $env <<'MIST_ENV', $FindBin::Bin;
