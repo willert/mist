@@ -232,8 +232,10 @@ CHECK_PREREQS
 
 
   run_cpanm( @ARGV, @prepend ) if @prepend;
-  run_cpanm( @ARGV, '--installdeps', @notest ) if @notest;
-  run_cpanm( @ARGV, '--notest', @notest ) if @notest;
+  for my $module ( @notest ) {
+    run_cpanm( @ARGV, '--installdeps', $module );
+    run_cpanm( @ARGV, '--notest', $module );
+  }
   run_cpanm( @ARGV, @prereqs ) if @prereqs;
 
   printf $env <<'MIST_ENV', $FindBin::Bin;
