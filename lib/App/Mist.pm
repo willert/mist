@@ -10,7 +10,7 @@ use version 0.74;
 use Carp;
 use Scalar::Util qw/looks_like_number blessed/;
 
-use App::Cmd::Setup -app;
+use base 'App::Cmd';
 use Module::Pluggable search_path => [ 'App::Mist::Command' ];
 
 use Path::Class qw/dir file/;
@@ -164,20 +164,34 @@ MSG
     '#;
 
     my ( $pb_installed ) = grep{ / \b $pb_version \b /x } @pb_versions;
-    die "FATAL: $pb_version not found and can't write to $pb_root\n" .
-      "Try\n  sudo -E perlbrew install $pb_version\nto install it as root\n"
-        unless $pb_installed or -w $pb_root;
+    die join(
+      qq{\n},
+      "FATAL: $pb_version not found $pb_root",
+      "Try",
+      "  sudo -E perlbrew install -Dusethreads -Duseshrplib -n $pb_version",
+      "to install it as root"
+    ) unless $pb_installed or -w $pb_root;
 
-    my @pb_call = ( $pb_exec, 'install', $pb_version );
-    system( @pb_call ) == 0 or die "`@pb_call` failed" unless $pb_installed;
+    # my @pb_call = ( $pb_exec, 'install', $pb_version );
+    # system( @pb_call ) == 0 or die "`@pb_call` failed" unless $pb_installed;
 
     if ( not $ENV{PERLBREW_PERL} || '' eq $pb_version ) {
-      print "Restarting $0 under $pb_version\n\n";
+      print "Restarting $0 under ${pb_version}\n\n";
       $ENV{PERLBREW_ROOT} = $pb_root;
       printf STDERR "Deactivating local lib\n", ;
 
-      local::lib->import('--deactivate-allss');
+      local::lib->import('--deactivate-all');
       exec $pb_exec, 'exec', '--with', $pb_version, $0, @ARGV;
+    } else {
+      eval 'require local::lib;' or die join(
+        qq{\n},
+        "FATAL: missing local::lib ",
+        "Please install local::lib for this perl. Try",
+        "  source ${pb_root}/etc/bashrc ; " .
+          "sudo -E perlbrew exec --with ${pb_version} cpanm local::lib",
+        "to install it as root"
+      );
+      local::lib->import( $self->local_lib );
     }
   }
 }

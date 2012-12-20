@@ -3,7 +3,7 @@ package App::Mist::Command::compile;
 use strict;
 use warnings;
 
-use App::Mist -command;
+use base 'App::Cmd::Command';
 
 use Try::Tiny;
 use Path::Class qw/dir/;

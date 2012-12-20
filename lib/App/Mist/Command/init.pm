@@ -3,7 +3,7 @@ package App::Mist::Command::init;
 use strict;
 use warnings;
 
-use App::Mist -command;
+use base 'App::Cmd::Command';
 
 use Try::Tiny;
 use File::Which;

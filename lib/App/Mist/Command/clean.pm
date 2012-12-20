@@ -3,7 +3,7 @@ package App::Mist::Command::clean;
 use strict;
 use warnings;
 
-use App::Mist -command;
+use base 'App::Cmd::Command';
 
 use CPAN::PackageDetails;
 
