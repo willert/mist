@@ -127,6 +127,7 @@ PERL
     }
 
     my @args = (
+      $app->perl5_base_lib->relative( $home ),
       $mpan->relative( $home ),
       $local_lib->relative( $home ),
       $perlbrew_init || '',
@@ -156,8 +157,11 @@ use File::Path qw/mkpath/;
 use File::Spec;
 use Cwd qw/realpath/;
 
-my $mpan      = File::Spec->catdir( $Bin, '%s' );
-my $local_lib = File::Spec->catdir( $Bin, '%s' );
+my $perl5_baselib = File::Spec->catdir( $Bin, '%s' );
+my $mpan          = File::Spec->catdir( $Bin, '%s' );
+my $local_lib     = File::Spec->catdir( $Bin, '%s' );
+
+my $cmd_wrapper   = File::Spec->catfile( $mpan, 'cmd-wrapper.bash' );
 
 my $pb_root;
 my $pb_home;
@@ -285,10 +289,37 @@ if [ ! -r $MIST_ENV ] ; then
 fi
 
 source $MIST_ENV
-export PATH="$MIST_ROOT/bin:$MIST_ROOT/sbin:$PATH"
+export PATH="$MIST_ROOT/bin:$MIST_ROOT/sbin:$MIST_ROOT/script:$PATH"
+export PERL5LIB="$MIST_ROOT/lib:$PERL5LIB"
 
 exec "$@"
 WRAPPER
+
+  for $script_dir (qw/ bin sbin script /) {
+
+    print "Creating local binaries for scripts in ${script_dir}\n";
+
+    next unless -d File::Spec->catdir( $Bin, $script_dir );
+    my $loc_script_dir = File::Spec->catdir( $perl5_baselib, $script_dir );
+    mkpath( $loc_script_dir );
+
+    opendir( my $dh, $script_dir ) || die "can't opendir $script_dir: $!";
+    my @binaries = map{(
+      File::Spec->catfile( $loc_script_dir, $_ )
+    )} grep {
+      -f File::Spec->catfile( $script_dir, $_ ) and
+        -x File::Spec->catfile( $script_dir, $_ )
+    } readdir( $dh );
+
+    closedir $dh;
+
+    for my $bin ( @binaries ) {
+      unlink $bin;
+      symlink $cmd_wrapper, $bin
+        or die "Failed to create symlink for $bin";
+    }
+  }
+
 
   print <<"SUCCESS";
 
@@ -312,7 +343,6 @@ INSTALLER
     chmod 0755, "mpan-install";
 
     print STDERR "Generating cmd wrapper\n";
-
 
     my $wrapper = $app->mpan_dist->file('cmd-wrapper.bash')->stringify;
     open $out, ">", $wrapper or die $!;
@@ -358,6 +388,8 @@ if [ ! $LOCAL_LIB ] ; then
   echo "$0: No local::lib directory found. Abort!" >&2
   exit 1
 fi
+
+cd $BASE_DIR
 
 $BASE_DIR/perl5/bin/mist-run `basename $0` $@
 

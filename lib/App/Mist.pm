@@ -196,13 +196,22 @@ MSG
   }
 }
 
+
+{
+  my $perl5_base_lib;
+  sub perl5_base_lib {
+    my $self = shift;
+    $perl5_base_lib ||= $self->project_root->subdir(
+      $ENV{MIST_LOCAL_LIB} || 'perl5'
+    )
+  }
+}
+
 {
   my $local_lib;
   sub local_lib {
     my $self = shift;
-    $local_lib ||= $self->project_root->subdir(
-      $ENV{MIST_LOCAL_LIB} || 'perl5'
-    )->subdir(
+    $local_lib ||= $self->perl5_base_lib->subdir(
       $self->perlbrew_version ? $self->perlbrew_version : 'system'
     );
   }
