@@ -389,8 +389,6 @@ if [ ! $LOCAL_LIB ] ; then
   exit 1
 fi
 
-cd $BASE_DIR
-
 $BASE_DIR/perl5/bin/mist-run `basename $0` $@
 
 CMD_WRAPPER
