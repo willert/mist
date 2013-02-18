@@ -41,18 +41,25 @@ sub execute {
     $mpath = "./${mpath}"       # qualify path to module if
       if $mpath->parent eq dir(); # it's parent directory is unspecified
 
-    my $dist    = CPAN::ParseDistribution->new( $d->pathname );
+    my $dist = do {
+      $SIG{__WARN__} = sub{};
+      CPAN::ParseDistribution->new( $d->pathname );
+    };
     my $modules = $dist->modules;
 
     {
       ( my $dist_pkg = $dist->dist ) =~ s/-/::/g;
       eval{
-        version->parse( $dist->distversion );
-        $package_details->add_entry(
-          package_name => $dist_pkg,
-          version      => $dist->distversion,
-          path         => $mpath,
-        );
+        if ( $dist->distversion =~ /\d/ ) {
+          version->parse( $dist->distversion );
+          $package_details->add_entry(
+            package_name => $dist_pkg,
+            version      => $dist->distversion,
+            path         => $mpath,
+          );
+        } else {
+          1;
+        }
       } or warn sprintf(
         "[WARNING] %s %s: %s\n", $dist_pkg, $dist->distversion, $@
       );

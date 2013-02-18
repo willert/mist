@@ -301,7 +301,7 @@ sub slurp_file {
   my ( $self, $file ) = @_;
 
   my @lines;
-  printf STDERR "Reading: %s\n", $file;
+  # printf STDERR "Reading: %s\n", $file;
 
   if ( -f -r $file->stringify ) {
     my $fh = $file->openr;
