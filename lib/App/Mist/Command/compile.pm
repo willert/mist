@@ -277,9 +277,10 @@ PERLBREW_RC
   print $env local::lib->environment_vars_string_for( "${local_lib}" );
   close $env;
 
-  printf $wrapper <<'WRAPPER', $Bin, $mist_rc;
+  printf $wrapper <<'WRAPPER', $local_lib, $Bin, $mist_rc;
 #!/bin/bash
 
+LOCAL_LIB="%%s"
 MIST_ROOT="%%s"
 MIST_ENV="%%s"
 
@@ -289,34 +290,53 @@ if [ ! -r $MIST_ENV ] ; then
 fi
 
 source $MIST_ENV
+export PATH="$LOCAL_LIB/bin:$LOCAL_LIB/sbin:$PATH"
 export PATH="$MIST_ROOT/bin:$MIST_ROOT/sbin:$MIST_ROOT/script:$PATH"
 export PERL5LIB="$MIST_ROOT/lib:$PERL5LIB"
 
 exec "$@"
 WRAPPER
 
-  for $script_dir (qw/ bin sbin script /) {
+  for my $script_dir (qw/ bin sbin script /) {
 
-    print "Creating local binaries for scripts in ${script_dir}\n";
-
-    next unless -d File::Spec->catdir( $Bin, $script_dir );
     my $loc_script_dir = File::Spec->catdir( $perl5_baselib, $script_dir );
-    mkpath( $loc_script_dir );
 
-    opendir( my $dh, $script_dir ) || die "can't opendir $script_dir: $!";
-    my @binaries = map{(
-      File::Spec->catfile( $loc_script_dir, $_ )
-    )} grep {
-      -f File::Spec->catfile( $script_dir, $_ ) and
-        -x File::Spec->catfile( $script_dir, $_ )
-    } readdir( $dh );
+    my @binaries;
+    my $dir;
 
-    closedir $dh;
+    use strict;
 
-    for my $bin ( @binaries ) {
-      unlink $bin;
-      symlink $cmd_wrapper, $bin
-        or die "Failed to create symlink for $bin";
+#   printf "%%s\n",
+      $dir = File::Spec->catdir( $local_lib, $script_dir );
+    if ( -d $dir and opendir( my $dh, $dir ) ) {
+      push @binaries, map{(
+        File::Spec->catfile( $loc_script_dir, $_ )
+      )} grep {
+        -f File::Spec->catfile( $dir, $_ ) and
+          -x File::Spec->catfile( $dir, $_ )
+      } readdir( $dh );
+    }
+
+#    printf "%%s\n",
+      $dir = File::Spec->catdir( $Bin, $script_dir );
+    if ( -d $dir and opendir( my $dh, $dir ) ) {
+      push @binaries, map{(
+        File::Spec->catfile( $loc_script_dir, $_ )
+      )} grep {
+        -f File::Spec->catfile( $script_dir, $_ ) and
+          -x File::Spec->catfile( $script_dir, $_ )
+      } readdir( $dh );
+    }
+
+    if ( @binaries ) {
+      mkpath( $loc_script_dir );
+      print "Creating local binaries in ${loc_script_dir}\n";
+
+      for my $bin ( @binaries ) {
+        unlink $bin;
+        symlink $cmd_wrapper, $bin
+          or die "Failed to create symlink for $bin";
+      }
     }
   }
 
