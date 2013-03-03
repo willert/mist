@@ -25,6 +25,8 @@ use CPAN::PackageDetails;
 use Data::Dumper;
 use Capture::Tiny qw/capture/;
 
+use Try::Tiny;
+
 my $verbose = 0;
 
 sub new {
@@ -292,7 +294,17 @@ MSG
         $empty_package_file->write_file( $packages->stringify );
       }
 
-      CPAN::PackageDetails->read( $packages->stringify );
+      {
+        no strict 'refs';
+        my $org = \&CPAN::PackageDetails::init;
+        *{"CPAN::PackageDetails::init"} = sub{
+          push @_, allow_packages_only_once => 0;
+          goto &$org;
+        };
+
+        CPAN::PackageDetails->read( $packages->stringify );
+      }
+
     };
   }
 }
@@ -325,7 +337,7 @@ sub parse_distribution {
       file( $dist->{local_path} )->basename
   );
 
-  return unless -r -f $file;
+  return unless -r -f "$file";
 
   my $d = CPAN::DistnameInfo->new( $file );
 
@@ -365,7 +377,7 @@ sub add_distribution_to_index {
 
   while ( my ( $pkg, $version ) = each %$modules ) {
 
-    eval{
+    my $do_index = sub {
       version->parse( $version );
       $self->mpan_package_details->add_entry(
         package_name => $pkg,
@@ -374,6 +386,8 @@ sub add_distribution_to_index {
       );
       printf STDERR "  Added module %s %s\n", $pkg, $version // 'N/A';
     };
+
+    $verbose ? &$do_index() : try{ &$do_index() };
 
     if ( my $err = $@ ) {
       $err =~ s/(.*) at .*/$1/s;
@@ -402,6 +416,10 @@ sub run_cpanm {
   $self->load_cpanm;
 
   my $app = App::cpanminus::script->new;
+
+  carp( "  cpanm @cmd_opts\n" ) if $verbose;
+
+
   $app->parse_options( @cmd_opts );
   $app->doit or exit(1);
 }
