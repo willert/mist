@@ -70,12 +70,13 @@ sub execute {
     };
   }
 
-  CPANM_AUTO_INDEXER: {
+ CPANM_AUTO_INDEXER: {
+    my $stage;
 
     my $guard = wrap 'App::cpanminus::script::build_stuff',
       pre  => sub{
         my ( $cpanm, $module, $dist ) = @_;
-        printf STDERR "Building: %s\n", $module;
+        printf STDERR "%s: %s\n", $stage, $module;
       },
       post => sub{
         my ( $cpanm, $module, $dist ) = @_;
@@ -88,11 +89,14 @@ sub execute {
     try {
       no warnings 'redefine';
       *CORE::GLOBAL::exit = sub{};
-      $self->app->run_cpanm( @dependency_options, @$args );
+      $stage = 'Dependencies';
+      my @dep_cmd_opts = grep { ! /--reinstall/ } @$args;
+      $self->app->run_cpanm( @dependency_options, @dep_cmd_opts );
     } finally {
       chdir $initial_directory;
     };
 
+    $stage = 'Building';
     $self->app->run_cpanm( @install_options, @$args );
   }
 
