@@ -296,8 +296,10 @@ MSG
 
       {
         no strict 'refs';
+        no warnings 'redefine';
+
         my $org = \&CPAN::PackageDetails::init;
-        *{"CPAN::PackageDetails::init"} = sub{
+        local *{"CPAN::PackageDetails::init"} = sub{
           push @_, allow_packages_only_once => 0;
           goto &$org;
         };
