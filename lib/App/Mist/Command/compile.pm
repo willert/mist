@@ -69,7 +69,7 @@ PREAMBLE
   use FindBin ();
   use File::Spec ();
 
-  $tmp_base_dir = File::Spec->catdir( $FindBin::Bin, 'tmp' );
+  my $tmp_base_dir = File::Spec->catdir( $FindBin::Bin, 'tmp' );
   $tmp_base_dir = File::Spec->catdir(
     File::Spec->tmpdir, ( File::Spec->splitdir( $Bin ))[ -1 ]
   ) unless -d $tmp_base_dir and -w $tmp_base_dir;
@@ -150,18 +150,31 @@ PERL
 
     printf $out <<'INSTALLER', @args;
 
+use strict;
+use warnings;
+
 use App::cpanminus::script;
 use FindBin qw/$Bin/;
 use File::Temp qw/tempdir/;
 use File::Path qw/mkpath/;
 use File::Spec;
+use File::Copy;
 use Cwd qw/realpath/;
 
-my $perl5_baselib = File::Spec->catdir( $Bin, '%s' );
-my $mpan          = File::Spec->catdir( $Bin, '%s' );
-my $local_lib     = File::Spec->catdir( $Bin, '%s' );
+my $mist_home = $ENV{MIST_APP_ROOT} ? $ENV{MIST_APP_ROOT} : $Bin;
 
-my $cmd_wrapper   = File::Spec->catfile( $mpan, 'cmd-wrapper.bash' );
+my $perl5_baselib = File::Spec->catdir( $mist_home, '%s' );
+my $mpan          = File::Spec->catdir( $mist_home, '%s' );
+my $local_lib     = File::Spec->catdir( $mist_home, '%s' );
+my $libexec_dir   = File::Spec->catdir( $perl5_baselib, 'libexec' );
+
+mkpath( $libexec_dir );
+
+my $cmd_wrapper_src = File::Spec->catfile( $mpan, 'cmd-wrapper.bash' );
+my $cmd_wrapper     = File::Spec->catfile( $libexec_dir, 'cmd-wrapper.bash' );
+
+copy( $cmd_wrapper_src, $cmd_wrapper )
+  or die "Creating $cmd_wrapper failed: $!";
 
 my $pb_root;
 my $pb_home;
