@@ -1,0 +1,57 @@
+#!/bin/bash
+
+# --- configuration --------------------------------------------------------
+
+GIT_NEW_WORKDIR="$ROOT/contrib/git-new-workdir"
+
+# --------------------------------------------------------------------------
+
+ROOT=$MIST_APP_ROOT
+
+if [ "x$ROOT" == 'x' ] ; then
+  echo "[FATAL] Not running under mist";
+  exit 1;
+fi
+
+cd $ROOT
+
+BRANCH=`git rev-parse --abbrev-ref HEAD`
+SHADOW=`mktemp -d --tmpdir="$ROOT/tmp/"`
+rmdir $SHADOW
+
+echo "Fetching current status of our repository";
+
+if [ -O .git/FETCH_HEAD ] ; then
+  git fetch
+else 
+  sudo -u `stat -c %U $ROOT/.git/FETCH_HEAD` git fetch
+fi
+
+echo "Creating shadow workdir in $SHADOW";
+
+
+trap "echo Getting rid of $SHADOW; rm -Rf $SHADOW" EXIT SIGINT SIGTERM
+sh $GIT_NEW_WORKDIR $ROOT $SHADOW $BRANCH || exit 1;
+
+cd $SHADOW
+
+echo "Rebasing shadow workdir"
+
+if [ -O .git/FETCH_HEAD ] ; then
+  git pull --rebase
+else 
+  sudo -u `stat -c %U $ROOT/.git/FETCH_HEAD` git pull --rebase
+fi
+
+echo "And runnning mist in the shadow"
+
+# .. but copy our installer first, just in case we were working on mist again
+# and have uncommited changes in the root workspace
+cp $ROOT/mpan-install $SHADOW/mpan-install
+
+
+# clean up our environment so mpan-install won't get confused by our local libs
+unset $(env | grep -o '^[_[:alpha:]][_[:alnum:]]*' | \
+		grep -v -E '^PWD$|^USER$|^TERM$|^SSH_.*|^LC_.*|^PERLBREW_|^PATH$|^SHELL$')
+
+MIST_APP_ROOT=$ROOT "./mpan-install"
