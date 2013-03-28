@@ -265,18 +265,18 @@ export PATH="$MIST_APP_ROOT/bin:$MIST_APP_ROOT/sbin:$MIST_APP_ROOT/script:$PATH"
 MIST_ENV
 
   if ( $pb_version ) {
-    printf $env <<'PERLBREW_HOME', $pb_home;
-# Initializing perlbrew environment
-
-if [[
-  -w "$MIST_APP_ROOT/tmp/perlbrew" ||
-  ( -w "$MIST_APP_ROOT/tmp" && ! -e "$MIST_APP_ROOT/tmp/perlbrew" )
-]] ; then
-  export PERLBREW_HOME="$MIST_APP_ROOT/tmp/perlbrew"
-else
-  export PERLBREW_HOME="%%s"
-fi
-PERLBREW_HOME
+# FIXME:      printf $env <<'PERLBREW_HOME', $pb_home;
+# FIXME:  # Initializing perlbrew environment
+# FIXME:
+# FIXME:  if [[
+# FIXME:    -w "$MIST_APP_ROOT/tmp/perlbrew" ||
+# FIXME:    ( -w "$MIST_APP_ROOT/tmp" && ! -e "$MIST_APP_ROOT/tmp/perlbrew" )
+# FIXME:  ]] ; then
+# FIXME:    export PERLBREW_HOME="$MIST_APP_ROOT/tmp/perlbrew"
+# FIXME:  else
+# FIXME:    export PERLBREW_HOME="%%s"
+# FIXME:  fi
+# FIXME:  PERLBREW_HOME
 
     print $env <<"PERLBREW_RC";
 
