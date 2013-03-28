@@ -116,7 +116,7 @@ MSG
   my @pb_call = ( $pb_exec, 'install', $pb_version );
   system( @pb_call ) == 0 or die "`@pb_call` failed" unless $pb_installed;
 
-  if ( not $ENV{PERLBREW_PERL} eq $pb_version ) {
+  if ( !$ENV{PERLBREW_PERL} or $ENV{PERLBREW_PERL} ne $pb_version ) {
     print "Restarting $0 under $pb_version\n\n";
     $ENV{PERLBREW_ROOT} = $pb_root;
     $ENV{PERLBREW_HOME} = $pb_home;
