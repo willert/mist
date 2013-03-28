@@ -41,7 +41,13 @@ sub execute {
   $do->( @inject,             @$args, @prereqs ) if @prereqs;
   $do->( 'compile' );
 
-  system( file('mpan-install')->absolute->stringify );
+  {
+    # we have to get rid of MIST_APP_ROOT here or else
+    # ./mpan-install might update mist's own local lib
+    # instead of the one of the project being worked on
+    local $ENV{MIST_APP_ROOT} = undef;
+    system( file('mpan-install')->absolute->stringify );
+  }
 
   return;
 }
