@@ -178,6 +178,10 @@ my $cmd_wrapper     = File::Spec->catfile( $libexec_dir, 'cmd-wrapper.bash' );
 copy( $cmd_wrapper_src, $cmd_wrapper )
   or die "Creating $cmd_wrapper failed: $!";
 
+my $perm = ( stat $cmd_wrapper )[2] & 07777;
+chmod( $perm | 0755, $cmd_wrapper );
+
+
 my $pb_root;
 my $pb_home;
 my $pb_version;
