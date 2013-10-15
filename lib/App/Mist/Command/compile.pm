@@ -254,7 +254,9 @@ CHECK_PREREQS
   );
 
 
-  run_cpanm( @ARGV, @prepend ) if @prepend;
+  for my $module ( @prepend ) {
+    run_cpanm( @ARGV, $module );
+  }
   for my $module ( @notest ) {
     run_cpanm( @ARGV, '--installdeps', $module );
     run_cpanm( @ARGV, '--notest', $module );
