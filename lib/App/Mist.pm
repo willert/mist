@@ -1,4 +1,5 @@
 package App::Mist;
+# ABSTRACT: MPAN distribution manager
 
 use strict;
 use warnings;
