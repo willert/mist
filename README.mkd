@@ -1,3 +1,5 @@
+### OVERVIEW
+
 _mist_ is intended to help with the quasi-deployment of uninstalled
 (or uninstallable) Perl applications. The most common applications for
 this are [Catalyst][cat] applications, but it might prove useful in other
@@ -25,6 +27,15 @@ The benefits of this approach are:
 _mist_ is in the earliest stages of development so any input is more
 than welcome.
 
+### INSTALLATION
+
+_mist_ is completely self-contained and only needs an available perlbrew
+environment. Inside _mist_ call:
+
+`./mpan-install`
+
+BE PATIENT, it takes some time!
+
 [dzil]: http://dzil.org/ "Dist::Zilla homepage"
 [cpanm]: http://xrl.us/cpanm "Download App::cpanminus"
-[cat]: http://www.catalystframework.org/ "Catalyst Framework"  
+[cat]: http://www.catalystframework.org/ "Catalyst Framework"
