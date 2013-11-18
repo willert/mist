@@ -25,7 +25,7 @@ The benefits of this approach are:
 _mist_ is in the earliest stages of development so any input is more
 than welcome.
 
-== INSTALLATION:
+### INSTALLATION:
 
 _mist_ is completely self-contained and only needs an available perlbrew
 environment. Inside _mist_ call:
