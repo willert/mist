@@ -39,5 +39,5 @@ if [ ! $LOCAL_LIB ] ; then
   exit 1
 fi
 
-$BASE_DIR/perl5/bin/mist-run `basename $0` $@
+exec "$BASE_DIR/perl5/bin/mist-run" `basename $0` "$@"
 

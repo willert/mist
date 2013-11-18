@@ -4,3 +4,5 @@
 *~
 /.bash_history_local
 /App-Mist-*
+/perl5.bak/
+/perl5.clean/
