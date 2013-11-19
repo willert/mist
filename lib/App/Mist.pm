@@ -94,7 +94,15 @@ sub new {
   sub mpan_conf {
     my $self = shift;
     my $conf_dir = $self->mpan_dist->subdir('mist');
-    return @_ ? $conf_dir->file( @_ ) : $conf_dir;
+    $conf_dir->mkpath;
+    if ( my @path = @_ ) {
+      my $conf = $conf_dir->file( @_ );
+      $conf->dir->mkpath if @path > 1;
+      $conf->touch unless -f $conf->stringify;
+      return $conf;
+    } else {
+      return $conf_dir;
+    }
   }
 }
 
