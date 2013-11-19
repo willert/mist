@@ -9316,20 +9316,21 @@ CHECK_PREREQS
     'Module::Pluggable',
     'Capture::Tiny',
     'File::HomeDir',
+    'Class::Load~0.2',
     'App::Cmd',
     'File::Which',
     'CPAN::PackageDetails',
     'CPAN::DistnameInfo',
     'Hook::LexWrap~0.24',
-    'Module::Runtime~0.012',
+    'Module::Runtime~0.013',
     'Data::Dumper::Concise',
-    'Test::More~0.96',
+    'Test::More~0.98',
     'File::Find::Upwards',
     'CPAN::Meta::Requirements~2.215',
     'Dist::Zilla~4.3',
     'CPAN::Meta~2.132830',
     'CPAN::ParseDistribution',
-    'local::lib'
+    'local::lib~1.008026'
   );
 
 
