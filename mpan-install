@@ -9325,7 +9325,9 @@ CHECK_PREREQS
     'Data::Dumper::Concise',
     'Test::More~0.96',
     'File::Find::Upwards',
+    'CPAN::Meta::Requirements~2.215',
     'Dist::Zilla~4.3',
+    'CPAN::Meta~2.132830',
     'CPAN::ParseDistribution',
     'local::lib'
   );
