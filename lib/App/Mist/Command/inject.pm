@@ -54,12 +54,10 @@ sub execute {
   $self->app->load_cpanm;
 
   DOWNLOAD_DIST: {
-    my $guard = wrap 'App::cpanminus::script::build_stuff',
-      pre  => sub{
-        my ( $cpanm, $module, $dist ) = @_;
-        printf STDERR "Downloading: %s\n", $module;
-        $_[-1] = 1;             # shor-circuit call to prevent installation
-      };
+    my $guard = wrap 'App::cpanminus::script::build_stuff', pre => sub{
+      my ( $cpanm, $module, $dist ) = @_;
+      $_[-1] = 1; # short-circuit call to prevent installation
+    };
 
     try {
       no warnings 'redefine';

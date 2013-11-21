@@ -1,1 +1,11 @@
-Module::Runtime
+version~0.99
+Module::Runtime~0.013
+Module::Build~0.42
+CPAN::Meta::Requirements~2.121
+Class::Load~0.2
+File::Spec~3.34
+Config::MVP~2.200002
+Data::Section~0.200002
+Perl::PrereqScanner~1.016
+String::ShellQuote
+CPAN::Meta::Check

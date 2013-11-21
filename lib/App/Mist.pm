@@ -5,6 +5,9 @@ use strict;
 use warnings;
 use 5.010;
 
+use lib '/home/willert/Devel/mist/contrib/cpanm/lib';
+use App::cpanminus::script;
+
 use mro;
 use version 0.74;
 
@@ -19,6 +22,7 @@ use File::HomeDir;
 use File::Which;
 use File::Find::Upwards;
 
+use CPAN::Meta::Validator;
 use CPAN::ParseDistribution;
 use CPAN::DistnameInfo;
 use CPAN::PackageDetails;
@@ -247,20 +251,13 @@ MSG
   }
 }
 
-{
-  my $cpanm_loaded;
-  sub load_cpanm {
-    my $self = shift;
-    my $pkg = $self->cpanm_executable;
+sub load_cpanm {
+  my $self = shift;
 
-    $cpanm_loaded = do $pkg;
-    require App::cpanminus;
+  die "$0: cpanm v$App::cpanminus::VERSION is too old, v1.7 needed\n"
+    if $App::cpanminus::VERSION < 1.7;
 
-    die "$0: cpanm v$App::cpanminus::VERSION is too old, v1.5 needed\n"
-      if $App::cpanminus::VERSION < 1.5;
-
-    return;
-  }
+  return;
 }
 
 {
@@ -430,9 +427,8 @@ sub run_cpanm {
 
   carp( "  cpanm @cmd_opts\n" ) if $verbose;
 
-
   $app->parse_options( @cmd_opts );
-  $app->doit or exit(1);
+  $app->doit;
 }
 
 

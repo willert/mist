@@ -71,7 +71,7 @@ PREAMBLE
 
   my $tmp_base_dir = File::Spec->catdir( $FindBin::Bin, 'tmp' );
   $tmp_base_dir = File::Spec->catdir(
-    File::Spec->tmpdir, ( File::Spec->splitdir( $Bin ))[ -1 ]
+    File::Spec->tmpdir, ( File::Spec->splitdir( $FindBin::Bin ))[ -1 ]
   ) unless -d $tmp_base_dir and -w $tmp_base_dir;
 
   $pb_root    = $ENV{PERLBREW_ROOT} || '%s';
@@ -140,13 +140,25 @@ PERL
 
     print STDERR "Generating mpan-install\n";
 
-    open my $out, ">", "mpan-install.tmp" or die $!;
+    use Module::Path qw/ module_path /;
 
-    while (<DATA>) {
+
+    open my $out, ">", "mpan-install.tmp" or die $!;
+    print $out "#!/usr/bin/env perl\n\n";
+
+    open my $fatscript, "<", module_path( 'App::cpanminus::fatscript' ) or die $!;
+    while ( <$fatscript> ) {
       next if $_ eq "\n";
+      last if /^__END__$/;
       print $out $_;
       last if /# END OF FATPACK CODE\s*$/;
     }
+
+    # while (<DATA>) {
+    #   next if $_ eq "\n";
+    #   print $out $_;
+    #   last if /# END OF FATPACK CODE\s*$/;
+    # }
 
     printf $out <<'INSTALLER', @args;
 
@@ -189,7 +201,7 @@ my $pb_version;
 %s
 
 sub run_cpanm {
-  my $app       = App::cpanminus::script->new;
+  my $app = App::cpanminus::script->new;
   my @options   = (
     "--quiet",
     "--local-lib-contained=${local_lib}",
@@ -198,7 +210,7 @@ sub run_cpanm {
   );
 
   $app->parse_options( @options, @_ );
-  $app->doit or exit(1);
+  $app->doit;
 }
 
 unless (caller) {
