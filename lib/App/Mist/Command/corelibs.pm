@@ -46,7 +46,7 @@ sub execute {
     "--save-dists=${mpan}",
   );
 
-  use Data::Dumper::Concise;
+  use Data::Dumper;
   require Module::CoreList;
   # $Module::CoreList::version{$]+0} =
   #  $Module::CoreList::version{5.008001};

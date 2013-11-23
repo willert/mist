@@ -21487,25 +21487,25 @@ CHECK_PREREQS
     'Dist::Zilla'
   );
   my @prereqs = (
-    'Module::Pluggable',
-    'Capture::Tiny',
-    'File::HomeDir',
-    'App::Cmd',
-    'Class::Load~0.2',
-    'File::Which',
-    'App::cpanminus~1.7',
-    'CPAN::PackageDetails',
-    'CPAN::DistnameInfo',
-    'Hook::LexWrap~0.24',
-    'Module::Runtime~0.013',
-    'Data::Dumper::Concise',
-    'Test::More~0.98',
-    'File::Find::Upwards',
-    'CPAN::Meta::Requirements~2.125',
-    'Dist::Zilla~4.3',
-    'CPAN::Meta~2.132830',
-    'CPAN::ParseDistribution',
-    'local::lib~1.008026'
+    'Module::Pluggable~version=HASH(0x78bd338)',
+    'Capture::Tiny~version=HASH(0x78c1450)',
+    'File::HomeDir~version=HASH(0x78cc948)',
+    'App::Cmd~version=HASH(0x78c0f40)',
+    'Class::Load~version=HASH(0x78ccd68)',
+    'File::Which~version=HASH(0x78c1600)',
+    'App::cpanminus~version=HASH(0x77d3e18)',
+    'CPAN::PackageDetails~version=HASH(0x78ccab0)',
+    'CPAN::DistnameInfo~version=HASH(0x78d0680)',
+    'Hook::LexWrap~version=HASH(0x78d0380)',
+    'Module::Runtime~version=HASH(0x78d00e0)',
+    'Data::Dumper::Concise~version=HASH(0x78d2c60)',
+    'Test::More~version=HASH(0x78d2ea0)',
+    'File::Find::Upwards~version=HASH(0x78d3188)',
+    'CPAN::Meta::Requirements~version=HASH(0x78d3548)',
+    'Dist::Zilla~version=HASH(0x78d70f8)',
+    'CPAN::Meta~version=HASH(0x78d74a0)',
+    'CPAN::ParseDistribution~version=HASH(0x78d79e0)',
+    'local::lib~version=HASH(0x78d7de8)'
   );
 
 

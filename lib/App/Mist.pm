@@ -5,8 +5,8 @@ use strict;
 use warnings;
 use 5.010;
 
-use lib '/home/willert/Devel/mist/contrib/cpanm/lib';
-use App::cpanminus::script;
+# use lib '/home/willert/Devel/mist/contrib/cpanm/lib';
+# use App::cpanminus::fatscript;
 
 use mro;
 use version 0.74;
@@ -26,6 +26,8 @@ use CPAN::Meta::Validator;
 use CPAN::ParseDistribution;
 use CPAN::DistnameInfo;
 use CPAN::PackageDetails;
+
+use Module::CPANfile;
 
 use Data::Dumper;
 use Capture::Tiny qw/capture/;
@@ -51,6 +53,19 @@ sub new {
         find_containing_dir_upwards( 'dist.ini' )
       } or die "$0: Can't find project root\n";
       dir( $root )->absolute->resolve;
+    };
+  }
+}
+
+{
+  my $cpanfile;
+  sub cpanfile {
+    my $self = shift;
+    return $cpanfile ||= do{
+      my $file = $self->project_root->file( 'cpanfile' );
+      die "$0: Can't find cpanfile for project\n"
+        unless -f "$file";
+      $file;
     };
   }
 }
@@ -253,6 +268,7 @@ MSG
 
 sub load_cpanm {
   my $self = shift;
+  return;
 
   die "$0: cpanm v$App::cpanminus::VERSION is too old, v1.7 needed\n"
     if $App::cpanminus::VERSION < 1.7;
@@ -310,7 +326,12 @@ sub load_cpanm {
           goto &$org;
         };
 
-        CPAN::PackageDetails->read( $packages->stringify );
+        {
+          no warnings 'uninitialized'; local $SIG{__WARN__} = sub{
+            printf STDERR "@_\n", @_ unless $_[0] =~ /\buninitialized\b/;
+          };
+          CPAN::PackageDetails->read( $packages->stringify );
+        }
       }
 
     };
@@ -340,10 +361,14 @@ sub parse_distribution {
 
   my $base_path = $self->mpan_dist->subdir( 'authors' )->subdir('id');
 
-  my $file = $base_path->file(
-    $dist->{pathname} ? split( '/', $dist->{pathname} ) :
-      file( $dist->{local_path} )->basename
-  );
+  my $file;
+  if ( $base_path->subsumes( $dist )) {
+    $file = file( $dist );
+  } elsif ( $dist->{pathname} ) {
+    $file = $base_path->file( split( '/', $dist->{pathname} ));
+  } else {
+    $file = $base_path->file( file( $dist->{local_path} )->basename );
+  };
 
   return unless -r -f "$file";
 
@@ -374,6 +399,9 @@ sub parse_distribution {
 sub add_distribution_to_index {
   my ( $self, $dist ) = @_;
 
+  printf STDERR "Parsing dist %s\n", $dist;
+
+
   my $dist_info = $self->parse_distribution( $dist );
 
   printf "Indexing %s ...\n", $dist_info->{pathname};
@@ -387,6 +415,10 @@ sub add_distribution_to_index {
 
     my $do_index = sub {
       version->parse( $version );
+      no warnings 'uninitialized'; local $SIG{__WARN__} = sub{
+        printf STDERR "@_\n", @_ unless $_[0] =~ /\buninitialized\b/;
+      };
+
       $self->mpan_package_details->add_entry(
         package_name => $pkg,
         version      => $version,
@@ -421,14 +453,24 @@ sub commit_mpan_package_index {
 
 sub run_cpanm {
   my ( $self, @cmd_opts ) = @_;
-  $self->load_cpanm;
 
-  my $app = App::cpanminus::script->new;
+  # $self->load_cpanm;
+
+  # my $app = App::cpanminus::script->new;
 
   carp( "  cpanm @cmd_opts\n" ) if $verbose;
 
-  $app->parse_options( @cmd_opts );
-  $app->doit;
+  my ( $stdout, $stderr, $exit ) = capture {
+    system( 'cpanm', @cmd_opts )
+  };
+
+  $stdout =~ s/^\d+ distributions? installed\n//m;
+  chomp( $stdout );
+  printf STDERR "%s\n", $stdout if $stdout and $verbose;
+
+  printf STDERR "%s\n", $stderr if $stderr;
+
+  croak "system cpanm @cmd_opts failed [$exit] : $?" unless $exit == 0;
 }
 
 
@@ -445,21 +487,16 @@ sub run_dzil {
 sub fetch_prereqs {
   my $self = shift;
 
-  require Dist::Zilla::App;
-  my $dzil = Dist::Zilla::App->new;
-  capture {
-    # force Dist::Zilla to load everything we need
-    $dzil->execute_command( $dzil->prepare_command('listdeps'));
-  };
-
-  my $prereqs = $dzil->zilla->prereqs->requirements_for(
-    runtime => 'requires'
-  );
+  my $cpanfile = Module::CPANfile->load( $self->cpanfile->stringify );
+  my $prereqs  = $cpanfile->prereqs->merged_requirements;
 
   my @reqs;
-  while ( my ( $module, $req ) = each %{ $prereqs->{requirements} }) {
-    my $version = $req->{minimum} ? '~'.$req->{minimum} : '';
-    push @reqs, $module . $version ;
+  foreach my $module ( $prereqs->required_modules ) {
+    my $req_str = $module;
+    if ( my $meta = $prereqs->requirements_for_module( $module )) {
+      $req_str .= '~' . $meta;
+    }
+    push @reqs, $req_str;
   }
 
   return @reqs;

@@ -14,7 +14,7 @@ use Cwd;
 
 use version 0.74;
 
-use Data::Dumper::Concise;
+use Data::Dumper;
 
 sub execute {
   my ( $self, $opt, $args ) = @_;

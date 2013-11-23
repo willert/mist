@@ -5,7 +5,6 @@ use warnings;
 
 use base 'App::Cmd::Command';
 
-use Hook::LexWrap;
 use Try::Tiny;
 use File::Which;
 use File::Find::Upwards;
@@ -31,74 +30,96 @@ sub execute {
     "--quiet",
     "--local-lib-contained=${local_lib}",
     "--mirror-only",
-    "--save-dists=${mpan}",
   );
 
-  # favor mpan-dist packages for dependencies
+  my @download_options = (
+    @base_options,
+    "--save-dists=${mpan}",
+
+    # use cpan for the requested package itself
+    "--mirror=http://search.cpan.org/CPAN",
+  );
+
   my @dependency_options = (
     @base_options,
+    "--installdeps",
+    "--save-dists=${mpan}",
+
+    # favor mpan-dist packages for dependencies
     "--mirror=file://${mpan}",
     "--mirror=http://search.cpan.org/CPAN",
-    "--installdeps",
+    "--cascade-search"
   );
 
-  # use cpan itself for the requested package itself
   my @install_options = (
     @base_options,
+
+    # use cpan for the requested package itself
     "--mirror=http://search.cpan.org/CPAN",
   );
 
   my $installed_packages = 0;
   my $initial_directory = cwd();
 
+  my %mpan_dist_files;
+  $self->app->mpan_dist->traverse( sub{
+    my ( $dist, $cont ) = @_;
+    $mpan_dist_files{ $dist->stringify } = {
+      'pre-existing' => 1,
+      'mtime'        => $dist->stat->mtime
+    } unless $dist->is_dir;
+    return $cont->();
+  });
+
   $self->app->load_cpanm;
 
+  my @modules  = grep{ !/^-/ } @$args;
+  my @cmd_args = grep{ /^-/ } @$args;
+
+  for my $module ( @modules ) {
+
+    printf "Injecting %s ...\n", $module;
+
   DOWNLOAD_DIST: {
-    my $guard = wrap 'App::cpanminus::script::build_stuff', pre => sub{
-      my ( $cpanm, $module, $dist ) = @_;
-      $_[-1] = 1; # short-circuit call to prevent installation
-    };
+      try {
+        local $ENV{SHELL} = '/bin/true';
+        $self->app->run_cpanm( '--look', @download_options, @cmd_args, $module );
+      } finally {
+        chdir $initial_directory;
+      };
+    }
 
-    try {
-      no warnings 'redefine';
-      *CORE::GLOBAL::exit = sub{};
-      $self->app->run_cpanm( @install_options, @$args );
-    } finally {
-      chdir $initial_directory;
-    };
-  }
+  CPANM_AUTO_INDEXER: {
+      my $stage;
 
- CPANM_AUTO_INDEXER: {
-    my $stage;
-
-    my $guard = wrap 'App::cpanminus::script::build_stuff',
-      pre  => sub{
-        my ( $cpanm, $module, $dist ) = @_;
-        printf STDERR "%s: %s\n", $stage, $module;
-      },
-      post => sub{
-        my ( $cpanm, $module, $dist ) = @_;
-        if ( $dist and my $success = !! $_[-1]  ) {
-          $self->app->add_distribution_to_index( $dist );
-          $installed_packages += 1;
-        }
+      try {
+        $stage = 'Dependencies';
+        my @dep_cmd_opts = ( '--reinstall', grep { !/--reinstall/ } @cmd_args );
+        $self->app->run_cpanm( @dependency_options, @dep_cmd_opts, $module );
+      } finally {
+        chdir $initial_directory;
       };
 
-    try {
-      no warnings 'redefine';
-      *CORE::GLOBAL::exit = sub{};
-      $stage = 'Dependencies';
-      my @dep_cmd_opts = grep { ! /--reinstall/ } @$args;
-      $self->app->run_cpanm( @dependency_options, @dep_cmd_opts );
-    } finally {
-      chdir $initial_directory;
-    };
+      $stage = 'Building';
+      $self->app->run_cpanm( @install_options, @cmd_args, $module );
+    }
 
-    $stage = 'Building';
-    $self->app->run_cpanm( @install_options, @$args );
   }
 
-  $self->app->commit_mpan_package_index if $installed_packages;
+  my $updated_packages = 0;
+
+  $self->app->mpan_dist->traverse( sub{
+    my ( $dist, $cont ) = @_;
+    return $cont->() if $dist->is_dir;
+    my $mtime = $dist->stat->mtime;
+    return $cont->() if exists $mpan_dist_files{ $dist->stringify }
+      and $mpan_dist_files{ $dist->stringify }{mtime} >= $mtime;
+    $self->app->add_distribution_to_index( $dist );
+    $updated_packages += 1;
+    return $cont->();
+  });
+
+  $self->app->commit_mpan_package_index if $updated_packages;
 
 }
 
