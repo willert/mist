@@ -1,3 +1,0 @@
-[submodule "contrib/cpanm"]
-	path = contrib/cpanm
-	url = https://github.com/miyagawa/cpanminus.git
