@@ -10,6 +10,7 @@ use File::Which;
 use File::Find::Upwards;
 use Path::Class qw/file dir/;
 use Cwd;
+use List::MoreUtils qw/ uniq /;
 
 use File::Temp qw/ tempfile tempdir /;
 use Data::Dumper;
@@ -78,31 +79,18 @@ sub execute {
 
   for my $module ( @modules ) {
 
-    printf "Injecting %s ...\n", $module;
-
-  DOWNLOAD_DIST: {
-      try {
-        local $ENV{SHELL} = '/bin/true';
-        $self->app->run_cpanm( '--look', @download_options, @cmd_args, $module );
-      } finally {
-        chdir $initial_directory;
-      };
+    # Download the dist via --look and a faked shell to open it in
+    {
+      local $ENV{SHELL} = '/bin/true';
+      $self->app->run_cpanm( '--look', @download_options, @cmd_args, $module );
     }
 
-  CPANM_AUTO_INDEXER: {
-      my $stage;
+    # Force checking and, if not found, installing dependencies
+    my @dep_cmd_opts = uniq '--reinstall', @cmd_args;
+    $self->app->run_cpanm( @dependency_options, @dep_cmd_opts, $module );
 
-      try {
-        $stage = 'Dependencies';
-        my @dep_cmd_opts = ( '--reinstall', grep { !/--reinstall/ } @cmd_args );
-        $self->app->run_cpanm( @dependency_options, @dep_cmd_opts, $module );
-      } finally {
-        chdir $initial_directory;
-      };
-
-      $stage = 'Building';
-      $self->app->run_cpanm( @install_options, @cmd_args, $module );
-    }
+    # Finally install the module
+    $self->app->run_cpanm( @install_options, @cmd_args, $module );
 
   }
 

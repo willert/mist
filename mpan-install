@@ -21486,7 +21486,8 @@ CHECK_PREREQS
     'Module::CPANfile~1.0002',
     'File::Find::Upwards',
     'Path::Class',
-    'CPAN::ParseDistribution'
+    'CPAN::ParseDistribution',
+    'List::MoreUtils'
   );
 
 

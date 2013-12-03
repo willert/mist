@@ -462,12 +462,6 @@ sub commit_mpan_package_index {
 sub run_cpanm {
   my ( $self, @cmd_opts ) = @_;
 
-  # $self->load_cpanm;
-
-  # my $app = App::cpanminus::script->new;
-
-  carp( "  cpanm @cmd_opts\n" ) if $verbose;
-
   my ( $stdout, $stderr, $exit ) = capture {
     system( 'cpanm', @cmd_opts )
   };
