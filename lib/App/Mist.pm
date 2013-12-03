@@ -367,8 +367,11 @@ sub parse_distribution {
   } elsif ( $dist->{pathname} ) {
     $file = $base_path->file( split( '/', $dist->{pathname} ));
   } else {
-    $file = $base_path->file( file( $dist->{local_path} )->basename );
+    $file = $dist;
   };
+
+  printf STDERR "Using file: %s\n", $file;
+
 
   return unless -r -f "$file";
 
@@ -405,6 +408,11 @@ sub add_distribution_to_index {
   my $dist_info = $self->parse_distribution( $dist );
 
   printf "Indexing %s ...\n", $dist_info->{pathname};
+
+  use Data::Dumper::Concise;
+  printf STDERR "[Dumper] at App::Mist line 410: %s\n",
+    Dumper( $dist_info );
+
 
   my $modules = $dist_info->modules;
 
