@@ -21303,6 +21303,27 @@ unshift @INC, sub {
   return
 };
 } # END OF FATPACK CODE
+package                         # hide from CPAN
+  App::Mist::MPAN::prereqs;
+
+our $VERSION = 1;
+
+1;
+package                         # hide from CPAN
+  App::Mist::MPAN::perlenv;
+
+our $VERSION = 1;
+
+1;
+package                         # hide from CPAN
+  App::Mist::MPAN::install;
+
+our $PERL5_BASE_LIB     // die '$PERL5_BASE_LIB not set';
+our $MPAN_DIST_DIR      // die '$MPAN_DIST_DIR not set';
+our $LOCAL_LIB_DIR      // die '$LOCAL_LIB_DIR not set';
+our $PREPEND_DISTS      // die '$PREPEND_DISTS not set';
+our $DONT_TEST_DISTS    // die '$DONT_TEST_DISTS not set';
+our $PREREQUISITE_DISTS // die '$PREREQUISITE_DISTS not set';
 
 use strict;
 use warnings;
@@ -21317,11 +21338,11 @@ use Cwd qw/realpath/;
 
 my $mist_home = $ENV{MIST_APP_ROOT} ? $ENV{MIST_APP_ROOT} : $Bin;
 
-my $perl5_baselib = File::Spec->catdir( $mist_home, 'perl5' );
+my $perl5_baselib = File::Spec->catdir( $mist_home, $PERL5_BASE_LIB );
 mkpath( $perl5_baselib );
 
-my $mpan          = File::Spec->catdir( $Bin, 'mpan-dist' );
-my $local_lib     = File::Spec->catdir( $mist_home, 'perl5/perl-5.14.2' );
+my $mpan          = File::Spec->catdir( $Bin, $MPAN_DIST_DIR );
+my $local_lib     = File::Spec->catdir( $mist_home, $LOCAL_LIB_DIR );
 my $libexec_dir   = File::Spec->catdir( $perl5_baselib, 'libexec' );
 
 mkpath( $libexec_dir );
@@ -21335,69 +21356,20 @@ copy( $cmd_wrapper_src, $cmd_wrapper )
 my $perm = ( stat $cmd_wrapper )[2] & 07777;
 chmod( $perm | 0755, $cmd_wrapper );
 
-
 my $pb_root;
 my $pb_home;
 my $pb_version;
 
-  use FindBin ();
-  use File::Spec ();
+{
+  # only try to load App::Mist::MPAN::perlenv if it hasn't been
+  # compiled in above
+  no strict 'refs';
+  require App::Mist::MPAN::perlenv
+    unless keys %{ "App::Mist::MPAN::perlenv::" };
+}
 
-  my $tmp_base_dir = File::Spec->catdir( $FindBin::Bin, 'tmp' );
-  $tmp_base_dir = File::Spec->catdir(
-    File::Spec->tmpdir, ( File::Spec->splitdir( $FindBin::Bin ))[ -1 ]
-  ) unless -d $tmp_base_dir and -w $tmp_base_dir;
-
-  $pb_root    = $ENV{PERLBREW_ROOT} || '/opt/perl5';
-  $pb_home    = File::Spec->catdir( $tmp_base_dir, 'perlbrew' );
-  $pb_version = 'perl-5.14.2';
-
-  print "Using perlbrew root $pb_root\n";
-  print "Using temporary perlbrew home $pb_home\n";
-
-  my $pb_exec = qx{ which perlbrew } || "${pb_root}/bin/perlbrew";
-  chomp $pb_exec;
-
-  system( "$pb_exec version >/dev/null" ) == 0 or die <<"MSG";
-No local installation of perlbrew was found ($?). You can install it
-as root via:
-  export PERLBREW_ROOT=${pb_root}
-  curl -kL http://install.perlbrew.pl | sudo -E bash
-or just for this account simply via:
-  curl -kL http://install.perlbrew.pl | bash
-MSG
-
-  my @pb_installed_versions = qx# bash -c '
-    export PERLBREW_ROOT=${pb_root}
-    export PERLBREW_HOME=${pb_home}
-
-    if ( ! . \${PERLBREW_ROOT}/etc/bashrc ) ; then
-      perlbrew init 2>/dev/null
-      if ( ! . \${PERLBREW_ROOT}/etc/bashrc ) ; then
-        echo "Cannot create perlbrew environment in \${PERLBREW_ROOT}"
-        exit 127
-      fi
-    fi
-
-    $pb_exec list
-  '#;
-
-  my ( $pb_installed ) = grep{ / \b $pb_version \b /x } @pb_installed_versions;
-  die "FATAL: $pb_version not found and can't write to $pb_root\n" .
-    "Try\n  sudo -E perlbrew install $pb_version\nto install it as root\n"
-      unless $pb_installed or -w $pb_root;
-
-  my @pb_call = ( $pb_exec, 'install', $pb_version );
-  system( @pb_call ) == 0 or die "`@pb_call` failed" unless $pb_installed;
-
-  if ( !$ENV{PERLBREW_PERL} or $ENV{PERLBREW_PERL} ne $pb_version ) {
-    print "Restarting $0 under $pb_version\n\n";
-    $ENV{PERLBREW_ROOT} = $pb_root;
-    $ENV{PERLBREW_HOME} = $pb_home;
-    exec $pb_exec, 'exec', '--with', $pb_version, $0;
-  }
-
-
+App::Mist::MPAN::perlenv->init
+  if App::Mist::MPAN::perlenv->can( 'init' );
 
 sub run_cpanm {
   my $app = App::cpanminus::script->new;
@@ -21435,62 +21407,38 @@ unless (caller) {
   my $rc_dir = File::Spec->catdir( $p5_dir, 'etc' );
   mkpath( $rc_dir );
   my $mist_rc = File::Spec->catfile( $rc_dir, 'mist.mistrc' );
-  open my $env, '>', $mist_rc; # to catch write errors early on
+  open my $env, '>', $mist_rc;  # to catch write errors early on
 
   my $bin_dir = File::Spec->catdir( $p5_dir, 'bin' );
   mkpath( $bin_dir );
   my $mist_run = File::Spec->catfile( $bin_dir, 'mist-run');
   open my $wrapper, '>', $mist_run; # to catch write errors early on
   {
-     my $perm = ( stat $mist_run )[2] & 07777;
-     chmod( $perm | 0755, $mist_run );
+    my $perm = ( stat $mist_run )[2] & 07777;
+    chmod( $perm | 0755, $mist_run );
   }
 
   local $ENV{HOME} = $workspace;
 
-  eval <<'CHECK_PREREQS';
-# This file contains perl code that is run before anything
-# else and can be used to ensure that the configuration of
-# the host system confirms to expectations.
-#
-# I.E you an use the following lines to ensure that
-# mysql_config (which is needed by DBD::mysql) is in the
-# current PATH:
-#
-#   die <<ERROR if system("mysql_config --version") < 0;
-#   Could not run mysql_config [$!]
-#   Do you have libmysqlclient-dev installed?
-#   ERROR
-#
-# Keep in mind that you can't use any modules that are not
-# available on the host system in this file.
+  {
+    # only try to load App::Mist::MPAN::prereqs if it hasn't been
+    # compiled in above
+    no strict 'refs';
+    require App::Mist::MPAN::prereqs
+      unless keys %{ "App::Mist::MPAN::prereqs::" };
+  }
 
-CHECK_PREREQS
+  if ( App::Mist::MPAN::prereqs->can( 'assert' )) {
+    eval { App::Mist::MPAN::prereqs->assert };
+  }
 
   if ( my $err = $@ ) {
     die "\n[FATAL] Error checking prerequisites:\n${err}\n";
   }
 
-  my @prepend = (
-    
-  );
-  my @notest  = (
-    'Term::ReadKey'
-  );
-  my @prereqs = (
-    'File::HomeDir',
-    'App::Cmd',
-    'Module::Path',
-    'App::cpanminus~1.7',
-    'CPAN::PackageDetails',
-    'Module::CPANfile~1.0002',
-    'File::Find::Upwards',
-    'Path::Class',
-    'CPAN::ParseDistribution',
-    'List::MoreUtils'
-  );
-
-
+  my @prepend = ( @$PREPEND_DISTS );
+  my @notest  = ( @$DONT_TEST_DISTS );
+  my @prereqs = ( @$PREREQUISITE_DISTS );
   for my $module ( @prepend ) {
     run_cpanm( @ARGV, $module );
   }
@@ -21521,7 +21469,7 @@ MIST_ENV
 # FIXME:  ]] ; then
 # FIXME:    export PERLBREW_HOME="$MIST_APP_ROOT/tmp/perlbrew"
 # FIXME:  else
-# FIXME:    export PERLBREW_HOME="%s"
+# FIXME:    export PERLBREW_HOME="%%s"
 # FIXME:  fi
 # FIXME:  PERLBREW_HOME
 
@@ -21570,8 +21518,7 @@ WRAPPER
 
     use strict;
 
-#   printf "%s\n",
-      $dir = File::Spec->catdir( $local_lib, $script_dir );
+    $dir = File::Spec->catdir( $local_lib, $script_dir );
     if ( -d $dir and opendir( my $dh, $dir ) ) {
       push @binaries, map{(
         File::Spec->catfile( $loc_script_dir, $_ )
@@ -21581,8 +21528,7 @@ WRAPPER
       } readdir( $dh );
     }
 
-#    printf "%s\n",
-      $dir = File::Spec->catdir( $Bin, $script_dir );
+    $dir = File::Spec->catdir( $Bin, $script_dir );
     if ( -d $dir and opendir( my $dh, $dir ) ) {
       push @binaries, map{(
         File::Spec->catfile( $loc_script_dir, $_ )
@@ -21617,4 +21563,20 @@ automatically prepended to \$PATH) you can also use this wrapper script:
 
 SUCCESS
 }
-
+BEGIN {
+  $PERL5_BASE_LIB     = 'perl5';
+  $MPAN_DIST_DIR      = 'mpan-dist';
+  $LOCAL_LIB_DIR      = 'perl5/perl-5.14.2';
+  $PREPEND_DISTS      = [];
+  $DONT_TEST_DISTS    = ['Term::ReadKey'];
+  $PREREQUISITE_DISTS = ['File::HomeDir',
+    'App::Cmd',
+    'Module::Path',
+    'App::cpanminus~1.7',
+    'CPAN::PackageDetails',
+    'Module::CPANfile~1.0002',
+    'File::Find::Upwards',
+    'Path::Class',
+    'CPAN::ParseDistribution',
+    'List::MoreUtils'];
+}
