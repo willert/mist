@@ -39,16 +39,12 @@ copy( $cmd_wrapper_src, $cmd_wrapper )
 my $perm = ( stat $cmd_wrapper )[2] & 07777;
 chmod( $perm | 0755, $cmd_wrapper );
 
-my $pb_root;
-my $pb_home;
-my $pb_version;
-
 {
   # only try to load App::Mist::MPAN::perlenv if it hasn't been
   # compiled in above
   no strict 'refs';
   require App::Mist::MPAN::perlenv
-    unless keys %{ "App::Mist::MPAN::perlenv::" };
+    unless keys %{ "App::Mist::MPAN::perl::" };
 }
 
 App::Mist::MPAN::perlenv->init
@@ -142,30 +138,9 @@ export PATH="$MIST_APP_ROOT/bin:$MIST_APP_ROOT/sbin:$MIST_APP_ROOT/script:$PATH"
 
 MIST_ENV
 
-  if ( $pb_version ) {
-# FIXME:      printf $env <<'PERLBREW_HOME', $pb_home;
-# FIXME:  # Initializing perlbrew environment
-# FIXME:
-# FIXME:  if [[
-# FIXME:    -w "$MIST_APP_ROOT/tmp/perlbrew" ||
-# FIXME:    ( -w "$MIST_APP_ROOT/tmp" && ! -e "$MIST_APP_ROOT/tmp/perlbrew" )
-# FIXME:  ]] ; then
-# FIXME:    export PERLBREW_HOME="$MIST_APP_ROOT/tmp/perlbrew"
-# FIXME:  else
-# FIXME:    export PERLBREW_HOME="%%s"
-# FIXME:  fi
-# FIXME:  PERLBREW_HOME
-
-    print $env <<"PERLBREW_RC";
-
-export PERLBREW_ROOT="$pb_root"
-source "$pb_root/etc/bashrc"
-
-perlbrew switch $pb_version
-
-PERLBREW_RC
-  }
+  App::Mist::MPAN::perl->write_env( $env ) if $pb_version;
   require local::lib;
+
   {
     local $SIG{__WARN__} = sub{};
     print $env local::lib->environment_vars_string_for( "${local_lib}" );

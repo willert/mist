@@ -60,73 +60,6 @@ PREAMBLE
     my @prereqs = $self->app->fetch_prereqs;
 
     my $perlbrew_version = $self->app->perlbrew_version;
-    my $perlbrew_init = '';
-
-    if ( $perlbrew_version ) {
-      my @args = (
-        $self->app->perlbrew_root,
-        $perlbrew_version,
-      );
-      $perlbrew_init = sprintf( <<'PERL', @args );
-  use FindBin ();
-  use File::Spec ();
-
-  my $tmp_base_dir = File::Spec->catdir( $FindBin::Bin, 'tmp' );
-  $tmp_base_dir = File::Spec->catdir(
-    File::Spec->tmpdir, ( File::Spec->splitdir( $FindBin::Bin ))[ -1 ]
-  ) unless -d $tmp_base_dir and -w $tmp_base_dir;
-
-  $pb_root    = $ENV{PERLBREW_ROOT} || '%s';
-  $pb_home    = File::Spec->catdir( $tmp_base_dir, 'perlbrew' );
-  $pb_version = '%s';
-
-  print "Using perlbrew root $pb_root\n";
-  print "Using temporary perlbrew home $pb_home\n";
-
-  my $pb_exec = qx{ which perlbrew } || "${pb_root}/bin/perlbrew";
-  chomp $pb_exec;
-
-  system( "$pb_exec version >/dev/null" ) == 0 or die <<"MSG";
-No local installation of perlbrew was found ($?). You can install it
-as root via:
-  export PERLBREW_ROOT=${pb_root}
-  curl -kL http://install.perlbrew.pl | sudo -E bash
-or just for this account simply via:
-  curl -kL http://install.perlbrew.pl | bash
-MSG
-
-  my @pb_installed_versions = qx# bash -c '
-    export PERLBREW_ROOT=${pb_root}
-    export PERLBREW_HOME=${pb_home}
-
-    if ( ! . \${PERLBREW_ROOT}/etc/bashrc ) ; then
-      perlbrew init 2>/dev/null
-      if ( ! . \${PERLBREW_ROOT}/etc/bashrc ) ; then
-        echo "Cannot create perlbrew environment in \${PERLBREW_ROOT}"
-        exit 127
-      fi
-    fi
-
-    $pb_exec list
-  '#;
-
-  my ( $pb_installed ) = grep{ / \b $pb_version \b /x } @pb_installed_versions;
-  die "FATAL: $pb_version not found and can't write to $pb_root\n" .
-    "Try\n  sudo -E perlbrew install $pb_version\nto install it as root\n"
-      unless $pb_installed or -w $pb_root;
-
-  my @pb_call = ( $pb_exec, 'install', $pb_version );
-  system( @pb_call ) == 0 or die "`@pb_call` failed" unless $pb_installed;
-
-  if ( !$ENV{PERLBREW_PERL} or $ENV{PERLBREW_PERL} ne $pb_version ) {
-    print "Restarting $0 under $pb_version\n\n";
-    $ENV{PERLBREW_ROOT} = $pb_root;
-    $ENV{PERLBREW_HOME} = $pb_home;
-    exec $pb_exec, 'exec', '--with', $pb_version, $0;
-  }
-
-PERL
-    }
 
     print STDERR "Generating mpan-install\n";
 
@@ -141,20 +74,43 @@ PERL
       last if /# END OF FATPACK CODE\s*$/;
     }
 
-    open my $prereqs, "<", module_path( 'App::Mist::MPAN::prereqs' ) or die $!;
-    while ( <$prereqs> ) {
-      last if /^__END__$/;
-      print $out $_;
+    {
+      open my $fh, "<", module_path( 'App::Mist::MPAN::prereqs' ) or die $!;
+      while ( <$fh> ) {
+        last if /^__END__$/;
+        print $out $_;
+      }
     }
 
-    open my $perlenv, "<", module_path( 'App::Mist::MPAN::perlenv' ) or die $!;
-    while ( <$perlenv> ) {
-      last if /^__END__$/;
-      print $out $_;
+    # TODO {
+    # TODO   open my $fh, "<", module_path( 'App::Mist::MPAN::perlenv' ) or die $!;
+    # TODO   while ( <$fh> ) {
+    # TODO     last if /^__END__$/;
+    # TODO     print $out $_;
+    # TODO   }
+    # TODO }
+
+    if ( $perlbrew_version ) {
+      open my $fh, "<", module_path( 'App::Mist::MPAN::perlbrew' ) or die $!;
+      while ( <$fh> ) {
+        last if /^__END__$/;
+        print $out $_;
+      }
+      my @args = (
+        $self->app->perlbrew_root,
+        $perlbrew_version,
+      );
+    printf $out <<'PERL', map{ sprintf q{'%s'}, $_ } @args;
+
+BEGIN {
+  $PERLBREW_ROOT            = %s;
+  $PERLBREW_DEFAULT_VERSION = %s;
+}
+PERL
     }
 
-    open my $installer, "<", module_path( 'App::Mist::MPAN::install' ) or die $!;
-    while ( <$installer> ) {
+    open my $fh, "<", module_path( 'App::Mist::MPAN::install' ) or die $!;
+    while ( <$fh> ) {
       last if /^__END__$/;
       print $out $_;
     }
@@ -173,6 +129,7 @@ PERL
     );
 
     printf $out <<'INSTALLER', @args;
+
 BEGIN {
   $PERL5_BASE_LIB     = %s;
   $MPAN_DIST_DIR      = %s;
