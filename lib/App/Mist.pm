@@ -472,7 +472,8 @@ sub run_cpanm {
 
   printf STDERR "%s\n", $stderr if $stderr;
 
-  croak "system cpanm @cmd_opts failed [$exit] : $?" unless $exit == 0;
+  croak "system cpanm @cmd_opts failed [$exit] : $?"
+    if $exit != 0 and $verbose;
 }
 
 

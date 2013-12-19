@@ -39,16 +39,8 @@ copy( $cmd_wrapper_src, $cmd_wrapper )
 my $perm = ( stat $cmd_wrapper )[2] & 07777;
 chmod( $perm | 0755, $cmd_wrapper );
 
-{
-  # only try to load App::Mist::MPAN::perlenv if it hasn't been
-  # compiled in above
-  no strict 'refs';
-  require App::Mist::MPAN::perlenv
-    unless keys %{ "App::Mist::MPAN::perl::" };
-}
-
-App::Mist::MPAN::perlenv->init
-  if App::Mist::MPAN::perlenv->can( 'init' );
+App::Mist::MPAN::perl->init
+  if eval{ App::Mist::MPAN::perl->can( 'init' ) };
 
 sub run_cpanm {
   my $app = App::cpanminus::script->new;
@@ -138,7 +130,10 @@ export PATH="$MIST_APP_ROOT/bin:$MIST_APP_ROOT/sbin:$MIST_APP_ROOT/script:$PATH"
 
 MIST_ENV
 
-  App::Mist::MPAN::perl->write_env( $env ) if $pb_version;
+  if ( eval{ App::Mist::MPAN::perl->can( 'write_env' )} ) {
+    App::Mist::MPAN::perl->write_env( $env );
+  }
+
   require local::lib;
 
   {

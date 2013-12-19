@@ -6,8 +6,6 @@ package                         # hide from CPAN
 
 our $VERSION = 1;
 
-sub write_env {
-  die "unimplemented";
-}
+sub write_env {}
 
 1;
