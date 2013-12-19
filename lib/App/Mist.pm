@@ -50,7 +50,7 @@ sub new {
     $project_root ||= do{
       my $root = eval{
         local $SIG{__WARN__} = sub{};
-        find_containing_dir_upwards( 'dist.ini' )
+        find_containing_dir_upwards( 'cpanfile' )
       } or die "$0: Can't find project root\n";
       dir( $root )->absolute->resolve;
     };
@@ -370,9 +370,6 @@ sub parse_distribution {
     $file = $dist;
   };
 
-  printf STDERR "Using file: %s\n", $file;
-
-
   return unless -r -f "$file";
 
   my $d = CPAN::DistnameInfo->new( $file );
@@ -394,25 +391,15 @@ sub parse_distribution {
     $mpath;
   };
 
-  # printf STDERR "Dist info: %s\n", Dumper( $dist_info );
-
   return $dist_info;
 }
 
 sub add_distribution_to_index {
   my ( $self, $dist ) = @_;
 
-  printf STDERR "Parsing dist %s\n", $dist;
-
-
   my $dist_info = $self->parse_distribution( $dist );
 
-  printf "Indexing %s ...\n", $dist_info->{pathname};
-
-  use Data::Dumper::Concise;
-  printf STDERR "[Dumper] at App::Mist line 410: %s\n",
-    Dumper( $dist_info );
-
+  printf "Indexing %s\n", $dist_info->{pathname};
 
   my $modules = $dist_info->modules;
 
@@ -432,7 +419,8 @@ sub add_distribution_to_index {
         version      => $version,
         path         => $dist_info->{pathname},
       );
-      printf STDERR "  Added module %s %s\n", $pkg, $version // 'N/A';
+
+      # printf STDERR "  Added module %s %s\n", $pkg, $version // 'N/A';
     };
 
     $verbose ? &$do_index() : try{ &$do_index() };

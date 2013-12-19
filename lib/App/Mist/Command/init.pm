@@ -29,16 +29,11 @@ sub execute {
     } ( @prepend, @notest );
   } $app->fetch_prereqs;
 
-  my @inject = (
-    'inject',
-    '--skip-satisfied',
-  );
-
   my $do = sub{ $app->execute_command( $app->prepare_command( @_ )) };
 
-  $do->( @inject,             @$args, @prepend ) if @prepend;
-  $do->( @inject, '--notest', @$args, @notest  ) if @notest;
-  $do->( @inject,             @$args, @prereqs ) if @prereqs;
+  $do->( 'inject',             @$args, @prepend ) if @prepend;
+  $do->( 'inject', '--notest', @$args, @notest  ) if @notest;
+  $do->( 'inject',             @$args, @prereqs ) if @prereqs;
   $do->( 'compile' );
 
   {

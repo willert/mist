@@ -1,13 +1,19 @@
-requires "App::Cmd"                => "0";
-requires "App::cpanminus"          => "1.7";
-requires "CPAN::PackageDetails"    => "0";
-requires "CPAN::ParseDistribution" => "0";
-requires "File::Find::Upwards"     => "0";
-requires "File::HomeDir"           => "0";
-requires "Module::Path"            => "0";
-requires "Path::Class"             => "0";
-requires "List::MoreUtils"         => "0";
-requires "Module::CPANfile"        => "1.0002";
+requires "App::Cmd";
+requires "App::cpanminus" => "1.7";
+requires "CPAN::PackageDetails";
+requires "CPAN::ParseDistribution";
+requires "File::Find::Upwards";
+requires "File::HomeDir";
+requires "File::Share";
+requires "Module::Path";
+requires "Path::Class";
+requires "List::MoreUtils";
+requires "Module::CPANfile" => "1.0002";
+
+requires 'Devel::CheckBin';
+requires 'Devel::CheckLib';
+requires 'Devel::CheckCompiler';
+requires 'Probe::Perl';
 
 on 'configure' => sub {
   requires "ExtUtils::MakeMaker" => "6.30";

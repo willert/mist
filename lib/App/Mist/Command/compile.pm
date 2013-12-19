@@ -5,10 +5,13 @@ use warnings;
 
 use base 'App::Cmd::Command';
 
+use App::Mist::Utils qw/ append_module_source /;
 use Module::Path qw/ module_path /;
 
 use Try::Tiny;
-use Path::Class qw/dir/;
+use File::Copy;
+use File::Share qw/ dist_file /;
+use Path::Class qw/ dir /;
 use Cwd;
 
 sub execute {
@@ -66,79 +69,31 @@ PREAMBLE
     open my $out, ">", "mpan-install.tmp" or die $!;
     print $out "#!/usr/bin/env perl\n\n";
 
-    open my $fatscript, "<", module_path( 'App::cpanminus::fatscript' ) or die $!;
-    while ( <$fatscript> ) {
-      next if $_ eq "\n";
-      last if /^__END__$/;
-      print $out $_;
-      last if /# END OF FATPACK CODE\s*$/;
-    }
-
-    {
-      open my $fh, "<", module_path( 'App::Mist::MPAN::prereqs' ) or die $!;
-      while ( <$fh> ) {
-        last if /^__END__$/;
-        print $out $_;
-      }
-    }
-
-    # TODO {
-    # TODO   open my $fh, "<", module_path( 'App::Mist::MPAN::perlenv' ) or die $!;
-    # TODO   while ( <$fh> ) {
-    # TODO     last if /^__END__$/;
-    # TODO     print $out $_;
-    # TODO   }
-    # TODO }
-
-    if ( $perlbrew_version ) {
-      open my $fh, "<", module_path( 'App::Mist::MPAN::perlbrew' ) or die $!;
-      while ( <$fh> ) {
-        last if /^__END__$/;
-        print $out $_;
-      }
-      my @args = (
-        $self->app->perlbrew_root,
-        $perlbrew_version,
-      );
-    printf $out <<'PERL', map{ sprintf q{'%s'}, $_ } @args;
-
-BEGIN {
-  $PERLBREW_ROOT            = %s;
-  $PERLBREW_DEFAULT_VERSION = %s;
-}
-PERL
-    }
-
-    open my $fh, "<", module_path( 'App::Mist::MPAN::install' ) or die $!;
-    while ( <$fh> ) {
-      last if /^__END__$/;
-      print $out $_;
-    }
-
-
-    my @args = map{ sprintf( qq{'%s'}, $_ ) } (
-      $app->perl5_base_lib->relative( $home ),
-      $mpan->relative( $home ),
-      $local_lib->relative( $home ),
+    append_module_source(
+      'App::cpanminus::fatscript' => $out,
+      until => qr/# END OF FATPACK CODE\s*$/,
     );
 
-    push @args, (
-      @prepend ? sprintf( qq{['%s']}, join qq{',\n    '}, @prepend ) : '[]',
-      @notest  ? sprintf( qq{['%s']}, join qq{',\n    '}, @notest  ) : '[]',
-      @prereqs ? sprintf( qq{['%s']}, join qq{',\n    '}, @prereqs ) : '[]',
-    );
+    append_module_source( 'Devel::CheckBin'      => $out );
+    append_module_source( 'Devel::CheckLib'      => $out );
+    append_module_source( 'Devel::CheckCompiler' => $out );
+    append_module_source( 'Probe::Perl'          => $out );
 
-    printf $out <<'INSTALLER', @args;
+    append_module_source( 'App::Mist::MPAN::prereqs' => $out );
 
-BEGIN {
-  $PERL5_BASE_LIB     = %s;
-  $MPAN_DIST_DIR      = %s;
-  $LOCAL_LIB_DIR      = %s;
-  $PREPEND_DISTS      = %s;
-  $DONT_TEST_DISTS    = %s;
-  $PREREQUISITE_DISTS = %s;
-}
-INSTALLER
+    append_module_source('App::Mist::MPAN::perlbrew' => $out, VARS => [
+      PERLBREW_ROOT            => $self->app->perlbrew_root,
+      PERLBREW_DEFAULT_VERSION => $perlbrew_version,
+    ]) if $perlbrew_version;
+
+    append_module_source( 'App::Mist::MPAN::install' => $out, VARS => [
+      PERL5_BASE_LIB     => $app->perl5_base_lib->relative( $home ),
+      MPAN_DIST_DIR      => $mpan->relative( $home ),
+      LOCAL_LIB_DIR      => $local_lib->relative( $home ),
+      PREPEND_DISTS      => \@prepend,
+      DONT_TEST_DISTS    => \@notest,
+      PREREQUISITE_DISTS => \@prereqs,
+    ]);
 
     close $out;
 
@@ -148,56 +103,9 @@ INSTALLER
 
     print STDERR "Generating cmd wrapper\n";
 
-    my $wrapper = $app->mpan_dist->file('cmd-wrapper.bash')->stringify;
-    open $out, ">", $wrapper or die $!;
-
-    print $out <<'CMD_WRAPPER';
-#!/bin/bash
-
-# get the absolute path of the executable
-SELF_PATH=$(cd -P -- "$(dirname -- "$0")" && pwd -P) && SELF_PATH=$SELF_PATH/$(basename -- "$0")
-
-# resolve symlinks
-while [ -h $SELF_PATH ]; do
-    # 1) cd to directory of the symlink
-    # 2) cd to the directory of where the symlink points
-    # 3) get the pwd
-    # 4) append the basename
-    DIR=$(dirname -- "$SELF_PATH")
-    SYM=$(readlink $SELF_PATH)
-    SELF_PATH=$(cd $DIR && cd $(dirname -- "$SYM") && pwd)/$(basename -- "$SYM")
-done
-
-WRAPPER=$(dirname $SELF_PATH)
-
-CALL_PATH="$( cd -P "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/$(basename $0)"
-
-if [ $SELF_PATH == $CALL_PATH ] ; then
-  echo "$(basename $0): Must be called as a symlink named like the command to be run" >&2
-  exit 1
-fi
-
-# try to upward-find local::lib directory
-for UPDIR in . .. ../.. ../../.. ../../../.. ; do
-  TEST="$WRAPPER/$UPDIR/perl5";
-  if [ -d $TEST ] ; then
-      LOCAL_LIB=$( cd -P "$( dirname "$TEST" )" && pwd )
-      BASE_DIR="$WRAPPER/$UPDIR"
-      break
-  fi
-done
-
-#exit if we can't find any
-if [ ! $LOCAL_LIB ] ; then
-  echo "$0: No local::lib directory found. Abort!" >&2
-  exit 1
-fi
-
-exec "$BASE_DIR/perl5/bin/mist-run" `basename $0` "$@"
-
-CMD_WRAPPER
-
-    close $out;
+    my $cmd_wrapper = 'cmd-wrapper.bash';
+    my $wrapper = $app->mpan_dist->file( $cmd_wrapper )->stringify;
+    copy( dist_file( 'App-Mist', $cmd_wrapper ), $wrapper );
     chmod 0755, $wrapper;
 
   } catch {

@@ -1,6 +1,5 @@
 #!/usr/bin/env perl
 
-;{
 package App::cpanminus::fatscript;
 #
 # You want to install cpanminus? Run the following command and it will
@@ -21304,732 +21303,25 @@ unshift @INC, sub {
   return
 };
 } # END OF FATPACK CODE
-};;{
-package Devel::CheckBin;
-use strict;
-use warnings;
-use 5.008001;
-our $VERSION = "0.02";
-use parent qw(Exporter);
-our @EXPORT = qw(can_run check_bin);
-use ExtUtils::MakeMaker;
-use File::Spec;
-use Config;
-# Check if we can run some command
-sub can_run {
-    my ($cmd) = @_;
-    my $_cmd = $cmd;
-    return $_cmd if (-x $_cmd or $_cmd = MM->maybe_command($_cmd));
-    for my $dir ((split /$Config::Config{path_sep}/, $ENV{PATH}), '.') {
-        next if $dir eq '';
-        my $abs = File::Spec->catfile($dir, $cmd);
-        return $abs if (-x $abs or $abs = MM->maybe_command($abs));
-    }
-    return;
-}
-sub check_bin {
-    my ( $bin, $version) = @_;
-    if ( $version ) {
-        die "check_bin does not support versions yet";
-    }
-    # Locate the bin
-    print "Locating bin:$bin...";
-    my $found_bin = can_run( $bin );
-    if ( $found_bin ) {
-        print " found at $found_bin.\n";
-        return 1;
-    } else {
-        print " missing.\n";
-        print "Unresolvable missing external dependency.\n";
-        print "Please install '$bin' seperately and try again.\n";
-        print STDERR "NA: Unable to build distribution on this platform.\n";
-        exit(0);
-    }
-}
-1;
-};;{
-# $Id: CheckLib.pm,v 1.25 2008/10/27 12:16:23 drhyde Exp $
-package Devel::CheckLib;
-use 5.00405; #postfix foreach
-use strict;
-use vars qw($VERSION @ISA @EXPORT);
-$VERSION = '1.01';
-use Config qw(%Config);
-use Text::ParseWords 'quotewords';
-use File::Spec;
-use File::Temp;
-require Exporter;
-@ISA = qw(Exporter);
-@EXPORT = qw(assert_lib check_lib_or_exit check_lib);
-# localising prevents the warningness leaking out of this module
-local $^W = 1;    # use warnings is a 5.6-ism
-_findcc(); # bomb out early if there's no compiler
-=head1 NAME
-Devel::CheckLib - check that a library is available
-=head1 DESCRIPTION
-Devel::CheckLib is a perl module that checks whether a particular C
-library and its headers are available.
-=head1 SYNOPSIS
-    use Devel::CheckLib;
-    check_lib_or_exit( lib => 'jpeg', header => 'jpeglib.h' );
-    check_lib_or_exit( lib => [ 'iconv', 'jpeg' ] );
-  
-    # or prompt for path to library and then do this:
-    check_lib_or_exit( lib => 'jpeg', libpath => $additional_path );
-=head1 USING IT IN Makefile.PL or Build.PL
-If you want to use this from Makefile.PL or Build.PL, do
-not simply copy the module into your distribution as this may cause
-problems when PAUSE and search.cpan.org index the distro.  Instead, use
-the use-devel-checklib script.
-=head1 HOW IT WORKS
-You pass named parameters to a function, describing to it how to build
-and link to the libraries.
-It works by trying to compile some code - which defaults to this:
-    int main(void) { return 0; }
-and linking it to the specified libraries.  If something pops out the end
-which looks executable, it gets executed, and if main() returns 0 we know
-that it worked.  That tiny program is
-built once for each library that you specify, and (without linking) once
-for each header file.
-If you want to check for the presence of particular functions in a
-library, or even that those functions return particular results, then
-you can pass your own function body for main() thus:
-    check_lib_or_exit(
-        function => 'foo();if(libversion() > 5) return 0; else return 1;'
-        incpath  => ...
-        libpath  => ...
-        lib      => ...
-        header   => ...
-    );
-In that case, it will fail to build if either foo() or libversion() don't
-exist, and main() will return the wrong value if libversion()'s return
-value isn't what you want.
-=head1 FUNCTIONS
-All of these take the same named parameters and are exported by default.
-To avoid exporting them, C<use Devel::CheckLib ()>.
-=head2 assert_lib
-This takes several named parameters, all of which are optional, and dies
-with an error message if any of the libraries listed can
-not be found.  B<Note>: dying in a Makefile.PL or Build.PL may provoke
-a 'FAIL' report from CPAN Testers' automated smoke testers.  Use 
-C<check_lib_or_exit> instead.
-The named parameters are:
-=over
-=item lib
-Must be either a string with the name of a single 
-library or a reference to an array of strings of library names.  Depending
-on the compiler found, library names will be fed to the compiler either as
-C<-l> arguments or as C<.lib> file names.  (E.g. C<-ljpeg> or C<jpeg.lib>)
-=item libpath
-a string or an array of strings
-representing additional paths to search for libraries.
-=item LIBS
-a C<ExtUtils::MakeMaker>-style space-seperated list of
-libraries (each preceded by '-l') and directories (preceded by '-L').
-This can also be supplied on the command-line.
-=item debug
-If true - emit information during processing that can be used for
-debugging.
-=back
-And libraries are no use without header files, so ...
-=over
-=item header
-Must be either a string with the name of a single 
-header file or a reference to an array of strings of header file names.
-=item incpath
-a string or an array of strings
-representing additional paths to search for headers.
-=item INC
-a C<ExtUtils::MakeMaker>-style space-seperated list of
-incpaths, each preceded by '-I'.
-This can also be supplied on the command-line.
-=back
-=head2 check_lib_or_exit
-This behaves exactly the same as C<assert_lib()> except that instead of
-dieing, it warns (with exactly the same error message) and exits.
-This is intended for use in Makefile.PL / Build.PL
-when you might want to prompt the user for various paths and
-things before checking that what they've told you is sane.
-If any library or header is missing, it exits with an exit value of 0 to avoid
-causing a CPAN Testers 'FAIL' report.  CPAN Testers should ignore this
-result -- which is what you want if an external library dependency is not
-available.
-=head2 check_lib
-This behaves exactly the same as C<assert_lib()> except that it is silent,
-returning false instead of dieing, or true otherwise.
-=cut
-sub check_lib_or_exit {
-    eval 'assert_lib(@_)';
-    if($@) {
-        warn $@;
-        exit;
-    }
-}
-sub check_lib {
-    eval 'assert_lib(@_)';
-    return $@ ? 0 : 1;
-}
-sub assert_lib {
-    my %args = @_;
-    my (@libs, @libpaths, @headers, @incpaths);
-    # FIXME: these four just SCREAM "refactor" at me
-    @libs = (ref($args{lib}) ? @{$args{lib}} : $args{lib}) 
-        if $args{lib};
-    @libpaths = (ref($args{libpath}) ? @{$args{libpath}} : $args{libpath}) 
-        if $args{libpath};
-    @headers = (ref($args{header}) ? @{$args{header}} : $args{header}) 
-        if $args{header};
-    @incpaths = (ref($args{incpath}) ? @{$args{incpath}} : $args{incpath}) 
-        if $args{incpath};
-    # work-a-like for Makefile.PL's LIBS and INC arguments
-    # if given as command-line argument, append to %args
-    for my $arg (@ARGV) {
-        for my $mm_attr_key (qw(LIBS INC)) {
-            if (my ($mm_attr_value) = $arg =~ /\A $mm_attr_key = (.*)/x) {
-            # it is tempting to put some \s* into the expression, but the
-            # MM command-line parser only accepts LIBS etc. followed by =,
-            # so we should not be any more lenient with whitespace than that
-                $args{$mm_attr_key} .= " $mm_attr_value";
-            }
-        }
-    }
-    # using special form of split to trim whitespace
-    if(defined($args{LIBS})) {
-        foreach my $arg (split(' ', $args{LIBS})) {
-            die("LIBS argument badly-formed: $arg\n") unless($arg =~ /^-[lLR]/);
-            push @{$arg =~ /^-l/ ? \@libs : \@libpaths}, substr($arg, 2);
-        }
-    }
-    if(defined($args{INC})) {
-        foreach my $arg (split(' ', $args{INC})) {
-            die("INC argument badly-formed: $arg\n") unless($arg =~ /^-I/);
-            push @incpaths, substr($arg, 2);
-        }
-    }
-    my ($cc, $ld) = _findcc();
-    my @missing;
-    my @wrongresult;
-    my @use_headers;
-    # first figure out which headers we can't find ...
-    for my $header (@headers) {
-        push @use_headers, $header;
-        my($ch, $cfile) = File::Temp::tempfile(
-            'assertlibXXXXXXXX', SUFFIX => '.c'
-        );
-        my $ofile = $cfile;
-        $ofile =~ s/\.c$/$Config{_o}/;
-        print $ch qq{#include <$_>\n} for @use_headers;
-        print $ch qq{int main(void) { return 0; }\n};
-        close($ch);
-        my $exefile = File::Temp::mktemp( 'assertlibXXXXXXXX' ) . $Config{_exe};
-        my @sys_cmd;
-        # FIXME: re-factor - almost identical code later when linking
-        if ( $Config{cc} eq 'cl' ) {                 # Microsoft compiler
-            require Win32;
-            @sys_cmd = (
-                @$cc,
-                $cfile,
-                "/Fe$exefile",
-                (map { '/I'.Win32::GetShortPathName($_) } @incpaths),
-		"/link",
-		@$ld
-            );
-        } elsif($Config{cc} =~ /bcc32(\.exe)?/) {    # Borland
-            @sys_cmd = (
-                @$cc,
-                @$ld,
-                (map { "-I$_" } @incpaths),
-                "-o$exefile",
-                $cfile
-            );
-        } else { # Unix-ish: gcc, Sun, AIX (gcc, cc), ...
-            @sys_cmd = (
-                @$cc,
-                @$ld,
-                $cfile,
-                (map { "-I$_" } @incpaths),
-                "-o", "$exefile"
-            );
-        }
-        warn "# @sys_cmd\n" if $args{debug};
-        my $rv = $args{debug} ? system(@sys_cmd) : _quiet_system(@sys_cmd);
-        push @missing, $header if $rv != 0 || ! -x $exefile;
-        _cleanup_exe($exefile);
-        unlink $ofile if -e $ofile;
-        unlink $cfile;
-    } 
-    # now do each library in turn with headers
-    my($ch, $cfile) = File::Temp::tempfile(
-        'assertlibXXXXXXXX', SUFFIX => '.c'
-    );
-    my $ofile = $cfile;
-    $ofile =~ s/\.c$/$Config{_o}/;
-    print $ch qq{#include <$_>\n} foreach (@headers);
-    print $ch "int main(void) { ".($args{function} || 'return 0;')." }\n";
-    close($ch);
-    for my $lib ( @libs ) {
-        my $exefile = File::Temp::mktemp( 'assertlibXXXXXXXX' ) . $Config{_exe};
-        my @sys_cmd;
-        if ( $Config{cc} eq 'cl' ) {                 # Microsoft compiler
-            require Win32;
-            my @libpath = map { 
-                q{/libpath:} . Win32::GetShortPathName($_)
-            } @libpaths; 
-            # this is horribly sensitive to the order of arguments
-            @sys_cmd = (
-                @$cc,
-                $cfile,
-                "${lib}.lib",
-                "/Fe$exefile", 
-                (map { '/I'.Win32::GetShortPathName($_) } @incpaths),
-                "/link",
-                @$ld,
-                (map {'/libpath:'.Win32::GetShortPathName($_)} @libpaths),
-            );
-        } elsif($Config{cc} eq 'CC/DECC') {          # VMS
-        } elsif($Config{cc} =~ /bcc32(\.exe)?/) {    # Borland
-            @sys_cmd = (
-                @$cc,
-                @$ld,
-                "-o$exefile",
-                (map { "-I$_" } @incpaths),
-                (map { "-L$_" } @libpaths),
-                "-l$lib",
-                $cfile);
-        } else {                                     # Unix-ish
-                                                     # gcc, Sun, AIX (gcc, cc)
-            @sys_cmd = (
-                @$cc,
-                @$ld,
-                $cfile,
-                "-o", "$exefile",
-                (map { "-I$_" } @incpaths),
-                (map { "-L$_" } @libpaths),
-                "-l$lib",
-            );
-        }
-        warn "# @sys_cmd\n" if $args{debug};
-        my $rv = $args{debug} ? system(@sys_cmd) : _quiet_system(@sys_cmd);
-        push @missing, $lib if $rv != 0 || ! -x $exefile;
-        my $absexefile = File::Spec->rel2abs($exefile);
-        $absexefile = '"'.$absexefile.'"' if $absexefile =~ m/\s/;
-        push @wrongresult, $lib if $rv == 0 && -x $exefile && system($absexefile) != 0;
-        unlink $ofile if -e $ofile;
-        _cleanup_exe($exefile);
-    } 
-    unlink $cfile;
-    my $miss_string = join( q{, }, map { qq{'$_'} } @missing );
-    die("Can't link/include C library $miss_string, aborting.\n") if @missing;
-    my $wrong_string = join( q{, }, map { qq{'$_'} } @wrongresult);
-    die("wrong result: $wrong_string\n") if @wrongresult;
-}
-sub _cleanup_exe {
-    my ($exefile) = @_;
-    my $ofile = $exefile;
-    $ofile =~ s/$Config{_exe}$/$Config{_o}/;
-    unlink $exefile if -f $exefile;
-    unlink $ofile if -f $ofile;
-    unlink "$exefile\.manifest" if -f "$exefile\.manifest";
-    if ( $Config{cc} eq 'cl' ) {
-        # MSVC also creates foo.ilk and foo.pdb
-        my $ilkfile = $exefile;
-        $ilkfile =~ s/$Config{_exe}$/.ilk/;
-        my $pdbfile = $exefile;
-        $pdbfile =~ s/$Config{_exe}$/.pdb/;
-        unlink $ilkfile if -f $ilkfile;
-        unlink $pdbfile if -f $pdbfile;
-    }
-    return
-}
-    
-# return ($cc, $ld)
-# where $cc is an array ref of compiler name, compiler flags
-# where $ld is an array ref of linker flags
-sub _findcc {
-    # Need to use $keep=1 to work with MSWin32 backslashes and quotes
-    my $Config_ccflags =  $Config{ccflags};  # use copy so ASPerl will compile
-    my @Config_ldflags = ();
-    for my $config_val ( @Config{qw(ldflags perllibs)} ){
-        push @Config_ldflags, $config_val if ( $config_val =~ /\S/ );
-    }
-    my @ccflags = grep { length } quotewords('\s+', 1, $Config_ccflags||'');
-    my @ldflags = grep { length } quotewords('\s+', 1, @Config_ldflags);
-    my @paths = split(/$Config{path_sep}/, $ENV{PATH});
-    my @cc = split(/\s+/, $Config{cc});
-    return ( [ @cc, @ccflags ], \@ldflags ) if -x $cc[0];
-    foreach my $path (@paths) {
-        my $compiler = File::Spec->catfile($path, $cc[0]) . $Config{_exe};
-        return ([ $compiler, @cc[1 .. $#cc], @ccflags ], \@ldflags)
-            if -x $compiler;
-    }
-    die("Couldn't find your C compiler\n");
-}
-# code substantially borrowed from IPC::Run3
-sub _quiet_system {
-    my (@cmd) = @_;
-    # save handles
-    local *STDOUT_SAVE;
-    local *STDERR_SAVE;
-    open STDOUT_SAVE, ">&STDOUT" or die "CheckLib: $! saving STDOUT";
-    open STDERR_SAVE, ">&STDERR" or die "CheckLib: $! saving STDERR";
-    
-    # redirect to nowhere
-    local *DEV_NULL;
-    open DEV_NULL, ">" . File::Spec->devnull 
-        or die "CheckLib: $! opening handle to null device";
-    open STDOUT, ">&" . fileno DEV_NULL
-        or die "CheckLib: $! redirecting STDOUT to null handle";
-    open STDERR, ">&" . fileno DEV_NULL
-        or die "CheckLib: $! redirecting STDERR to null handle";
-    # run system command
-    my $rv = system(@cmd);
-    # restore handles
-    open STDOUT, ">&" . fileno STDOUT_SAVE
-        or die "CheckLib: $! restoring STDOUT handle";
-    open STDERR, ">&" . fileno STDERR_SAVE
-        or die "CheckLib: $! restoring STDERR handle";
-    return $rv;
-}
-=head1 PLATFORMS SUPPORTED
-You must have a C compiler installed.  We check for C<$Config{cc}>,
-both literally as it is in Config.pm and also in the $PATH.
-It has been tested with varying degrees on rigourousness on:
-=over
-=item gcc (on Linux, *BSD, Mac OS X, Solaris, Cygwin)
-=item Sun's compiler tools on Solaris
-=item IBM's tools on AIX
-=item SGI's tools on Irix 6.5
-=item Microsoft's tools on Windows
-=item MinGW on Windows (with Strawberry Perl)
-=item Borland's tools on Windows
-=item QNX
-=back
-=head1 WARNINGS, BUGS and FEEDBACK
-This is a very early release intended primarily for feedback from
-people who have discussed it.  The interface may change and it has
-not been adequately tested.
-Feedback is most welcome, including constructive criticism.
-Bug reports should be made using L<http://rt.cpan.org/> or by email.
-When submitting a bug report, please include the output from running:
-    perl -V
-    perl -MDevel::CheckLib -e0
-=head1 SEE ALSO
-L<Devel::CheckOS>
-L<Probe::Perl>
-=head1 AUTHORS
-David Cantrell E<lt>david@cantrell.org.ukE<gt>
-David Golden E<lt>dagolden@cpan.orgE<gt>
-Yasuhiro Matsumoto E<lt>mattn@cpan.orgE<gt>
-Thanks to the cpan-testers-discuss mailing list for prompting us to write it
-in the first place;
-to Chris Williams for help with Borland support;
-to Tony Cook for help with Microsoft compiler command-line options
-=head1 COPYRIGHT and LICENCE
-Copyright 2007 David Cantrell. Portions copyright 2007 David Golden.
-This module is free-as-in-speech software, and may be used, distributed,
-and modified under the same conditions as perl itself.
-=head1 CONSPIRACY
-This module is also free-as-in-mason software.
-=cut
-1;
-};;{
-package Devel::CheckCompiler;
-use strict;
-use warnings;
-use 5.008001;
-our $VERSION = '0.05';
-use parent qw/Exporter/;
-our @EXPORT = qw/check_c99 check_c99_or_exit check_compile/;
-use ExtUtils::CBuilder;
-my $C99_SOURCE = <<'C99';
-// include a C99 header
-#include <stdbool.h>
-inline // a C99 keyword with C99 style comments
-int test_c99() {
-    int i = 0;
-    i++;
-    int j = i - 1; // another C99 feature: declaration after statement
-    return j;
-}
-C99
-sub check_c99 {
-    check_compile($C99_SOURCE);
-}
-sub check_c99_or_exit {
-    check_compile($C99_SOURCE) or do {
-        warn "Your system is not support C99(OS unsupported)\n";
-        exit 0;
-    };
-}
-sub check_compile {
-    my ($src, %opt) = @_;
-    my $cbuilder = ExtUtils::CBuilder->new(quiet => 1);
-    return 0 unless $cbuilder->have_compiler;
-    require File::Temp;
-    my $tmpfile = File::Temp->new(SUFFIX => '.c');
-    $tmpfile->print($src);
-    $tmpfile->close();
-    my $objname = eval {
-        $cbuilder->compile(source => $tmpfile->filename);
-    };
-    if ($objname) {
-        my $ret = 1;
-        if ($opt{executable}) {
-            my $execfile = eval {
-                $cbuilder->link_executable(objects => $objname,
-                                           extra_linker_flags => $opt{extra_linker_flags});
-            };
-            if ($execfile) {
-                unlink $execfile or warn "Cannot unlink $execfile (ignored): $!";
-            } else {
-                $ret = 0;
-            }
-        }
-        unlink $objname or warn "Cannot unlink $objname (ignored): $!";
-        return $ret;
-    } else {
-        return 0;
-    }
-}
-1;
-};;{
-use strict;
-package Probe::Perl;
-{
-  $Probe::Perl::VERSION = '0.03';
-}
-# TODO: cache values derived from launching an external perl process
-# TODO: docs refer to Config.pm and $self->{config}
-use Config;
-use File::Spec;
-sub new {
-  my $class = shift;
-  my $data  = shift || {};
-  return bless( $data, $class );
-}
-sub config {
-  my ($self, $key) = (shift, shift);
-  if (@_) {
-    unless (ref $self) {
-      die "Can't set config values via $self->config().  Use $self->new() to create a local view";
-    }
-    $self->{$key} = shift;
-  }
-  return ref($self) && exists $self->{$key} ? $self->{$key} : $Config{$key};
-}
-sub config_revert {
-  my $self = shift;
-  die "Can't use config_revert() as a class method" unless ref($self);
-  
-  delete $self->{$_} foreach @_;
-}
-sub perl_version {
-  my $self = shift;
-  # Check the current perl interpreter
-  # It's much more convenient to use $] here than $^V, but 'man
-  # perlvar' says I'm not supposed to.  Bloody tyrant.
-  return $^V ? $self->perl_version_to_float(sprintf( "%vd", $^V )) : $];
-}
-sub perl_version_to_float {
-  my ($self, $version) = @_;
-  $version =~ s/\./../;  # Double up the first dot so the output has one dot remaining
-  $version =~ s/\.(\d+)/sprintf( '%03d', $1 )/eg;
-  return $version;
-}
-sub _backticks {
-  my $perl = shift;
-  return unless -e $perl;
-  my $fh;
-  eval {open $fh, '-|', $perl, @_ or die $!};
-  if (!$@) {
-    return <$fh> if wantarray;
-    my $tmp = do {local $/=undef; <$fh>};
-    return $tmp;
-  }
-  # Quoting only happens on the path to perl - I control the rest of
-  # the args and they don't need quoting.
-  if ($^O eq 'MSWin32') {
-    $perl = qq{"$perl"} if $perl =~ m{^[\w\\]+$};
-  } else {
-    $perl =~ s{([^\w\\])}{\\$1}g;
-  }
-  return `$perl @_`;
-}
-sub perl_is_same {
-  my ($self, $perl) = @_;
-  return _backticks($perl, qw(-MConfig=myconfig -e print -e myconfig)) eq Config->myconfig;
-}
-sub find_perl_interpreter {
-  my $self = shift;
-  return $^X if File::Spec->file_name_is_absolute($^X);
-  my $exe = $self->config('exe_ext');
-  my $thisperl = $^X;
-  if ($self->os_type eq 'VMS') {
-    # VMS might have a file version at the end
-    $thisperl .= $exe unless $thisperl =~ m/$exe(;\d+)?$/i;
-  } elsif (defined $exe) {
-    $thisperl .= $exe unless $thisperl =~ m/$exe$/i;
-  }
-  foreach my $perl ( $self->config('perlpath'),
-		     map( File::Spec->catfile($_, $thisperl),
-			  File::Spec->path() )
-		   ) {
-    return $perl if -f $perl and $self->perl_is_same($perl);
-  }
-  return;
-}
-# Determine the default @INC for this Perl
-sub perl_inc {
-  my $self = shift;
-  local $ENV{PERL5LIB};  # this is not considered part of the default.
-  my $perl = $self->find_perl_interpreter();
-  my @inc = _backticks($perl, qw(-l -e print -e for -e @INC));
-  chomp @inc;
-  return @inc;
-}
-{
-  my %OSTYPES = qw(
-		   aix       Unix
-		   bsdos     Unix
-		   dgux      Unix
-		   dynixptx  Unix
-		   freebsd   Unix
-		   linux     Unix
-		   hpux      Unix
-		   irix      Unix
-		   darwin    Unix
-		   machten   Unix
-		   next      Unix
-		   openbsd   Unix
-		   netbsd    Unix
-		   dec_osf   Unix
-		   svr4      Unix
-		   svr5      Unix
-		   sco_sv    Unix
-		   unicos    Unix
-		   unicosmk  Unix
-		   solaris   Unix
-		   sunos     Unix
-		   cygwin    Unix
-		   os2       Unix
-		   dos       Windows
-		   MSWin32   Windows
-		   os390     EBCDIC
-		   os400     EBCDIC
-		   posix-bc  EBCDIC
-		   vmesa     EBCDIC
-		   MacOS     MacOS
-		   VMS       VMS
-		   VOS       VOS
-		   riscos    RiscOS
-		   amigaos   Amiga
-		   mpeix     MPEiX
-		  );
-  sub os_type {
-    my $class  = shift;
-    return $OSTYPES{shift || $^O};
-  }
-}
-1;
-};;{
 package                         # hide from CPAN
   App::Mist::MPAN::prereqs;
+
 our $VERSION = 1;
+
 1;
-};;{
-package                         # hide from CPAN
-  App::Mist::MPAN::perl;
-# poor-mans pluggable objects: everything that handles perl versions
-# has to live in App::Mist::MPAN::perl
-our $PERLBREW_ROOT;
-our $PERLBREW_DEFAULT_VERSION // die '$PERL5_DEFAULT_VERSION not set';
-use FindBin ();
-use File::Spec ();
-use Getopt::Long;
-my $tmp_base_dir = File::Spec->catdir( $FindBin::Bin, 'tmp' );
-$tmp_base_dir = File::Spec->catdir(
-  File::Spec->tmpdir, ( File::Spec->splitdir( $FindBin::Bin ))[ -1 ]
-  ) unless -d $tmp_base_dir and -w $tmp_base_dir;
-my $pb_root    = $ENV{PERLBREW_ROOT} || $PERLBREW_ROOT;
-my $pb_home    = File::Spec->catdir( $tmp_base_dir, 'perlbrew' );
-GetOptions( "perl=s" => \ my $pb_version );
-$pb_version ||= $PERLBREW_DEFAULT_VERSION;
-print "Using perlbrew root $pb_root\n";
-print "Using temporary perlbrew home $pb_home\n";
-my $pb_exec = qx{ which perlbrew } || "${pb_root}/bin/perlbrew";
-chomp $pb_exec;
-system( "$pb_exec version >/dev/null" ) == 0 or die <<"MSG";
-No local installation of perlbrew was found ($?). You can install it
-as root via:
-  export PERLBREW_ROOT=${pb_root}
-  curl -kL http://install.perlbrew.pl | sudo -E bash
-or just for this account simply via:
-  curl -kL http://install.perlbrew.pl | bash
-MSG
-my @pb_installed_versions = qx# bash -c '
-    export PERLBREW_ROOT=${pb_root}
-    export PERLBREW_HOME=${pb_home}
-    if ( ! . \${PERLBREW_ROOT}/etc/bashrc ) ; then
-      perlbrew init 2>/dev/null
-      if ( ! . \${PERLBREW_ROOT}/etc/bashrc ) ; then
-        echo "Cannot create perlbrew environment in \${PERLBREW_ROOT}"
-        exit 127
-      fi
-    fi
-    $pb_exec list
-  '#;
-my ( $pb_installed ) = grep{ / \b $pb_version \b /x } @pb_installed_versions;
-die "FATAL: $pb_version not found and can't write to $pb_root\n" .
-  "Try\n  sudo -E perlbrew install $pb_version\nto install it as root\n"
-  unless $pb_installed or -w $pb_root;
-my @pb_call = ( $pb_exec, 'install', $pb_version );
-system( @pb_call ) == 0 or die "`@pb_call` failed" unless $pb_installed;
-if ( !$ENV{PERLBREW_PERL} or $ENV{PERLBREW_PERL} ne $pb_version ) {
-  print "Restarting $0 under $pb_version\n\n";
-  $ENV{PERLBREW_ROOT} = $pb_root;
-  $ENV{PERLBREW_HOME} = $pb_home;
-  exec $pb_exec, 'exec', '--with', $pb_version, $0;
-}
-sub write_env {
-  my $env = shift;
-# FIXME:      printf $env <<'PERLBREW_HOME', $pb_home;
-# FIXME:  # Initializing perlbrew environment
-# FIXME:
-# FIXME:  if [[
-# FIXME:    -w "$MIST_APP_ROOT/tmp/perlbrew" ||
-# FIXME:    ( -w "$MIST_APP_ROOT/tmp" && ! -e "$MIST_APP_ROOT/tmp/perlbrew" )
-# FIXME:  ]] ; then
-# FIXME:    export PERLBREW_HOME="$MIST_APP_ROOT/tmp/perlbrew"
-# FIXME:  else
-# FIXME:    export PERLBREW_HOME="%%s"
-# FIXME:  fi
-# FIXME:  PERLBREW_HOME
-    printf $env <<'PERLBREW_RC', $pb_root, $pb_version;
-PERLBREW_DEFAULT_ROOT=%s
-PERLBREW_DEFAULT_VERSION=%s
-if [ "x$PERLBREW_ROOT" == "x" ] ; then
-  export PERLBREW_ROOT=$PERLBREW_DEFAULT_ROOT
-fi
-source "$PERLBREW_ROOT/etc/bashrc"
-perlbrew use $PERLBREW_DEFAULT_VERSION
-PERLBREW_RC
-}
-1;
-; BEGIN {$PERLBREW_ROOT = '/opt/perl5';
-;
-$PERLBREW_DEFAULT_VERSION = 'perl-5.14.2';
-;
-};};;{
 package                         # hide from CPAN
   App::Mist::MPAN::install;
+
 our $PERL5_BASE_LIB     // die '$PERL5_BASE_LIB not set';
 our $MPAN_DIST_DIR      // die '$MPAN_DIST_DIR not set';
 our $LOCAL_LIB_DIR      // die '$LOCAL_LIB_DIR not set';
 our $PREPEND_DISTS      // die '$PREPEND_DISTS not set';
 our $DONT_TEST_DISTS    // die '$DONT_TEST_DISTS not set';
 our $PREREQUISITE_DISTS // die '$PREREQUISITE_DISTS not set';
+
 use strict;
 use warnings;
+
 use App::cpanminus::script;
 use FindBin qw/$Bin/;
 use File::Temp qw/tempdir/;
@@ -22037,21 +21329,30 @@ use File::Path qw/mkpath/;
 use File::Spec;
 use File::Copy;
 use Cwd qw/realpath/;
+
 my $mist_home = $ENV{MIST_APP_ROOT} ? $ENV{MIST_APP_ROOT} : $Bin;
+
 my $perl5_baselib = File::Spec->catdir( $mist_home, $PERL5_BASE_LIB );
 mkpath( $perl5_baselib );
+
 my $mpan          = File::Spec->catdir( $Bin, $MPAN_DIST_DIR );
 my $local_lib     = File::Spec->catdir( $mist_home, $LOCAL_LIB_DIR );
 my $libexec_dir   = File::Spec->catdir( $perl5_baselib, 'libexec' );
+
 mkpath( $libexec_dir );
+
 my $cmd_wrapper_src = File::Spec->catfile( $mpan, 'cmd-wrapper.bash' );
 my $cmd_wrapper     = File::Spec->catfile( $libexec_dir, 'cmd-wrapper.bash' );
+
 copy( $cmd_wrapper_src, $cmd_wrapper )
   or die "Creating $cmd_wrapper failed: $!";
+
 my $perm = ( stat $cmd_wrapper )[2] & 07777;
 chmod( $perm | 0755, $cmd_wrapper );
+
 App::Mist::MPAN::perl->init
   if eval{ App::Mist::MPAN::perl->can( 'init' ) };
+
 sub run_cpanm {
   my $app = App::cpanminus::script->new;
   my @options   = (
@@ -22060,27 +21361,36 @@ sub run_cpanm {
     "--mirror=file://${mpan}",
     '--mirror-only',
   );
+
   $app->parse_options( @options, @_ );
   my $result = $app->_doit;
   exit 1 unless $result and $result == 1;
   return $result;
 }
+
 unless (caller) {
+
   die "mpan-install can not run as root\n" if $> == 0;
+
   my $workspace = tempdir();
   mkpath( $local_lib );
+
   if ( not -r $mpan or not -w $local_lib ) {
     warn "$0: can't read from ${mpan}: permission denied\n"
       unless -r $mpan;
+
     warn "$0: can't write to ${local_lib}: permission denied\n"
       unless -w $local_lib;
+
     exit 1;
   }
+
   my $p5_dir = realpath( File::Spec->catdir( $local_lib, File::Spec->updir ));
   my $rc_dir = File::Spec->catdir( $p5_dir, 'etc' );
   mkpath( $rc_dir );
   my $mist_rc = File::Spec->catfile( $rc_dir, 'mist.mistrc' );
   open my $env, '>', $mist_rc;  # to catch write errors early on
+
   my $bin_dir = File::Spec->catdir( $p5_dir, 'bin' );
   mkpath( $bin_dir );
   my $mist_run = File::Spec->catfile( $bin_dir, 'mist-run');
@@ -22089,7 +21399,9 @@ unless (caller) {
     my $perm = ( stat $mist_run )[2] & 07777;
     chmod( $perm | 0755, $mist_run );
   }
+
   local $ENV{HOME} = $workspace;
+
   {
     # only try to load App::Mist::MPAN::prereqs if it hasn't been
     # compiled in above
@@ -22097,12 +21409,15 @@ unless (caller) {
     require App::Mist::MPAN::prereqs
       unless keys %{ "App::Mist::MPAN::prereqs::" };
   }
+
   if ( App::Mist::MPAN::prereqs->can( 'assert' )) {
     eval { App::Mist::MPAN::prereqs->assert };
   }
+
   if ( my $err = $@ ) {
     die "\n[FATAL] Error checking prerequisites:\n${err}\n";
   }
+
   my @prepend = ( @$PREPEND_DISTS );
   my @notest  = ( @$DONT_TEST_DISTS );
   my @prereqs = ( @$PREREQUISITE_DISTS );
@@ -22116,41 +21431,57 @@ unless (caller) {
   for my $module ( @prereqs ) {
     run_cpanm( @ARGV, $module );
   }
+
   printf $env <<'MIST_ENV', $mist_home;
 # This file is automatically generated by ./mpan-install
 # DO NOT EDIT
+
 export MIST_APP_ROOT="%s"
 export PATH="$MIST_APP_ROOT/bin:$MIST_APP_ROOT/sbin:$MIST_APP_ROOT/script:$PATH"
+
 MIST_ENV
+
   if ( eval{ App::Mist::MPAN::perl->can( 'write_env' )} ) {
     App::Mist::MPAN::perl->write_env( $env );
   }
+
   require local::lib;
+
   {
     local $SIG{__WARN__} = sub{};
     print $env local::lib->environment_vars_string_for( "${local_lib}" );
   }
   close $env;
+
   printf $wrapper <<'WRAPPER', $local_lib, $mist_home, $mist_rc;
 #!/bin/bash
+
 LOCAL_LIB="%s"
 MIST_ROOT="%s"
 MIST_ENV="%s"
+
 if [ ! -r $MIST_ENV ] ; then
     echo "FATAL: Could not load env from $MIST_ENV"
     exit 1
 fi
+
 source $MIST_ENV
 export PATH="$LOCAL_LIB/bin:$LOCAL_LIB/sbin:$PATH"
 export PATH="$MIST_ROOT/bin:$MIST_ROOT/sbin:$MIST_ROOT/script:$PATH"
 export PERL5LIB="$MIST_ROOT/lib:$PERL5LIB"
+
 exec "$@"
 WRAPPER
+
   for my $script_dir (qw/ bin sbin script /) {
+
     my $loc_script_dir = File::Spec->catdir( $perl5_baselib, $script_dir );
+
     my @binaries;
     my $dir;
+
     use strict;
+
     $dir = File::Spec->catdir( $local_lib, $script_dir );
     if ( -d $dir and opendir( my $dh, $dir ) ) {
       push @binaries, map{(
@@ -22160,6 +21491,7 @@ WRAPPER
           -x File::Spec->catfile( $dir, $_ )
       } readdir( $dh );
     }
+
     $dir = File::Spec->catdir( $Bin, $script_dir );
     if ( -d $dir and opendir( my $dh, $dir ) ) {
       push @binaries, map{(
@@ -22169,9 +21501,11 @@ WRAPPER
           -x File::Spec->catfile( $script_dir, $_ )
       } readdir( $dh );
     }
+
     if ( @binaries ) {
       mkpath( $loc_script_dir );
       print "Creating local binaries in ${loc_script_dir}\n";
+
       for my $bin ( @binaries ) {
         unlink $bin;
         symlink $cmd_wrapper, $bin
@@ -22179,43 +21513,26 @@ WRAPPER
       }
     }
   }
+
+
   print <<"SUCCESS";
+
 Successfully created a mist environment for this distribution.
 To enable it put the following line in your scripts:
   source $mist_rc
+
 To run binaries from this distribution (\$HOME/bin and \$HOME/sbin are in
 automatically prepended to \$PATH) you can also use this wrapper script:
   $mist_run my_script.pl [OPTIONS ..]
+
 SUCCESS
 }
-; BEGIN {$PERL5_BASE_LIB = 'perl5';
-;
-$MPAN_DIST_DIR = 'mpan-dist';
-;
-$LOCAL_LIB_DIR = 'perl5/perl-5.14.2';
-;
-$PREPEND_DISTS = [];
-;
-$DONT_TEST_DISTS = [
-                     'Term::ReadKey'
-                   ];
-;
-$PREREQUISITE_DISTS = [
-                        'File::HomeDir',
-                        'App::Cmd',
-                        'Module::Path',
-                        'App::cpanminus~1.7',
-                        'File::Share',
-                        'CPAN::PackageDetails',
-                        'Module::CPANfile~1.0002',
-                        'Probe::Perl',
-                        'File::Find::Upwards',
-                        'Devel::CheckLib',
-                        'Devel::CheckBin',
-                        'Devel::CheckCompiler',
-                        'Path::Class',
-                        'CPAN::ParseDistribution',
-                        'List::MoreUtils'
-                      ];
-;
-};};
+
+BEGIN {
+  $PERL5_BASE_LIB     = 'perl5';
+  $MPAN_DIST_DIR      = 'mpan-dist';
+  $LOCAL_LIB_DIR      = 'perl5/system';
+  $PREPEND_DISTS      = [];
+  $DONT_TEST_DISTS    = [];
+  $PREREQUISITE_DISTS = ['Test::More'];
+}
