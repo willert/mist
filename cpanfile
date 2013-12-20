@@ -2,6 +2,7 @@ requires "App::Cmd";
 requires "App::cpanminus" => "1.7";
 requires "CPAN::PackageDetails";
 requires "CPAN::ParseDistribution";
+requires "Digest::MD5";
 requires "File::Find::Upwards";
 requires "File::HomeDir";
 requires "File::Share";

@@ -457,9 +457,9 @@ sub run_cpanm {
   };
 
   $stdout =~ s/^\d+ distributions? installed\n//m;
-  chomp( $stdout );
-  printf STDERR "%s\n", $stdout if $stdout and $verbose;
 
+  chomp( $stdout, $stderr );
+  printf STDERR "%s\n", $stdout if $stdout and $verbose;
   printf STDERR "%s\n", $stderr if $stderr;
 
   croak "system cpanm @cmd_opts failed [$exit] : $?"

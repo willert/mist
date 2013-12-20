@@ -11,6 +11,7 @@ use File::Find::Upwards;
 use Path::Class qw/file dir/;
 use Cwd;
 use List::MoreUtils qw/ uniq /;
+use Digest::MD5 qw/ md5_hex /;
 
 use File::Temp qw/ tempfile tempdir /;
 use Data::Dumper;
@@ -26,6 +27,8 @@ sub execute {
   my $mpan      = $self->app->mpan_dist;
   my $local_lib = $self->app->local_lib;
   my $workspace = $self->app->workspace_lib;
+
+  my $digest = Digest::MD5->new;
 
   my @base_options   = (
     "--quiet",
@@ -67,8 +70,10 @@ sub execute {
     my ( $dist, $cont ) = @_;
     $mpan_dist_files{ $dist->stringify } = {
       'pre-existing' => 1,
-      'mtime'        => $dist->stat->mtime
+      'mtime'        => $dist->stat->mtime,
+      'digest'       => md5_hex( $dist->slurp ),
     } unless $dist->is_dir;
+
     return $cont->();
   });
 
@@ -98,10 +103,11 @@ sub execute {
 
   $self->app->mpan_dist->traverse( sub{
     my ( $dist, $cont ) = @_;
+
     return $cont->() if $dist->is_dir;
-    my $mtime = $dist->stat->mtime;
-    return $cont->() if exists $mpan_dist_files{ $dist->stringify }
-      and $mpan_dist_files{ $dist->stringify }{mtime} >= $mtime;
+    return $cont->() if exists $mpan_dist_files{ $dist }
+      and $mpan_dist_files{ $dist }{digest} eq md5_hex( $dist->slurp );
+
     $self->app->add_distribution_to_index( $dist );
     $updated_packages += 1;
     return $cont->();
