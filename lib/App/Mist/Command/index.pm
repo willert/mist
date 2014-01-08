@@ -1,9 +1,11 @@
 package App::Mist::Command::index;
+use 5.014;
 
-use strict;
-use warnings;
+use Moose;
+extends 'MooseX::App::Cmd::Command';
+with 'Mist::Role::CPAN::PackageIndex';
 
-use base 'App::Cmd::Command';
+sub use_cpan_dist_root { my $self = shift; $self->app->project_root->subdir('mpan-dist') }
 
 use CPAN::ParseDistribution;
 use CPAN::DistnameInfo;
@@ -14,6 +16,14 @@ use Path::Class qw/dir file/;
 
 use version 0.74;
 
+sub execute {
+  my ( $self, $opt, $args ) = @_;
+  $self->reindex_distributions;
+}
+
+1;
+
+__END__
 sub execute {
   my ( $self, $opt, $args ) = @_;
 

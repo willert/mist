@@ -4,6 +4,9 @@ package                         # hide from CPAN
 # poor-mans pluggable objects: everything that handles perl versions
 # has to live in App::Mist::MPAN::perl
 
+our @INITIAL_ARGS;
+BEGIN { @INITIAL_ARGS = @ARGV; }
+
 our $PERLBREW_ROOT;
 our $PERLBREW_DEFAULT_VERSION // die '$PERL5_DEFAULT_VERSION not set';
 
@@ -64,7 +67,7 @@ if ( !$ENV{PERLBREW_PERL} or $ENV{PERLBREW_PERL} ne $pb_version ) {
   print "Restarting $0 under $pb_version\n\n";
   $ENV{PERLBREW_ROOT} = $pb_root;
   $ENV{PERLBREW_HOME} = $pb_home;
-  exec $pb_exec, 'exec', '--with', $pb_version, $0;
+  exec $pb_exec, 'exec', '--with', $pb_version, $0, @INITIAL_ARGS;
 }
 
 sub write_env {

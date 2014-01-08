@@ -1,9 +1,8 @@
 package App::Mist::Command::init;
+use 5.014;
 
-use strict;
-use warnings;
-
-use base 'App::Cmd::Command';
+use Moose;
+extends 'MooseX::App::Cmd::Command';
 
 use Try::Tiny;
 use File::Which;
@@ -16,14 +15,12 @@ sub execute {
   my $app = $self->app;
   $app->ensure_correct_perlbrew_context;
 
-  my $dist_prepend = $app->mpan_conf->file(qw/ 01.prepend.txt /);
-  my $dist_notest  = $app->mpan_conf->file(qw/ 02.notest.txt /);
-
-  my @prepend = $app->slurp_file( $dist_prepend );
-  my @notest  = $app->slurp_file( $dist_notest );
+  my @prepend = $app->dist->get_prepended_modules;
+  my @notest  = $app->dist->get_modules_not_to_test;
 
   my @prereqs = grep{
     my $this = $_;
+    # this clever bit of code seems to manipulate @prepend and @notest arrays
     ! grep{
       $this =~ m/^${_}(?:~.*)$/ and $_ = $this # pick up version string
     } ( @prepend, @notest );
@@ -31,9 +28,14 @@ sub execute {
 
   my $do = sub{ $app->execute_command( $app->prepare_command( @_ )) };
 
-  $do->( 'inject',             @$args, @prepend ) if @prepend;
-  $do->( 'inject', '--notest', @$args, @notest  ) if @notest;
-  $do->( 'inject',             @$args, @prereqs ) if @prereqs;
+  my @default_opts = (
+    '--no-skip-installed', '--no-skip-satisfied', '--reinstall'
+  );
+
+  $do->( 'inject', @default_opts,             @$args, @prepend ) if @prepend;
+  $do->( 'inject', @default_opts, '--notest', @$args, @notest  ) if @notest;
+  $do->( 'inject', @default_opts,             @$args, @prereqs ) if @prereqs;
+
   $do->( 'compile' );
 
   {

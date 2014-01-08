@@ -1,9 +1,8 @@
 package App::Mist::Command::clean;
+use 5.014;
 
-use strict;
-use warnings;
-
-use base 'App::Cmd::Command';
+use Moose;
+extends 'MooseX::App::Cmd::Command';
 
 use CPAN::PackageDetails;
 

@@ -1,0 +1,11 @@
+# ask perlbrew or perlenv to default to a specific version of perl
+perl '5.14.2';
+
+assert {
+  # check some system wide prereqs on install time here
+};
+
+prepend 'ExtUtils::MakeMaker';# => "6.30";
+
+# skip testing for those distributions
+notest 'Term::ReadKey';
