@@ -5,7 +5,7 @@ assert {
   # check some system wide prereqs on install time here
 };
 
-prepend 'ExtUtils::MakeMaker';# => "6.30";
+prepend 'Params::Validate';
 
 # skip testing for those distributions
 notest 'Term::ReadKey';
