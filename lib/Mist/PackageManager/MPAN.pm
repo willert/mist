@@ -85,8 +85,12 @@ sub commit {
     my ( $dist, $cont ) = @_;
 
     return $cont->() if $dist->is_dir;
+
+    # return $cont->() if $self->has_distribution_index_for( $dist )
+    #   and $self->distribution_index( $dist )->{digest} eq md5_hex( $dist->slurp );
+
     return $cont->() if $self->has_distribution_index_for( $dist )
-      and $self->distribution_index( $dist )->{digest} eq md5_hex( $dist->slurp );
+      and $self->distribution_index( $dist )->{mtime} == $dist->stat->mtime;
 
     $self->add_distribution_to_index( $dist );
     $updated_packages += 1;
