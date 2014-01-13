@@ -19,8 +19,6 @@ sub execute {
   my $app       = $self->app;
   my $home      = $app->project_root;
   my $mpan      = $app->mpan_dist;
-  my $local_lib = $app->local_lib;
-
 
   chdir $home->stringify;
 
