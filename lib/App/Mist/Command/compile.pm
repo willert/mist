@@ -58,8 +58,8 @@ sub execute {
 
     append_module_source('App::Mist::MPAN::perlbrew' => $out, VARS => [
       PERLBREW_ROOT            => $self->app->perlbrew_root,
-      PERLBREW_DEFAULT_VERSION => $perlbrew_version,
-    ]) if $perlbrew_version;
+      PERLBREW_DEFAULT_VERSION => $perl_version,
+    ]);
 
     append_module_source( 'Mist::Script::install' => $out, VARS => [
       PERL5_BASE_LIB     => $app->perl5_base_lib->relative( $home ),
