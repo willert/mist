@@ -20,18 +20,9 @@ sub execute {
     workspace    => $self->app->workspace_lib,
   });
 
-  my @modules  = grep{ !/^-/ } @$args;
-  my @cmd_args = grep{ /^-/ } @$args;
-
   $package_manager->begin_work;
 
-  $package_manager->install( \@modules, @cmd_args );
-
-#  for my $module ( @modules ) {
-#    $package_manager->install(
-#      $module, @cmd_args
-#    );
-#  }
+  $package_manager->install( @$args );
 
   $package_manager->commit;
 }

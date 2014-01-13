@@ -58,65 +58,22 @@ sub begin_work {
 }
 
 sub install {
-  my ( $self, $module, @args ) = @_;
-  @args = @{ $args[0] } if @args == 1 and ref $args[0] eq 'ARRAY';
-
-  my @modules = ref $module eq 'ARRAY' ? @$module : $module;
+  my ( $self, @cmd_args ) = @_;
 
   my $mpan      = $self->mpan_dist;
   my $local_lib = $self->local_lib;
 
-  my @base_options = (
+  my @install_options = (
     '--quiet',
     '--local-lib-contained' => $self->local_lib,
-    '--save-dists' => $self->mpan_dist,
-
+    '--save-dists'          => $self->mpan_dist,
+    '--mirror'              => 'file://' . $self->mpan_dist . '/',
+    '--mirror'              => 'http://www.cpan.org/',
     '--mirror-only',
-    '--mirror' => 'file://' . $self->mpan_dist . '/',
-    '--mirror' => 'http://www.cpan.org/',
     '--cascade-search'
   );
 
-  my @download_options = (
-    @base_options,
-    '--reinstall',
-    '--no-skip-installed',
-    '--perl' => '/bin/true',
-  );
-
-  my @dependency_options = (
-    @base_options,
-    '--installdeps',
-    '--reinstall',
-    '--save-dists' => $self->mpan_dist,
-  );
-
-  my @install_options = (
-    @base_options,
-  );
-
- INSTALL_MODULE: {
-    # only report errors in the last cpanm call, they will most likely be the
-    # same for all three calls anyways
-
-#     {
-#       # Download the dist via --look and a faked shell to open it in
-#       local $ENV{SHELL} = '/bin/true';
-#       $self->run_cpanm(
-#         { -stderr => undef },
-#         @download_options, @args, @modules
-#       );
-#     }
-
-    # Force checking and, if not found, installing dependencies
-#    $self->run_cpanm(
-#      { -stderr => undef },
-#       @dependency_options, @args, @modules
-#    );
-
-    # Finally install the module
-    $self->run_cpanm( @install_options, @args, @modules );
-  }
+  $self->run_cpanm( @install_options, @cmd_args );
 }
 
 sub commit {
