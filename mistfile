@@ -5,7 +5,10 @@ assert {
   # check some system wide prereqs on install time here
 };
 
+prepend 'List::Util' => qw/1.33/;
+
 prepend 'Params::Validate';
+prepend 'MooseX::Getopt';
 
 # skip testing for those distributions
 notest 'Term::ReadKey';
