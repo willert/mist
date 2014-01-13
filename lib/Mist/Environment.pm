@@ -35,17 +35,20 @@ sub as_code {
   my $code = $args{ source } // do {
     local $/ = undef;
     my $file = $self->{file};
-    open my $fh, "<", $file
-      or die "could not open $file: $!";
-    <$fh>;
-  } if defined $self->{file};
+    defined $file ? do {
+      open my $fh, "<", $file
+        or die "could not open $file: $!";
+      <$fh>;
+    } : '';
+  };
 
   Carp::croak( "Nothing to parse" ) unless defined $code;
 
   my $package_name = $args{ package };
   $package_name //= 'Mist::Environment::Sandbox' . $file_id++;
 
-  my $line_pos = $args{ package } ? '' : qq{\n# line 1 "$self->{file}"\n};
+  my $line_pos = $args{ package } ? '' :
+    defined( $self->{file} ) ? qq{\n# line 1 "$self->{file}"\n} : '';
 
   return <<"PERL";
 {
