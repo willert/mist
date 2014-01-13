@@ -32,7 +32,7 @@ sub execute {
     my @notest  = $app->dist->get_modules_not_to_test;
     my @prereqs = $app->fetch_prereqs;
 
-    my $perlbrew_version = $self->app->perlbrew_version;
+    my $perl_version = $self->app->perl_version;
 
     print STDERR "Generating mpan-install\n";
 
@@ -52,21 +52,17 @@ sub execute {
     append_module_source( 'Mist::Distribution' => $out );
     append_module_source( 'Mist::Environment'  => $out );
 
-    # append_module_source( 'App::Mist::MPAN::prereqs' => $out );
-
     print $out $app->mist_environment->as_code( package => 'DISTRIBUTION' );
 
-    append_module_source('App::Mist::MPAN::perlbrew' => $out, VARS => [
+    # has to be included before Mist::Script::install so it has unfettered
+    # access to @ARGV
+    append_module_source('Mist::Script::perlbrew' => $out, VARS => [
       PERLBREW_ROOT            => $self->app->perlbrew_root,
       PERLBREW_DEFAULT_VERSION => $perl_version,
     ]);
 
     append_module_source( 'Mist::Script::install' => $out, VARS => [
-      PERL5_BASE_LIB     => $app->perl5_base_lib->relative( $home ),
       MPAN_DIST_DIR      => $mpan->relative( $home ),
-      LOCAL_LIB_DIR      => $local_lib->relative( $home ),
-      # PREPEND_DISTS      => \@prepend,
-      # DONT_TEST_DISTS    => \@notest,
       PREREQUISITE_DISTS => \@prereqs,
     ]);
 

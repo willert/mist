@@ -196,13 +196,13 @@ sub _build_cpanm_executable {
 }
 
 
-has perlbrew_version => (
+has perl_version => (
   is         => 'ro',
   isa        => 'Str',
   lazy_build => 1,
 );
 
-sub _build_perlbrew_version {
+sub _build_perl_version {
   my $self = shift;
   my $pb_version = $self->dist->get_default_perl_version;
   return "perl-${pb_version}";
@@ -220,7 +220,7 @@ sub ensure_correct_perlbrew_context {
 
   my $pb_root    = $self->perlbrew_root;
   my $pb_home    = $self->perlbrew_home;
-  my $pb_version = $self->perlbrew_version || return;
+  my $pb_version = $self->perl_version || return;
 
   my $pb_exec = qx{ which perlbrew } || "${pb_root}/bin/perlbrew";
   chomp $pb_exec;
@@ -271,10 +271,11 @@ MSG
 
     printf "Restarting $0 under %s [%s]\n", $pb_version, $pb_archname;
     $ENV{PERLBREW_ROOT} = $pb_root;
-    printf STDERR "Deactivating local lib\n", ;
 
+    printf "Deactivating local lib\n", ;
     local::lib->import('--deactivate-all');
-    exec $pb_exec, 'exec', '--with', $pb_version, $0, @ARGV;
+
+    exec $pb_exec, 'exec', '--quiet', '--with', $pb_version, $0, @ARGV;
   } else {
     eval 'require local::lib;' or die join(
       qq{\n},
