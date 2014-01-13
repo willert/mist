@@ -163,7 +163,7 @@ has perl5_base_lib => (
 
 sub _build_perl5_base_lib {
   my $self = shift;
-  $self->project_root->subdir( $ENV{MIST_LOCAL_LIB} || 'perl5' );
+  $self->project_root->subdir( 'perl5' );
 }
 
 
@@ -175,9 +175,10 @@ has local_lib => (
 
 sub _build_local_lib {
   my $self = shift;
-  $self->perl5_base_lib->subdir(
-    $self->perlbrew_version ? $self->perlbrew_version : 'system'
-  );
+
+  my $version = join( q{-}, 'perl', $Config{version}, $Config{archname} );
+
+  return $self->perl5_base_lib->subdir( $version );
 }
 
 
@@ -263,7 +264,12 @@ MSG
   # system( @pb_call ) == 0 or die "`@pb_call` failed" unless $pb_installed;
 
   if ( not $ENV{PERLBREW_PERL} || '' eq $pb_version ) {
-    print "Restarting $0 under ${pb_version}\n\n";
+
+    my $pb_cmd = qq{ $pb_exec exec --quiet --with '$pb_version' };
+    my $pb_archname =  qx{ $pb_cmd perl -MConfig -E "say \\\$Config{archname}" };
+    chomp $pb_archname;
+
+    printf "Restarting $0 under %s [%s]\n", $pb_version, $pb_archname;
     $ENV{PERLBREW_ROOT} = $pb_root;
     printf STDERR "Deactivating local lib\n", ;
 
