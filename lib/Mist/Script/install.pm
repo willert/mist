@@ -46,8 +46,8 @@ copy( $cmd_wrapper_src, $cmd_wrapper )
 my $perm = ( stat $cmd_wrapper )[2] & 07777;
 chmod( $perm | 0755, $cmd_wrapper );
 
-App::Mist::MPAN::perl->init
-  if eval{ App::Mist::MPAN::perl->can( 'init' ) };
+Mist::Script::perl->init
+  if eval{ Mist::Script::perl->can( 'init' ) };
 
 sub run_cpanm {
   my $app = App::cpanminus::script->new;
@@ -134,8 +134,8 @@ export PATH="$MIST_APP_ROOT/bin:$MIST_APP_ROOT/sbin:$MIST_APP_ROOT/script:$PATH"
 
 MIST_ENV
 
-  if ( eval{ App::Mist::MPAN::perl->can( 'write_env' )} ) {
-    App::Mist::MPAN::perl->write_env( $env );
+  if ( eval{ Mist::Script::perl->can( 'write_env' )} ) {
+    Mist::Script::perl->write_env( $env );
   }
 
   require local::lib;

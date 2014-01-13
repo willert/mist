@@ -1,8 +1,10 @@
 package                         # hide from CPAN
-  App::Mist::MPAN::perl;
+  Mist::Script::perl;
 
 # poor-mans pluggable objects: everything that handles perl versions
-# has to live in App::Mist::MPAN::perl
+# has to live in Mist::Script::perl
+
+use 5.010;
 
 our @INITIAL_ARGS;
 BEGIN { @INITIAL_ARGS = @ARGV; }
@@ -13,20 +15,25 @@ our $PERLBREW_DEFAULT_VERSION // die '$PERL5_DEFAULT_VERSION not set';
 use FindBin ();
 use File::Spec ();
 use Getopt::Long;
+use Config;
 
 my $tmp_base_dir = File::Spec->catdir( $FindBin::Bin, 'tmp' );
 $tmp_base_dir = File::Spec->catdir(
-  File::Spec->tmpdir, ( File::Spec->splitdir( $FindBin::Bin ))[ -1 ]
-  ) unless -d $tmp_base_dir and -w $tmp_base_dir;
+  File::Spec->tmpdir,
+  ( File::Spec->splitdir( $FindBin::Bin ))[ -1 ],
+) unless -d $tmp_base_dir and -w $tmp_base_dir;
 
 my $pb_root    = $ENV{PERLBREW_ROOT} || $PERLBREW_ROOT;
 my $pb_home    = File::Spec->catdir( $tmp_base_dir, 'perlbrew' );
 
-GetOptions( "perl=s" => \ my $pb_version );
+my @CMD_ARGS = @INITIAL_ARGS;
+my $p = Getopt::Long::Parser->new;
+$p->getoptionsfromarray( \@CMD_ARGS, "perl=s" => \ my $pb_version );
 $pb_version ||= $PERLBREW_DEFAULT_VERSION;
 
-print "Using perlbrew root $pb_root\n";
-print "Using temporary perlbrew home $pb_home\n";
+# print "Using perl version $pb_version\n";
+# print "Using perlbrew root $pb_root\n";
+# print "Using temporary perlbrew home $pb_home\n";
 
 my $pb_exec = qx{ which perlbrew } || "${pb_root}/bin/perlbrew";
 chomp $pb_exec;
@@ -63,30 +70,31 @@ die "FATAL: $pb_version not found and can't write to $pb_root\n" .
 my @pb_call = ( $pb_exec, 'install', $pb_version );
 system( @pb_call ) == 0 or die "`@pb_call` failed" unless $pb_installed;
 
+# ensure version is in perlbrew lingo
+$pb_version = "perl-${pb_version}"
+  if $pb_version and $pb_version =~ m/^[\d.]+$/;
+
 if ( !$ENV{PERLBREW_PERL} or $ENV{PERLBREW_PERL} ne $pb_version ) {
-  print "Restarting $0 under $pb_version\n\n";
   $ENV{PERLBREW_ROOT} = $pb_root;
   $ENV{PERLBREW_HOME} = $pb_home;
-  exec $pb_exec, 'exec', '--with', $pb_version, $0, @INITIAL_ARGS;
+  my $pb_archname = get_archname();
+
+  printf "Restarting $0 under %s [%s]\n", $pb_version, $pb_archname;
+  exec $pb_exec, 'exec', '--quiet', '--with', $pb_version, $0, @INITIAL_ARGS;
+}
+
+sub get_archname {
+  my $pb_cmd = qq{ $pb_exec exec --quiet --with '$pb_version' };
+  my $pb_archname =  qx{ $pb_cmd perl -MConfig -E "say \\\$Config{archname}" };
+  chomp $pb_archname;
+  return $pb_archname;
 }
 
 sub write_env {
+  my $class = shift;
   my $env = shift;
 
-# FIXME:      printf $env <<'PERLBREW_HOME', $pb_home;
-# FIXME:  # Initializing perlbrew environment
-# FIXME:
-# FIXME:  if [[
-# FIXME:    -w "$MIST_APP_ROOT/tmp/perlbrew" ||
-# FIXME:    ( -w "$MIST_APP_ROOT/tmp" && ! -e "$MIST_APP_ROOT/tmp/perlbrew" )
-# FIXME:  ]] ; then
-# FIXME:    export PERLBREW_HOME="$MIST_APP_ROOT/tmp/perlbrew"
-# FIXME:  else
-# FIXME:    export PERLBREW_HOME="%%s"
-# FIXME:  fi
-# FIXME:  PERLBREW_HOME
-
-    printf $env <<'PERLBREW_RC', $pb_root, $pb_version;
+  printf $env <<'PERLBREW_RC', $pb_root, $pb_version;
 
 PERLBREW_DEFAULT_ROOT=%s
 PERLBREW_DEFAULT_VERSION=%s
