@@ -40,7 +40,7 @@ sub as_code {
     <$fh>;
   } if defined $self->{file};
 
-  Carp::croak( "Nothing to parse" ) unless $code;
+  Carp::croak( "Nothing to parse" ) unless defined $code;
 
   my $package_name = $args{ package };
   $package_name //= 'Mist::Environment::Sandbox' . $file_id++;
