@@ -32,7 +32,7 @@ sub _build_project_root {
   my $self = shift;
   my $root = eval{
     local $SIG{__WARN__} = sub{};
-    find_containing_dir_upwards( 'mistfile' )
+    find_containing_dir_upwards( 'mistfile', 'cpanfile' )
   } or die "$0: Can't find project root\n";
 
   return dir( $root )->absolute->resolve;
