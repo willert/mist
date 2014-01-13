@@ -109,14 +109,6 @@ unless (caller) {
     $_->() for DISTRIBUTION->distinfo->get_assertions;
   }
 
-  if ( App::Mist::MPAN::prereqs->can( 'assert' )) {
-    eval { App::Mist::MPAN::prereqs->assert };
-  }
-
-  if ( my $err = $@ ) {
-    die "\n[FATAL] Error checking prerequisites:\n${err}\n";
-  }
-
   my @prepend = ( @$PREPEND_DISTS );
   my @notest  = ( @$DONT_TEST_DISTS );
   my @prereqs = ( @$PREREQUISITE_DISTS );
