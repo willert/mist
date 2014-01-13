@@ -8,6 +8,7 @@ extends 'MooseX::App::Cmd';
 our $VERSION = '0.1';
 
 use Carp;
+use Config;
 
 # preload all commands
 use Module::Pluggable search_path => [ 'App::Mist::Command' ];
@@ -101,9 +102,9 @@ has mist_environment => (
 
 sub _build_mist_environment {
   my $self = shift;
-  return Mist::Environment->new(
-    $self->project_root->file( 'mistfile' )->stringify
-  );
+  my $mistfile = $self->project_root->file( 'mistfile' )->stringify;
+  return Mist::Environment->new unless -f $mistfile;
+  return Mist::Environment->new( $mistfile );
 }
 
 
@@ -205,6 +206,7 @@ has perl_version => (
 sub _build_perl_version {
   my $self = shift;
   my $pb_version = $self->dist->get_default_perl_version;
+  return '' unless $pb_version;
   return "perl-${pb_version}";
 }
 
