@@ -5,23 +5,61 @@ use warnings;
 use base 'Exporter';
 
 our @EXPORT_OK;
-BEGIN { @EXPORT_OK = qw/ append_module_source / }
+BEGIN { @EXPORT_OK = qw/ append_module_source append_text_file / }
 
 use Data::Dumper;
 use Carp;
 
 use Module::Path qw/ module_path /;
 use Scalar::Util qw/ blessed looks_like_number /;
+use Digest::MD5  qw/ md5_hex /;
+
+sub append_text_file {
+  my ( $textfile, $fh, %p ) = @_;
+  my $pkg = $p{as} || $p{package}
+    or croak "append_text_file needs a package name";
+
+  croak "Invalid package name ${pkg}"
+    unless $pkg =~ m/ ^ [a-z] (?:\w+::)* \w+ $ /ix;
+
+  my $document = do {
+    local $/ = undef;
+    open my $fh, "<", $textfile
+      or croak "Can't open ${textfile}: $!";
+    <$fh>;
+  };
+
+  my $delimiter = join( q{_}, 'TEXTFILE', uc( md5_hex( $document )));
+
+  print $fh sprintf( <<'PERL', $pkg, $delimiter, $document, $delimiter );
+;{
+  package %s;
+
+  sub get_content {
+    my $content = <<'%s';
+%s
+%s
+    chomp $content;
+    return $content;
+  }
+  1;
+};
+PERL
+
+  return;
+}
 
 sub append_module_source {
   my ( $module, $fh, %p ) = @_;
 
-  print $fh ";{\n";
-
   my $path = module_path( $module )
     or croak "Can't find module ${module}";
 
-  open my $module_source, "<", $path or die $!;
+  open my $module_source, "<", $path
+    or croak "Can't open ${module}: $!";
+
+  print $fh ";{\n";
+
   while ( <$module_source> ) {
     next if $_ eq "\n";
     last if /^__END__$/;

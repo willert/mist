@@ -43,11 +43,13 @@ my $libexec_dir   = File::Spec->catdir( $perl5_baselib, 'libexec' );
 
 mkpath( $libexec_dir );
 
-my $cmd_wrapper_src = File::Spec->catfile( $mpan, 'cmd-wrapper.bash' );
 my $cmd_wrapper     = File::Spec->catfile( $libexec_dir, 'cmd-wrapper.bash' );
-
-copy( $cmd_wrapper_src, $cmd_wrapper )
-  or die "Creating $cmd_wrapper failed: $!";
+{
+  my $cmd_wrapper_src = CMD_WRAPPER::Bash->get_content;
+  open my $fh, '>', $cmd_wrapper
+    or die "Creating $cmd_wrapper failed: $!";
+  print $fh $cmd_wrapper_src;
+}
 
 my $perm = ( stat $cmd_wrapper )[2] & 07777;
 chmod( $perm | 0755, $cmd_wrapper );
@@ -144,10 +146,9 @@ MIST_ENV
   }
   close $env;
 
-  printf $wrapper <<'WRAPPER', $local_lib, $mist_home, $mist_rc;
+  printf $wrapper <<'WRAPPER', $mist_home, $mist_rc;
 #!/bin/bash
 
-LOCAL_LIB="%s"
 MIST_ROOT="%s"
 MIST_ENV="%s"
 
@@ -156,12 +157,29 @@ if [ ! -r $MIST_ENV ] ; then
     exit 1
 fi
 
+# may be overwritten by mist env script
+function mist_exec {
+   echo Executing "${@}"
+   exec "${@}"
+}
+
+function mist_run {
+   echo Running "${@}"
+   eval "${@}"
+}
+
 source $MIST_ENV
+
+VERSION_ARCH_PATH=`mist_run perl -MConfig -e 'print join( q{-}, "perl", $Config{version}, $Config{archname})'`
+LOCAL_LIB="$MIST_ROOT/$VERSION_ARCH_PATH"
+
+echo "Using local lib $LOCAL_LIB"
+
 export PATH="$LOCAL_LIB/bin:$LOCAL_LIB/sbin:$PATH"
 export PATH="$MIST_ROOT/bin:$MIST_ROOT/sbin:$MIST_ROOT/script:$PATH"
 export PERL5LIB="$MIST_ROOT/lib:$PERL5LIB"
 
-exec "$@"
+mist_exec "${@}"
 WRAPPER
 
   for my $script_dir (qw/ bin sbin script /) {

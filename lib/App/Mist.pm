@@ -17,8 +17,10 @@ use Path::Class qw/dir file/;
 use File::HomeDir;
 use File::Which;
 use File::Find::Upwards;
+use File::Share qw/ dist_file /;
 
 use Module::CPANfile;
+use CPAN::Meta::Prereqs;
 
 use Mist::Distribution;
 use Mist::Environment;
@@ -206,6 +208,7 @@ has perl_version => (
 sub _build_perl_version {
   my $self = shift;
   my $pb_version = $self->dist->get_default_perl_version;
+
   return '' unless $pb_version;
   return "perl-${pb_version}";
 }
@@ -265,7 +268,8 @@ MSG
   # my @pb_call = ( $pb_exec, 'install', $pb_version );
   # system( @pb_call ) == 0 or die "`@pb_call` failed" unless $pb_installed;
 
-  if ( not $ENV{PERLBREW_PERL} || '' eq $pb_version ) {
+
+  if ( ( $ENV{PERLBREW_PERL} || '' ) ne $pb_version ) {
 
     my $pb_cmd = qq{ $pb_exec exec --quiet --with '$pb_version' };
     my $pb_archname =  qx{ $pb_cmd perl -MConfig -E "say \\\$Config{archname}" };
@@ -273,12 +277,14 @@ MSG
 
     printf "Restarting $0 under %s [%s]\n", $pb_version, $pb_archname;
     $ENV{PERLBREW_ROOT} = $pb_root;
+    $ENV{MIST_PERLBREW_VERSION} = $pb_version;
 
-    printf "Deactivating local lib\n", ;
+    local::lib->import('--deactivate-all');
+    exec $pb_exec, 'exec', '--quiet', '--with', $pb_version,
+      dist_file( 'App-Mist', 'perlbrew-wrapper.bash' ), $0, @ARGV;
+  } else {
     local::lib->import('--deactivate-all');
 
-    exec $pb_exec, 'exec', '--quiet', '--with', $pb_version, $0, @ARGV;
-  } else {
     eval 'require local::lib;' or die join(
       qq{\n},
       "FATAL: missing local::lib ",

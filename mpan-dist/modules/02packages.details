@@ -165,6 +165,7 @@ Devel::CheckLib                     1.01  M/MA/MATTN/Devel-CheckLib-1.01.tar.gz
 Devel::CheckOS                      1.71  D/DC/DCANTRELL/Devel-CheckOS-1.71.tar.gz
 Devel::FindPerl                    0.012  L/LE/LEONT/Devel-FindPerl-0.012.tar.gz
 Devel::GlobalDestruction            0.12  H/HA/HAARG/Devel-GlobalDestruction-0.12.tar.gz
+Devel::InnerPackage                  0.4  S/SI/SIMONW/Module-Pluggable-5.1.tar.gz
 Devel::StackTrace                   1.30  D/DR/DROLSKY/Devel-StackTrace-1.30.tar.gz
 Devel::StackTrace::Frame            1.30  D/DR/DROLSKY/Devel-StackTrace-1.30.tar.gz
 Digest::MD5                         2.53  G/GA/GAAS/Digest-MD5-2.53.tar.gz
@@ -300,6 +301,8 @@ Module::CPANfile::Environment          0  M/MI/MIYAGAWA/Module-CPANfile-1.0002.t
 Module::CPANfile::Result               0  M/MI/MIYAGAWA/Module-CPANfile-1.0002.tar.gz
 Module::Implementation              0.07  D/DR/DROLSKY/Module-Implementation-0.07.tar.gz
 Module::Path                        0.09  N/NE/NEILB/Module-Path-0.09.tar.gz
+Module::Pluggable                    5.1  S/SI/SIMONW/Module-Pluggable-5.1.tar.gz
+Module::Pluggable::Object            5.1  S/SI/SIMONW/Module-Pluggable-5.1.tar.gz
 Module::Runtime                    0.013  Z/ZE/ZEFRAM/Module-Runtime-0.013.tar.gz
 Moose                              2.1201  E/ET/ETHER/Moose-2.1201.tar.gz
 Moose::Exception                   2.1201  E/ET/ETHER/Moose-2.1201.tar.gz

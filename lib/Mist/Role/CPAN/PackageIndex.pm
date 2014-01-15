@@ -8,7 +8,18 @@ use Carp;
 
 use Mist::ParseDistribution;
 use CPAN::DistnameInfo;
+
 use CPAN::PackageDetails;
+
+# Those are dynamically loaded normally. Force pre-loading them
+# because we will use mist's local::lib in the process of
+# installing distributions
+use CPAN::PackageDetails::Header;
+use CPAN::PackageDetails::Entries;
+use CPAN::PackageDetails::Entry;
+
+use CPAN::ParseDistribution::Unix;
+use Devel::AssertOS::Unix;
 
 use File::Temp ();
 

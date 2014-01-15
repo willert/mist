@@ -4,7 +4,7 @@ use 5.014;
 use Moose;
 extends 'MooseX::App::Cmd::Command';
 
-use App::Mist::Utils qw/ append_module_source /;
+use App::Mist::Utils qw/ append_module_source append_text_file /;
 use Module::Path qw/ module_path /;
 
 use Try::Tiny;
@@ -12,6 +12,8 @@ use File::Copy;
 use File::Share qw/ dist_file /;
 use Path::Class qw/ dir /;
 use Cwd;
+
+use App::cpanminus::fatscript;
 
 sub execute {
   my ( $self, $opt, $args ) = @_;
@@ -52,6 +54,11 @@ sub execute {
 
     print $out $app->mist_environment->as_code( package => 'DISTRIBUTION' );
 
+    append_text_file(
+      dist_file( 'App-Mist', 'cmd-wrapper.bash' ) => $out,
+      package => 'CMD_WRAPPER::Bash',
+    );
+
     # has to be included before Mist::Script::install so it has unfettered
     # access to @ARGV
     append_module_source('Mist::Script::perlbrew' => $out, VARS => [
@@ -69,13 +76,6 @@ sub execute {
     unlink "mpan-install";
     rename "mpan-install.tmp", "mpan-install";
     chmod 0755, "mpan-install";
-
-    print STDERR "Generating cmd wrapper\n";
-
-    my $cmd_wrapper = 'cmd-wrapper.bash';
-    my $wrapper = $app->mpan_dist->file( $cmd_wrapper )->stringify;
-    copy( dist_file( 'App-Mist', $cmd_wrapper ), $wrapper );
-    chmod 0755, $wrapper;
 
   } catch {
 

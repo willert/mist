@@ -5,7 +5,8 @@ assert {
   # check some system wide prereqs on install time here
 };
 
-prepend 'List::Util' => qw/1.33/;
+prepend 'List::Util' => '1.33';
+prepend 'Module::Pluggable::Object' => '5.1';
 
 prepend 'Params::Validate';
 prepend 'MooseX::Getopt';

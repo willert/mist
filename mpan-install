@@ -22050,7 +22050,8 @@ assert {
   # check some system wide prereqs on install time here
 };
 
-prepend 'List::Util' => qw/1.33/;
+prepend 'List::Util' => '1.33';
+prepend 'Module::Pluggable::Object' => '5.1';
 
 prepend 'Params::Validate';
 prepend 'MooseX::Getopt';
@@ -22062,6 +22063,60 @@ notest 'Term::ReadKey';
   sub distinfo { $_result }
   $_result;
 }
+;{
+  package CMD_WRAPPER::Bash;
+
+  sub get_content {
+    my $content = <<'TEXTFILE_A0EA2897D9BE1A03EA0A30C741D5E8E7';
+#!/bin/bash
+
+# get the absolute path of the executable
+SELF_PATH=$(cd -P -- "$(dirname -- "$0")" && pwd -P) && SELF_PATH=$SELF_PATH/$(basename -- "$0")
+
+# resolve symlinks
+while [ -h $SELF_PATH ]; do
+    # 1) cd to directory of the symlink
+    # 2) cd to the directory of where the symlink points
+    # 3) get the pwd
+    # 4) append the basename
+    DIR=$(dirname -- "$SELF_PATH")
+    SYM=$(readlink $SELF_PATH)
+    SELF_PATH=$(cd $DIR && cd $(dirname -- "$SYM") && pwd)/$(basename -- "$SYM")
+done
+
+WRAPPER=$(dirname $SELF_PATH)
+
+CALL_PATH="$( cd -P "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/$(basename $0)"
+
+if [ $SELF_PATH == $CALL_PATH ] ; then
+  echo "$(basename $0): Must be called as a symlink named like the command to be run" >&2
+  exit 1
+fi
+
+# try to upward-find local::lib directory
+for UPDIR in . .. ../.. ../../.. ../../../.. ; do
+  TEST="$WRAPPER/$UPDIR/perl5";
+  if [ -d $TEST ] ; then
+      LOCAL_LIB=$( cd -P "$( dirname "$TEST" )" && pwd )
+      BASE_DIR="$WRAPPER/$UPDIR"
+      break
+  fi
+done
+
+#exit if we can't find any
+if [ ! $LOCAL_LIB ] ; then
+  echo "$0: No local::lib directory found. Abort!" >&2
+  exit 1
+fi
+
+exec "$BASE_DIR/perl5/bin/mist-run" `basename $0` "$@"
+
+TEXTFILE_A0EA2897D9BE1A03EA0A30C741D5E8E7
+    chomp $content;
+    return $content;
+  }
+  1;
+};
 ;{
 package                         # hide from CPAN
   Mist::Script::perl;
@@ -22087,8 +22142,9 @@ my $pb_root    = $ENV{PERLBREW_ROOT} || $PERLBREW_ROOT;
 my $pb_home    = File::Spec->catdir( $tmp_base_dir, 'perlbrew' );
 my @CMD_ARGS = @INITIAL_ARGS;
 GetOptionsFromArray( \@CMD_ARGS, "perl=s" => \ my $pb_version );
+$pb_version ||= $ENV{MIST_PERLBREW_VERSION};
 $pb_version ||= $PERLBREW_DEFAULT_VERSION;
-# print "Using perl version $pb_version\n";
+print "Using perl version $pb_version\n";
 # print "Using perlbrew root $pb_root\n";
 # print "Using temporary perlbrew home $pb_home\n";
 my $pb_exec;
@@ -22124,12 +22180,15 @@ MSG
   # ensure version is in perlbrew lingo
   $pb_version = "perl-${pb_version}"
     if $pb_version and $pb_version =~ m/^[\d.]+$/;
-  if ( !$ENV{PERLBREW_PERL} or $ENV{PERLBREW_PERL} ne $pb_version ) {
-    $ENV{PERLBREW_ROOT} = $pb_root;
-    $ENV{PERLBREW_HOME} = $pb_home;
-    my $pb_archname = get_archname();
-    printf "Restarting $0 under %s [%s]\n", $pb_version, $pb_archname;
-    exec $pb_exec, 'exec', '--quiet', '--with', $pb_version, $0, @INITIAL_ARGS;
+  if ( not $ENV{MIST_PERLBREW_VERSION} ) {
+    if ( !$ENV{PERLBREW_PERL} or $ENV{PERLBREW_PERL} ne $pb_version ) {
+      $ENV{PERLBREW_ROOT} = $pb_root;
+      $ENV{PERLBREW_HOME} = $pb_home;
+      my $pb_archname = get_archname();
+      $ENV{MIST_PERLBREW_VERSION} = $pb_version;
+      printf "Restarting $0 @CMD_ARGS under %s [%s]\n", $pb_version, $pb_archname;
+      exec $pb_exec, 'exec', '--quiet', '--with', $pb_version, $0, @CMD_ARGS;
+    }
   }
 }
 sub get_archname {
@@ -22141,15 +22200,18 @@ sub get_archname {
 sub write_env {
   my $class = shift;
   my $env = shift;
-  return unless $pb_version;
-  printf $env <<'PERLBREW_RC', $pb_root, $pb_version;
+  return unless $ENV{MIST_PERLBREW_VERSION} || $pb_version;
+  printf $env <<'PERLBREW_RC', $pb_root, $ENV{MIST_PERLBREW_VERSION} || $pb_version;
 PERLBREW_DEFAULT_ROOT=%s
 PERLBREW_DEFAULT_VERSION=%s
 if [ "x$PERLBREW_ROOT" == "x" ] ; then
   export PERLBREW_ROOT=$PERLBREW_DEFAULT_ROOT
 fi
 source "$PERLBREW_ROOT/etc/bashrc"
-perlbrew use $PERLBREW_DEFAULT_VERSION
+if [ "x$MIST_PERLBREW_VERSION" == "x" ] ; then
+  MIST_PERLBREW_VERSION=$PERLBREW_DEFAULT_VERSION
+fi
+perlbrew use $MIST_PERLBREW_VERSION
 PERLBREW_RC
 }
 1;
@@ -22189,10 +22251,13 @@ my $mpan          = File::Spec->catdir( $Bin, $MPAN_DIST_DIR );
 my $local_lib     = File::Spec->catdir( $mist_home, $LOCAL_LIB_DIR );
 my $libexec_dir   = File::Spec->catdir( $perl5_baselib, 'libexec' );
 mkpath( $libexec_dir );
-my $cmd_wrapper_src = File::Spec->catfile( $mpan, 'cmd-wrapper.bash' );
 my $cmd_wrapper     = File::Spec->catfile( $libexec_dir, 'cmd-wrapper.bash' );
-copy( $cmd_wrapper_src, $cmd_wrapper )
-  or die "Creating $cmd_wrapper failed: $!";
+{
+  my $cmd_wrapper_src = CMD_WRAPPER::Bash->get_content;
+  open my $fh, '>', $cmd_wrapper
+    or die "Creating $cmd_wrapper failed: $!";
+  print $fh $cmd_wrapper_src;
+}
 my $perm = ( stat $cmd_wrapper )[2] & 07777;
 chmod( $perm | 0755, $cmd_wrapper );
 Mist::Script::perl->init
@@ -22267,9 +22332,8 @@ MIST_ENV
     print $env local::lib->environment_vars_string_for( "${local_lib}" );
   }
   close $env;
-  printf $wrapper <<'WRAPPER', $local_lib, $mist_home, $mist_rc;
+  printf $wrapper <<'WRAPPER', $mist_home, $mist_rc;
 #!/bin/bash
-LOCAL_LIB="%s"
 MIST_ROOT="%s"
 MIST_ENV="%s"
 if [ ! -r $MIST_ENV ] ; then
@@ -22277,6 +22341,7 @@ if [ ! -r $MIST_ENV ] ; then
     exit 1
 fi
 source $MIST_ENV
+LOCAL_LIB="$MIST_ROOT/"`env perl -MConfig -e 'print join( q{-}, "perl", $Config{version}, $Config{archname})'`
 export PATH="$LOCAL_LIB/bin:$LOCAL_LIB/sbin:$PATH"
 export PATH="$MIST_ROOT/bin:$MIST_ROOT/sbin:$MIST_ROOT/script:$PATH"
 export PERL5LIB="$MIST_ROOT/lib:$PERL5LIB"

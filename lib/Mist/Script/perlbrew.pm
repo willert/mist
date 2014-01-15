@@ -30,11 +30,8 @@ my $pb_home    = File::Spec->catdir( $tmp_base_dir, 'perlbrew' );
 
 my @CMD_ARGS = @INITIAL_ARGS;
 GetOptionsFromArray( \@CMD_ARGS, "perl=s" => \ my $pb_version );
+$pb_version ||= $ENV{MIST_PERLBREW_VERSION};
 $pb_version ||= $PERLBREW_DEFAULT_VERSION;
-
-# print "Using perl version $pb_version\n";
-# print "Using perlbrew root $pb_root\n";
-# print "Using temporary perlbrew home $pb_home\n";
 
 my $pb_exec;
 
@@ -79,15 +76,23 @@ MSG
   $pb_version = "perl-${pb_version}"
     if $pb_version and $pb_version =~ m/^[\d.]+$/;
 
-  if ( !$ENV{PERLBREW_PERL} or $ENV{PERLBREW_PERL} ne $pb_version ) {
-    $ENV{PERLBREW_ROOT} = $pb_root;
-    $ENV{PERLBREW_HOME} = $pb_home;
-    my $pb_archname = get_archname();
+  if ( not $ENV{MIST_PERLBREW_VERSION} ) {
+    if ( !$ENV{PERLBREW_PERL} or $ENV{PERLBREW_PERL} ne $pb_version ) {
+      $ENV{PERLBREW_ROOT} = $pb_root;
+      $ENV{PERLBREW_HOME} = $pb_home;
+      my $pb_archname = get_archname();
 
-    printf "Restarting $0 under %s [%s]\n", $pb_version, $pb_archname;
-    exec $pb_exec, 'exec', '--quiet', '--with', $pb_version, $0, @INITIAL_ARGS;
+      $ENV{MIST_PERLBREW_VERSION} = $pb_version;
+
+      printf "Restarting $0 @CMD_ARGS under %s [%s]\n", $pb_version, $pb_archname;
+      exec $pb_exec, 'exec', '--quiet', '--with', $pb_version, $0, @CMD_ARGS;
+    }
   }
 }
+
+# printf "Using perl version %s [%s]\n", $pb_version, get_archname();
+# print "Using perlbrew root $pb_root\n";
+# print "Using temporary perlbrew home $pb_home\n";
 
 sub get_archname {
   my $pb_cmd = qq{ $pb_exec exec --quiet --with '$pb_version' };
@@ -100,9 +105,9 @@ sub write_env {
   my $class = shift;
   my $env = shift;
 
-  return unless $pb_version;
+  return unless $ENV{MIST_PERLBREW_VERSION} || $pb_version;
 
-  printf $env <<'PERLBREW_RC', $pb_root, $pb_version;
+  printf $env <<'PERLBREW_RC', $pb_root, $ENV{MIST_PERLBREW_VERSION} || $pb_version;
 
 PERLBREW_DEFAULT_ROOT=%s
 PERLBREW_DEFAULT_VERSION=%s
@@ -113,7 +118,19 @@ fi
 
 source "$PERLBREW_ROOT/etc/bashrc"
 
-perlbrew use $PERLBREW_DEFAULT_VERSION
+if [ "x$MIST_PERLBREW_VERSION" == "x" ] ; then
+  MIST_PERLBREW_VERSION=$PERLBREW_DEFAULT_VERSION
+fi
+
+function mist_exec {
+   echo Executing with perlbrew: "${@}"
+   exec perlbrew exec --with "$MIST_PERLBREW_VERSION" --quiet "${@}"
+}
+
+function mist_run {
+   echo Running with perlbrew: "${@}"
+   perlbrew exec --with "$MIST_PERLBREW_VERSION" --quiet "${@}"
+}
 
 PERLBREW_RC
 
