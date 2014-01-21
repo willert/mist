@@ -34,7 +34,7 @@ sub execute {
 
     my $perl_version = $self->app->perl_version;
 
-    print STDERR "Generating mpan-install\n";
+    print "Generating mpan-install\n";
 
     open my $out, ">", "mpan-install.tmp" or die $!;
     print $out "#!/usr/bin/env perl\n\n";

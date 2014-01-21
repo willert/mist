@@ -123,12 +123,10 @@ if [ "x$MIST_PERLBREW_VERSION" == "x" ] ; then
 fi
 
 function mist_exec {
-   echo Executing with perlbrew: "${@}"
    exec perlbrew exec --with "$MIST_PERLBREW_VERSION" --quiet "${@}"
 }
 
 function mist_run {
-   echo Running with perlbrew: "${@}"
    perlbrew exec --with "$MIST_PERLBREW_VERSION" --quiet "${@}"
 }
 

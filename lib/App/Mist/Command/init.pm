@@ -38,7 +38,10 @@ sub execute {
 
   $do->( 'compile' );
 
+  print "Packaging and compilation successful!\n\n";
+
   {
+    print "Running mpan-install\n";
     # we have to get rid of MIST_APP_ROOT here or else
     # ./mpan-install might update mist's own local lib
     # instead of the one of the project being worked on

@@ -159,12 +159,10 @@ fi
 
 # may be overwritten by mist env script
 function mist_exec {
-   echo Executing "${@}"
    exec "${@}"
 }
 
 function mist_run {
-   echo Running "${@}"
    eval "${@}"
 }
 
@@ -172,8 +170,6 @@ source $MIST_ENV
 
 VERSION_ARCH_PATH=`mist_run perl -MConfig -e 'print join( q{-}, "perl", $Config{version}, $Config{archname})'`
 LOCAL_LIB="$MIST_ROOT/$VERSION_ARCH_PATH"
-
-echo "Using local lib $LOCAL_LIB"
 
 export PATH="$LOCAL_LIB/bin:$LOCAL_LIB/sbin:$PATH"
 export PATH="$MIST_ROOT/bin:$MIST_ROOT/sbin:$MIST_ROOT/script:$PATH"
