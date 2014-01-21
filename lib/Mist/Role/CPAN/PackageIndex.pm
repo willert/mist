@@ -113,13 +113,13 @@ sub add_distribution_to_index {
 
   my $modules = $dist_info->modules;
 
-  if ( not %$modules ) {
+  my $dist_name = CPAN::DistnameInfo->new( q{}. $dist_info->pathname );
+  my $main_module = $dist_name->dist;
+  $main_module =~ s/-/::/g;
+
+  if ( not $modules->{ $main_module } ) {
     # parsing dist failed, try to at least index main module
-    my $dist_name = CPAN::DistnameInfo->new( q{}. $dist_info->pathname );
-    my $main_module = $dist_name->dist;
-    $main_module =~ s/-/::/g;
-    $modules->{ $main_module } = $dist_name->version
-      if $dist_name->version;
+    $modules->{ $main_module } = $dist_name->version // 0;
   }
 
   while ( my ( $pkg, $version ) = each %$modules ) {
