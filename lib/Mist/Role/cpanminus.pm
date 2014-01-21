@@ -5,7 +5,6 @@ use Moose::Role;
 use namespace::clean -except => 'meta';
 
 use Carp;
-use Capture::Tiny qw/capture/;
 use File::Share qw/ dist_file /;
 
 my $VERBOSE = 1;
@@ -21,21 +20,11 @@ sub run_cpanm {
 
   carp sprintf qq{$cpanm '%s'\n}, join( q{', '}, @cmd_opts ) if $DEBUG;
 
-  my ( $stdout, $stderr, $exit ) = capture {
-    system( $cpanm, @cmd_opts )
-  };
-
-  $stdout =~ s/^\d+ distributions? installed\n//m;
-
-  my $skip_stdout = exists $opts{-stdout} && ! defined $opts{-stdout};
-  my $skip_stderr = exists $opts{-stderr} && ! defined $opts{-stderr};
-
-  chomp( $stdout, $stderr );
-  printf "%s\n", $stdout if $VERBOSE and $stdout and not $skip_stdout;
-  printf STDERR "%s\n", $stderr if $stderr and not $skip_stderr;
-
+  my $exit = system( $cpanm, @cmd_opts );
   croak "cpanm @cmd_opts failed [$exit] : $?"
-    if $exit != 0 and $VERBOSE;
+    if $exit != 0 and $DEBUG;
+
+  exit $exit if $exit != 0;
 }
 
 
