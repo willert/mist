@@ -114,15 +114,16 @@ unless (caller) {
   my @prepend = ( @$PREPEND_DISTS );
   my @notest  = ( @$DONT_TEST_DISTS );
   my @prereqs = ( @$PREREQUISITE_DISTS );
+
   for my $module ( @prepend ) {
-    run_cpanm( @ARGV, $module );
+    run_cpanm( @CMD_OPTS, $module );
   }
   for my $module ( @notest ) {
-    run_cpanm( @ARGV, '--installdeps', $module );
-    run_cpanm( @ARGV, '--notest', $module );
+    run_cpanm( @CMD_OPTS, '--installdeps', $module );
+    run_cpanm( @CMD_OPTS, '--notest', $module );
   }
   for my $module ( @prereqs ) {
-    run_cpanm( @ARGV, $module );
+    run_cpanm( @CMD_OPTS, $module );
   }
 
   printf $env <<'MIST_ENV', $mist_home;

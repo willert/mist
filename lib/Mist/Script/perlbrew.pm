@@ -28,8 +28,13 @@ $tmp_base_dir = File::Spec->catdir(
 my $pb_root    = $ENV{PERLBREW_ROOT} || $PERLBREW_ROOT;
 my $pb_home    = File::Spec->catdir( $tmp_base_dir, 'perlbrew' );
 
+my $pb_version;
 my @CMD_ARGS = @INITIAL_ARGS;
-GetOptionsFromArray( \@CMD_ARGS, "perl=s" => \ my $pb_version );
+{
+  local $SIG{__WARN__} = sub{};
+  GetOptionsFromArray( \@CMD_ARGS, "perl=s" => \$pb_version );
+}
+
 $pb_version ||= $ENV{MIST_PERLBREW_VERSION};
 $pb_version ||= $PERLBREW_DEFAULT_VERSION;
 
