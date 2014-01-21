@@ -93,6 +93,12 @@ MSG
       exec $pb_exec, 'exec', '--quiet', '--with', $pb_version, $0, @CMD_ARGS;
     }
   }
+
+  # ensure cpanm is installed
+  print "Ensuring cpanm is installed in this environment\n";
+  my $cpanm_exit = system( "$pb_exec install-cpanm </dev/null >/dev/null" );
+  die "Installing cpanm failed (try running `perlbrew install-cpanm` as root)\n"
+    unless $cpanm_exit == 0;
 }
 
 # printf "Using perl version %s [%s]\n", $pb_version, get_archname();
