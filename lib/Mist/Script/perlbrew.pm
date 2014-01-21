@@ -122,6 +122,8 @@ if [ "x$MIST_PERLBREW_VERSION" == "x" ] ; then
   MIST_PERLBREW_VERSION=$PERLBREW_DEFAULT_VERSION
 fi
 
+perlbrew use "$MIST_PERLBREW_VERSION"
+
 function mist_exec {
    exec perlbrew exec --with "$MIST_PERLBREW_VERSION" --quiet "${@}"
 }
