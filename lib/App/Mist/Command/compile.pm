@@ -30,7 +30,7 @@ sub execute {
 
     my @prepend = $app->dist->get_prepended_modules;
     my @notest  = $app->dist->get_modules_not_to_test;
-    my @prereqs = $app->fetch_prereqs;
+    my @prereqs = sort $app->fetch_prereqs;
 
     my $perl_version = $self->app->perl_version;
 
