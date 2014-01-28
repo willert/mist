@@ -12,7 +12,7 @@ our @INITIAL_ARGS;
 BEGIN { @INITIAL_ARGS = @ARGV; }
 
 our $PERLBREW_ROOT;
-our $PERLBREW_DEFAULT_VERSION // die '$PERL5_DEFAULT_VERSION not set';
+our $PERLBREW_DEFAULT_VERSION || die '$PERL5_DEFAULT_VERSION not set';
 
 use FindBin ();
 use File::Spec ();

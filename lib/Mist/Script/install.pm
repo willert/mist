@@ -8,7 +8,7 @@ our @CMD_OPTS;
 
 BEGIN { @CMD_OPTS = @ARGV; @ARGV = () }
 
-our $MPAN_DIST_DIR      // die '$MPAN_DIST_DIR not set';
+our $MPAN_DIST_DIR || die '$MPAN_DIST_DIR not set';
 
 our $PERL5_BASE_LIB = 'perl5';
 our $LOCAL_LIB_DIR = File::Spec->catdir(
@@ -16,13 +16,13 @@ our $LOCAL_LIB_DIR = File::Spec->catdir(
   join( q{-}, 'perl', $Config{version}, $Config{archname} )
 );
 
-our $PREPEND_DISTS //= eval {[ DISTRIBUTION->distinfo->get_prepended_modules ]};
+our $PREPEND_DISTS ||= eval {[ DISTRIBUTION->distinfo->get_prepended_modules ]};
 die '$PREPEND_DISTS not set' . $@ unless $PREPEND_DISTS;
 
-our $DONT_TEST_DISTS //= eval {[ DISTRIBUTION->distinfo->get_modules_not_to_test ]};
+our $DONT_TEST_DISTS ||= eval {[ DISTRIBUTION->distinfo->get_modules_not_to_test ]};
 die '$DONT_TEST_DISTS not set' . $@ unless $DONT_TEST_DISTS;
 
-our $PREREQUISITE_DISTS // die '$PREREQUISITE_DISTS not set';
+our $PREREQUISITE_DISTS || die '$PREREQUISITE_DISTS not set';
 
 use App::cpanminus::script;
 use FindBin qw/$Bin/;

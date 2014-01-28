@@ -32,7 +32,7 @@ sub bind {
 sub as_code {
   my ( $self, %args ) = @_;
 
-  my $code = $args{ source } // do {
+  my $code = $args{ source } || do {
     local $/ = undef;
     my $file = $self->{file};
     defined $file ? do {
@@ -45,7 +45,7 @@ sub as_code {
   Carp::croak( "Nothing to parse" ) unless defined $code;
 
   my $package_name = $args{ package };
-  $package_name //= 'Mist::Environment::Sandbox' . $file_id++;
+  $package_name ||= 'Mist::Environment::Sandbox' . $file_id++;
 
   my $line_pos = $args{ package } ? '' :
     defined( $self->{file} ) ? qq{\n# line 1 "$self->{file}"\n} : '';
