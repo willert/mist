@@ -4,7 +4,6 @@ package                         # hide from CPAN
 # poor-mans pluggable objects: everything that handles perl versions
 # has to live in Mist::Script::perl
 
-use 5.010;
 use strict;
 use warnings;
 
