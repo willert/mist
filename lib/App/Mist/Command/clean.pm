@@ -35,7 +35,14 @@ sub execute {
 
   print "Scanning package details\n";
 
-  while ( my ( $pkg, $versions ) = each %{ $records->entries } ) {
+  my %entries = do {
+    local $SIG{__WARN__} = sub{
+      print STDERR "@_\n" unless $_[0] =~ m{ entries \s+ is \s+ deprecated }x;
+    };
+    %{ $records->entries };
+  };
+
+  while ( my ( $pkg, $versions ) = each %entries ) {
     for ( values %$versions ) {
       ( my $rel_path = $_->path ) =~ s{ ^ \. [/\\] }{}x;
       $dist_package{ $rel_path } = 1;
