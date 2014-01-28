@@ -269,7 +269,7 @@ MSG
   # system( @pb_call ) == 0 or die "`@pb_call` failed" unless $pb_installed;
 
 
-  if ( ( $ENV{PERLBREW_PERL} || '' ) ne $pb_version ) {
+  if ( ( $ENV{PERLBREW_PERL} || '' ) ne $pb_version or not $ENV{MIST_PERLBREW_VERSION}) {
 
     my $pb_cmd = qq{ $pb_exec exec --quiet --with '$pb_version' };
     my $pb_archname =  qx{ $pb_cmd perl -MConfig -E "say \\\$Config{archname}" };
