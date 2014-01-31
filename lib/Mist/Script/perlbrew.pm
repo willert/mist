@@ -15,8 +15,10 @@ our $PERLBREW_DEFAULT_VERSION || die '$PERL5_DEFAULT_VERSION not set';
 
 use FindBin ();
 use File::Spec ();
-use Getopt::Long qw/GetOptionsFromArray/;
+use Getopt::Long;
 use Config;
+
+my $run_quiet = 0;
 
 my $tmp_base_dir = File::Spec->catdir( $FindBin::Bin, 'tmp' );
 $tmp_base_dir = File::Spec->catdir(
@@ -29,9 +31,18 @@ my $pb_home    = File::Spec->catdir( $tmp_base_dir, 'perlbrew' );
 
 my $pb_version;
 my @CMD_ARGS = @INITIAL_ARGS;
+
 {
-  local $SIG{__WARN__} = sub{};
-  GetOptionsFromArray( \@CMD_ARGS, "perl=s" => \$pb_version );
+  local $SIG{__WARN__} = sub{}; # silence warnings from unknown options
+
+  if ( Getopt::Long->can( 'GetOptionsFromArray' ) ) {
+    Getopt::Long::GetOptionsFromArray( \@CMD_ARGS, "perl=s" => \$pb_version );
+  } else {
+    my @org_argv = @ARGV;
+    @ARGV = @CMD_ARGS;
+    Getopt::Long::GetOptions( "perl=s" => \$pb_version );
+    @ARGV = @org_argv;
+  }
 }
 
 $pb_version ||= $ENV{MIST_PERLBREW_VERSION};
@@ -80,6 +91,14 @@ MSG
   $pb_version = "perl-${pb_version}"
     if $pb_version and $pb_version =~ m/^[\d.]+$/;
 
+  my @pb_options = ( '--with', $pb_version );
+
+  # try running quietly
+  if ( system( $pb_exec, 'exec', '--quiet', @pb_options, 'true' ) == 0 ) {
+    push @pb_options, '--quiet';
+    $run_quiet = 1;
+  }
+
   if ( not $ENV{MIST_PERLBREW_VERSION} ) {
     if ( !$ENV{PERLBREW_PERL} or $ENV{PERLBREW_PERL} ne $pb_version ) {
       $ENV{PERLBREW_ROOT} = $pb_root;
@@ -89,7 +108,7 @@ MSG
       $ENV{MIST_PERLBREW_VERSION} = $pb_version;
 
       printf "Restarting $0 @CMD_ARGS under %s [%s]\n", $pb_version, $pb_archname;
-      exec $pb_exec, 'exec', '--quiet', '--with', $pb_version, $0, @CMD_ARGS;
+      exec $pb_exec, 'exec', @pb_options, $0, @CMD_ARGS;
     }
   }
 
@@ -105,7 +124,7 @@ MSG
 # print "Using temporary perlbrew home $pb_home\n";
 
 sub get_archname {
-  my $pb_cmd = qq{ $pb_exec exec --quiet --with '$pb_version' };
+  my $pb_cmd = qq{ $pb_exec exec } . ( $run_quiet ? '--quiet ' : '' ) . qq{--with '$pb_version' };
   my $pb_archname =  qx{ $pb_cmd perl -MConfig -E "say \\\$Config{archname}" };
   chomp $pb_archname;
   return $pb_archname;
@@ -133,16 +152,31 @@ if [ "x$MIST_PERLBREW_VERSION" == "x" ] ; then
 fi
 
 perlbrew use "$MIST_PERLBREW_VERSION"
+PERLBREW_RC
 
+  if ( $run_quiet ) {
+
+    print $env <<'PERLBREW_RC';
 function mist_exec {
    exec perlbrew exec --with "$MIST_PERLBREW_VERSION" --quiet "${@}"
 }
-
 function mist_run {
    perlbrew exec --with "$MIST_PERLBREW_VERSION" --quiet "${@}"
 }
-
 PERLBREW_RC
+
+  } else {
+
+    print $env <<'PERLBREW_RC';
+function mist_exec {
+   exec perlbrew exec --with "$MIST_PERLBREW_VERSION" "${@}"
+}
+function mist_run {
+   perlbrew exec --with "$MIST_PERLBREW_VERSION" "${@}"
+}
+PERLBREW_RC
+
+  }
 
 }
 
