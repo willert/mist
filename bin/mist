@@ -3,9 +3,5 @@
 use FindBin qw/$Bin/;
 use lib "$Bin/../lib";
 
-# MAC seems to cause problems if not pre-loaded here
-use MooseX::App::Cmd;
-use MooseX::App::Cmd::Command;
-
 use App::Mist;
 App::Mist->run;
