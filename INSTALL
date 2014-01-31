@@ -5,5 +5,5 @@ git checkout cpanm-1.7
 ./mpan-install
 ./mpan-install --perl 5.18.2 # or any other version you need supported
 
-cp ./perl5/bin/mist ~/bin # or anywhere else in your path
+cp ./perl5/script/mist ~/bin # or anywhere else in your path
 
