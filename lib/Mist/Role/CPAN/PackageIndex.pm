@@ -164,6 +164,12 @@ sub reindex_distributions {
     return $cont->();
   });
 
+  $self->cpan_dist_root->subdir(qw/ vendor /)->traverse( sub{
+      my ( $dist, $cont ) = @_;
+      $self->add_distribution_to_index( $dist, $index ) unless $dist->is_dir;
+      return $cont->();
+  }) if -d $self->cpan_dist_root->subdir(qw/ vendor /)->stringify;
+
   $self->write_index( $index );
 }
 
