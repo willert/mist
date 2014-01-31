@@ -44,6 +44,8 @@ sub execute {
     check_git;
     $project = Minilla::Project->new({ cleanup => 0 });
     {
+      # activating $Minilla::DEBUG seems to be the only way to
+      # avoid Minillas own workdir cleanup for now
       local $Minilla::DEBUG = 1;
       $work_dir = $project->work_dir;
     }
