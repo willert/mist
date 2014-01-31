@@ -16,6 +16,8 @@ requires 'Devel::CheckLib';
 requires 'Devel::CheckCompiler';
 requires 'Probe::Perl';
 
+requires 'Minilla' => '0.11.0';
+
 on 'configure' => sub {
   requires "ExtUtils::MakeMaker" => "6.30";
 };

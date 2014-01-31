@@ -21996,7 +21996,7 @@ sub bind {
 }
 sub as_code {
   my ( $self, %args ) = @_;
-  my $code = $args{ source } // do {
+  my $code = $args{ source } || do {
     local $/ = undef;
     my $file = $self->{file};
     defined $file ? do {
@@ -22007,7 +22007,7 @@ sub as_code {
   };
   Carp::croak( "Nothing to parse" ) unless defined $code;
   my $package_name = $args{ package };
-  $package_name //= 'Mist::Environment::Sandbox' . $file_id++;
+  $package_name ||= 'Mist::Environment::Sandbox' . $file_id++;
   my $line_pos = $args{ package } ? '' :
     defined( $self->{file} ) ? qq{\n# line 1 "$self->{file}"\n} : '';
   return <<"PERL";
@@ -22122,17 +22122,17 @@ package                         # hide from CPAN
   Mist::Script::perl;
 # poor-mans pluggable objects: everything that handles perl versions
 # has to live in Mist::Script::perl
-use 5.010;
 use strict;
 use warnings;
 our @INITIAL_ARGS;
 BEGIN { @INITIAL_ARGS = @ARGV; }
 our $PERLBREW_ROOT;
-our $PERLBREW_DEFAULT_VERSION // die '$PERL5_DEFAULT_VERSION not set';
+our $PERLBREW_DEFAULT_VERSION || die '$PERL5_DEFAULT_VERSION not set';
 use FindBin ();
 use File::Spec ();
-use Getopt::Long qw/GetOptionsFromArray/;
+use Getopt::Long; # qw/GetOptionsFromArray/;
 use Config;
+my $run_quiet = 0;
 my $tmp_base_dir = File::Spec->catdir( $FindBin::Bin, 'tmp' );
 $tmp_base_dir = File::Spec->catdir(
   File::Spec->tmpdir,
@@ -22140,13 +22140,15 @@ $tmp_base_dir = File::Spec->catdir(
 ) unless -d $tmp_base_dir and -w $tmp_base_dir;
 my $pb_root    = $ENV{PERLBREW_ROOT} || $PERLBREW_ROOT;
 my $pb_home    = File::Spec->catdir( $tmp_base_dir, 'perlbrew' );
+my $pb_version;
 my @CMD_ARGS = @INITIAL_ARGS;
-GetOptionsFromArray( \@CMD_ARGS, "perl=s" => \ my $pb_version );
+{
+  local $SIG{__WARN__} = sub{};
+  eval{ Getopt::Long::GetOptionsFromArray( \@CMD_ARGS, "perl=s" => \$pb_version ); };
+  warn "$@" if $@;
+}
 $pb_version ||= $ENV{MIST_PERLBREW_VERSION};
 $pb_version ||= $PERLBREW_DEFAULT_VERSION;
-print "Using perl version $pb_version\n";
-# print "Using perlbrew root $pb_root\n";
-# print "Using temporary perlbrew home $pb_home\n";
 my $pb_exec;
 if ( $pb_version ) {
   $pb_exec = qx{ which perlbrew } || "${pb_root}/bin/perlbrew";
@@ -22187,12 +22189,20 @@ MSG
       my $pb_archname = get_archname();
       $ENV{MIST_PERLBREW_VERSION} = $pb_version;
       printf "Restarting $0 @CMD_ARGS under %s [%s]\n", $pb_version, $pb_archname;
-      exec $pb_exec, 'exec', '--quiet', '--with', $pb_version, $0, @CMD_ARGS;
+      exec $pb_exec, 'exec', $run_quiet ? '--quiet' : (), '--with', $pb_version, $0, @CMD_ARGS;
     }
   }
+  # ensure cpanm is installed
+  print "Ensuring cpanm is installed in this environment\n";
+  my $cpanm_exit = system( "$pb_exec install-cpanm </dev/null >/dev/null" );
+  die "Installing cpanm failed (try running `perlbrew install-cpanm` as root)\n"
+    unless $cpanm_exit == 0;
 }
+# printf "Using perl version %s [%s]\n", $pb_version, get_archname();
+# print "Using perlbrew root $pb_root\n";
+# print "Using temporary perlbrew home $pb_home\n";
 sub get_archname {
-  my $pb_cmd = qq{ $pb_exec exec --quiet --with '$pb_version' };
+  my $pb_cmd = qq{ $pb_exec exec } . ( $run_quiet ? '--quiet' : '' ) . qq{--with '$pb_version' };
   my $pb_archname =  qx{ $pb_cmd perl -MConfig -E "say \\\$Config{archname}" };
   chomp $pb_archname;
   return $pb_archname;
@@ -22211,8 +22221,27 @@ source "$PERLBREW_ROOT/etc/bashrc"
 if [ "x$MIST_PERLBREW_VERSION" == "x" ] ; then
   MIST_PERLBREW_VERSION=$PERLBREW_DEFAULT_VERSION
 fi
-perlbrew use $MIST_PERLBREW_VERSION
+perlbrew use "$MIST_PERLBREW_VERSION"
 PERLBREW_RC
+  if ( $run_quiet ) {
+    print $env <<'PERLBREW_RC';
+function mist_exec {
+   exec perlbrew exec --with "$MIST_PERLBREW_VERSION" --quiet "${@}"
+}
+function mist_run {
+   perlbrew exec --with "$MIST_PERLBREW_VERSION" --quiet "${@}"
+}
+PERLBREW_RC
+  } else {
+    print $env <<'PERLBREW_RC';
+function mist_exec {
+   exec perlbrew exec --with "$MIST_PERLBREW_VERSION" "${@}"
+}
+function mist_run {
+   perlbrew exec --with "$MIST_PERLBREW_VERSION" "${@}"
+}
+PERLBREW_RC
+  }
 }
 1;
 ; BEGIN {$PERLBREW_ROOT = '/opt/perl5';
@@ -22226,17 +22255,17 @@ use warnings;
 use Config;
 our @CMD_OPTS;
 BEGIN { @CMD_OPTS = @ARGV; @ARGV = () }
-our $MPAN_DIST_DIR      // die '$MPAN_DIST_DIR not set';
+our $MPAN_DIST_DIR || die '$MPAN_DIST_DIR not set';
 our $PERL5_BASE_LIB = 'perl5';
 our $LOCAL_LIB_DIR = File::Spec->catdir(
   $PERL5_BASE_LIB,
   join( q{-}, 'perl', $Config{version}, $Config{archname} )
 );
-our $PREPEND_DISTS //= eval {[ DISTRIBUTION->distinfo->get_prepended_modules ]};
+our $PREPEND_DISTS ||= eval {[ DISTRIBUTION->distinfo->get_prepended_modules ]};
 die '$PREPEND_DISTS not set' . $@ unless $PREPEND_DISTS;
-our $DONT_TEST_DISTS //= eval {[ DISTRIBUTION->distinfo->get_modules_not_to_test ]};
+our $DONT_TEST_DISTS ||= eval {[ DISTRIBUTION->distinfo->get_modules_not_to_test ]};
 die '$DONT_TEST_DISTS not set' . $@ unless $DONT_TEST_DISTS;
-our $PREREQUISITE_DISTS // die '$PREREQUISITE_DISTS not set';
+our $PREREQUISITE_DISTS || die '$PREREQUISITE_DISTS not set';
 use App::cpanminus::script;
 use FindBin qw/$Bin/;
 use File::Temp qw/tempdir/;
@@ -22308,14 +22337,14 @@ unless (caller) {
   my @notest  = ( @$DONT_TEST_DISTS );
   my @prereqs = ( @$PREREQUISITE_DISTS );
   for my $module ( @prepend ) {
-    run_cpanm( @ARGV, $module );
+    run_cpanm( $module );
   }
   for my $module ( @notest ) {
-    run_cpanm( @ARGV, '--installdeps', $module );
-    run_cpanm( @ARGV, '--notest', $module );
+    run_cpanm( '--installdeps', $module );
+    run_cpanm( '--notest', $module );
   }
   for my $module ( @prereqs ) {
-    run_cpanm( @ARGV, $module );
+    run_cpanm( $module );
   }
   printf $env <<'MIST_ENV', $mist_home;
 # This file is automatically generated by ./mpan-install
@@ -22340,12 +22369,20 @@ if [ ! -r $MIST_ENV ] ; then
     echo "FATAL: Could not load env from $MIST_ENV"
     exit 1
 fi
+# may be overwritten by mist env script
+function mist_exec {
+   exec "${@}"
+}
+function mist_run {
+   eval "${@}"
+}
 source $MIST_ENV
-LOCAL_LIB="$MIST_ROOT/"`env perl -MConfig -e 'print join( q{-}, "perl", $Config{version}, $Config{archname})'`
+VERSION_ARCH_PATH=`mist_run perl -MConfig -e 'print join( q{-}, "perl", $Config{version}, $Config{archname})'`
+LOCAL_LIB="$MIST_ROOT/$VERSION_ARCH_PATH"
 export PATH="$LOCAL_LIB/bin:$LOCAL_LIB/sbin:$PATH"
 export PATH="$MIST_ROOT/bin:$MIST_ROOT/sbin:$MIST_ROOT/script:$PATH"
 export PERL5LIB="$MIST_ROOT/lib:$PERL5LIB"
-exec "$@"
+mist_exec "${@}"
 WRAPPER
   for my $script_dir (qw/ bin sbin script /) {
     my $loc_script_dir = File::Spec->catdir( $perl5_baselib, $script_dir );
@@ -22392,23 +22429,24 @@ SUCCESS
 ; BEGIN {$MPAN_DIST_DIR = 'mpan-dist';
 ;
 $PREREQUISITE_DISTS = [
-                        'MooseX::App::Cmd',
-                        'File::HomeDir',
-                        'Module::Path',
                         'App::cpanminus~1.7',
                         'CPAN::PackageDetails',
-                        'File::Share',
-                        'Module::CPANfile~1.0002',
-                        'File::Find::Upwards',
-                        'Probe::Perl',
+                        'CPAN::ParseDistribution',
                         'Devel::CheckBin',
+                        'Devel::CheckCompiler',
                         'Devel::CheckLib',
                         'Digest::MD5',
-                        'Devel::CheckCompiler',
-                        'Path::Class',
-                        'CPAN::ParseDistribution',
+                        'File::Find::Upwards',
+                        'File::HomeDir',
+                        'File::Share',
                         'List::MoreUtils',
-                        'Moose'
+                        'Minilla~v0.11.0',
+                        'Module::CPANfile~1.0002',
+                        'Module::Path',
+                        'Moose',
+                        'MooseX::App::Cmd',
+                        'Path::Class',
+                        'Probe::Perl'
                       ];
 ;
 };};
