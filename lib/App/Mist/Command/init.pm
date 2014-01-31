@@ -27,7 +27,8 @@ sub execute {
     } ( @prepend, @notest );
   } $ctx->fetch_prereqs;
 
-  my $do = sub{ $ctx->execute_command( $ctx->prepare_command( @_ )) };
+  my $app = $self->app;
+  my $do  = sub{ $app->execute_command( $app->prepare_command( @_ )) };
 
   $do->( 'inject',             @$args, @prepend ) if @prepend;
   $do->( 'inject', '--notest', @$args, @notest  ) if @notest;
