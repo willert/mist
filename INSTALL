@@ -1,6 +1,5 @@
 git clone git://github.com/willert/mist.git
 cd mist
-git checkout cpanm-1.7
 
 ./mpan-install
 ./mpan-install --perl 5.18.2 # or any other version you need supported
