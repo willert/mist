@@ -3,8 +3,6 @@ use 5.014;
 use utf8;
 
 use Moose;
-use namespace::clean -except => 'meta';
-
 use Moose::Util::TypeConstraints ();
 use Path::Class ();
 
