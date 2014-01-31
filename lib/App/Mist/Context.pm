@@ -3,7 +3,6 @@ use 5.014;
 use utf8;
 
 use Moose;
-use namespace::autoclean;
 
 use Carp;
 use Config;

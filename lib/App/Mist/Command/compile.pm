@@ -1,8 +1,7 @@
 package App::Mist::Command::compile;
-use 5.014;
+use 5.010;
 
-use Moose;
-extends 'MooseX::App::Cmd::Command';
+use App::Mist -command;
 
 use App::Mist::Utils qw/ append_module_source append_text_file /;
 use Module::Path qw/ module_path /;

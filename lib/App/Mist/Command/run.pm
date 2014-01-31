@@ -1,8 +1,7 @@
 package App::Mist::Command::run;
-use 5.014;
+use 5.010;
 
-use Moose;
-extends 'MooseX::App::Cmd::Command';
+use App::Mist -command;
 
 sub execute {
   my ( $self, $opt, $args ) = @_;
@@ -14,3 +13,5 @@ sub execute {
 
   exec $runner, @$args;
 }
+
+1;

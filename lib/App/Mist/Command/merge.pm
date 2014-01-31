@@ -1,8 +1,7 @@
 package App::Mist::Command::merge;
 use 5.010;
 
-use Moose;
-extends 'MooseX::App::Cmd::Command';
+use App::Mist -command;
 
 use Path::Class qw/ dir file /;
 use File::Spec::Functions qw/ catfile /;

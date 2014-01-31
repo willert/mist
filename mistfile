@@ -7,9 +7,9 @@ assert {
 
 prepend 'List::Util' => '1.33';
 prepend 'Module::Pluggable::Object' => '5.1';
-
 prepend 'Params::Validate';
-prepend 'MooseX::Getopt';
+
+prepend 'Test::Tester' => '0.107';
 
 # skip testing for those distributions
 notest 'Term::ReadKey';

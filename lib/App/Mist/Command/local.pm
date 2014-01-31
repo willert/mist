@@ -1,8 +1,7 @@
 package App::Mist::Command::local;
 use 5.010;
 
-use Moose;
-extends 'MooseX::App::Cmd::Command';
+use App::Mist -command;
 
 use Mist::Role::cpanminus;
 use Mist::PackageManager::MPAN;

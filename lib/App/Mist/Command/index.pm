@@ -1,14 +1,9 @@
 package App::Mist::Command::index;
-use 5.014;
+use 5.010;
 
-use Moose;
-extends 'MooseX::App::Cmd::Command';
+use App::Mist -command;
 
 use Mist::CPAN::PackageIndex;
-
-sub use_cpan_dist_root {
-  my $self = shift;
-}
 
 use CPAN::ParseDistribution;
 use CPAN::DistnameInfo;

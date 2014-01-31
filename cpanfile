@@ -1,5 +1,4 @@
-requires "MooseX::App::Cmd";
-requires "App::cpanminus" => "1.7";
+requires "App::Cmd";
 requires "CPAN::PackageDetails";
 requires "CPAN::ParseDistribution";
 requires "Digest::MD5";
@@ -16,6 +15,7 @@ requires 'Devel::CheckLib';
 requires 'Devel::CheckCompiler';
 requires 'Probe::Perl';
 
+requires "App::cpanminus" => "1.7";
 requires 'Minilla' => '0.11.0';
 
 on 'configure' => sub {
