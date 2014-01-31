@@ -11,7 +11,7 @@ my $VERBOSE = 1;
 my $DEBUG   = 0;
 
 sub run_cpanm {
-  my ( $self, @cmd_opts ) = @_;
+  my ( $this, @cmd_opts ) = @_;
 
   my %opts;
   %opts = %{ shift @cmd_opts } if ref $cmd_opts[0] eq 'HASH';

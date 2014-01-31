@@ -1,10 +1,10 @@
 package App::Mist::Command::local;
-use 5.014;
+use 5.010;
 
 use Moose;
 extends 'MooseX::App::Cmd::Command';
-with 'Mist::Role::cpanminus';
 
+use Mist::Role::cpanminus;
 use Mist::PackageManager::MPAN;
 
 sub execute {
@@ -27,9 +27,7 @@ sub execute {
   my @modules  = grep{ !/^-/ } @$args;
   my @cmd_args = grep{ /^-/ } @$args;
 
-  for my $module ( @modules ) {
-    $self->run_cpanm( @cpanm_options, @cmd_args, $module );
-  }
+  Mist::Role::cpanminus->run_cpanm( @cpanm_options, @cmd_args, @modules );
 }
 
 1;
