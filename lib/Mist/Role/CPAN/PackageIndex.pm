@@ -26,13 +26,7 @@ use File::Temp ();
 my $VERBOSE = 0;
 my $DEBUG = 0;
 
-requires 'use_cpan_dist_root';
-
-has cpan_dist_root => (
-  is      => 'ro',
-  lazy    => 1,
-  builder => 'use_cpan_dist_root',
-);
+requires 'cpan_dist_root';
 
 has cpan_index_file => (
   is         => 'ro',

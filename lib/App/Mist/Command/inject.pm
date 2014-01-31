@@ -8,16 +8,17 @@ use Mist::PackageManager::MPAN;
 
 sub execute {
   my ( $self, $opt, $args ) = @_;
+  my $ctx = $self->app->ctx;
 
   die "$0: No module to install"
     unless $args and ref $args eq 'ARRAY' and @$args;
 
-  $self->app->ensure_correct_perlbrew_context;
+  $ctx->ensure_correct_perlbrew_context;
 
   my $package_manager = Mist::PackageManager::MPAN->new({
-    project_root => $self->app->project_root,
-    local_lib    => $self->app->local_lib,
-    workspace    => $self->app->workspace_lib,
+    project_root => $ctx->project_root,
+    local_lib    => $ctx->local_lib,
+    workspace    => $ctx->workspace_lib,
   });
 
   $package_manager->begin_work;

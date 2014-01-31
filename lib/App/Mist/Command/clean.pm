@@ -18,12 +18,14 @@ use Data::Dumper;
 sub execute {
   my ( $self, $opt, $args ) = @_;
 
-  my $home      = $self->app->project_root;
-  my $mpan      = $self->app->mpan_dist;
-  my $local_lib = $self->app->local_lib;
+  my $ctx       = $self->app->ctx;
+  my $home      = $ctx->project_root;
+  my $mpan      = $ctx->mpan_dist;
+  my $local_lib = $ctx->local_lib;
 
   my $mpan_modules = $mpan->subdir( 'modules' );
   my $mpan_authors = $mpan->subdir( 'authors' );
+  my $mpan_vendor  = $mpan->subdir( 'vendor'  );
 
   my $package_details = CPAN::PackageDetails->read(
     $mpan_modules->file( '02packages.details.txt.gz' )->stringify
@@ -52,17 +54,30 @@ sub execute {
   my $rm_count = 0;
 
   chdir $mpan->stringify;
-  find({ wanted => sub{
+
+  my $files_to_clean = sub{
     return unless -f $_;
-    my $from = dir( cwd() )->subdir( 'authors', 'id', '__PLACEHOLDER__' );
+
+    my $cwd = dir( cwd() );
+    my $authors = $cwd->subdir( 'authors', 'id' );
+
+    my $from = $authors->subdir( '__PLACEHOLDER__' );
     $from =~ s/__PLACEHOLDER__//;
     ( my $path = $_ ) =~ s|${from}||;
-    if ( not $dist_package{ $path } ) {
-      printf "Removing %s ...\n", $path;
+
+    my $vendor_path = file( $_ )->relative( $authors );
+
+    if ( not $dist_package{ $path } and not $dist_package{ $vendor_path } ) {
+      printf "Removing %s ...\n", file( $path )->basename;
       unlink $_;
       $rm_count += 1;
     }
-  }, no_chdir => 1 }, $mpan_authors->stringify );
+  };
+
+  find({ wanted => $files_to_clean, no_chdir => 1 }, $mpan_authors->stringify );
+
+  find({ wanted => $files_to_clean, no_chdir => 1 }, $mpan_vendor->stringify )
+    if -d $mpan_vendor->stringify;
 
   print "No stale distributions found\n"
     unless $rm_count;

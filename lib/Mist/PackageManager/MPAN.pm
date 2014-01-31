@@ -40,8 +40,6 @@ sub _build_mpan_dist   {
   return $dist_dir;
 }
 
-sub use_cpan_dist_root { my $self = shift; $self->mpan_dist }
-
 sub begin_work {
   my $self = shift;
   $self->clear_distribution_index;
@@ -101,6 +99,8 @@ sub commit {
 }
 
 # -- internals ---------------------------------------------------------------
+
+sub cpan_dist_root { my $self = shift; $self->mpan_dist }
 
 {
   my $package_file;

@@ -3,9 +3,12 @@ use 5.014;
 
 use Moose;
 extends 'MooseX::App::Cmd::Command';
-with 'Mist::Role::CPAN::PackageIndex';
 
-sub use_cpan_dist_root { my $self = shift; $self->app->project_root->subdir('mpan-dist') }
+use Mist::CPAN::PackageIndex;
+
+sub use_cpan_dist_root {
+  my $self = shift;
+}
 
 use CPAN::ParseDistribution;
 use CPAN::DistnameInfo;
@@ -18,7 +21,11 @@ use version 0.74;
 
 sub execute {
   my ( $self, $opt, $args ) = @_;
-  $self->reindex_distributions;
+  my $ctx  = $self->app->ctx;
+  my $mpan = Mist::CPAN::PackageIndex->new({
+    cpan_dist_root => $ctx->project_root->subdir('mpan-dist')
+  });
+  $mpan->reindex_distributions;
 }
 
 1;

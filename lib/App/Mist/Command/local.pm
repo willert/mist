@@ -9,15 +9,16 @@ use Mist::PackageManager::MPAN;
 
 sub execute {
   my ( $self, $opt, $args ) = @_;
+  my $ctx = $self->app->ctx;
 
   die "$0: No module to install"
     unless $args and ref $args eq 'ARRAY' and @$args;
 
-  $self->app->ensure_correct_perlbrew_context;
+  $ctx->ensure_correct_perlbrew_context;
 
   my @cpanm_options = (
     '--quiet',
-    '--local-lib-contained' => $self->app->local_lib,
+    '--local-lib-contained' => $ctx->local_lib,
     '--mirror-only',
     # use cpan for the requested package
     '--mirror' => 'http://search.cpan.org/CPAN',

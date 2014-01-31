@@ -12,11 +12,12 @@ use Cwd;
 
 sub execute {
   my ( $self, $opt, $args ) = @_;
-  my $app = $self->app;
-  $app->ensure_correct_perlbrew_context;
 
-  my @prepend = $app->dist->get_prepended_modules;
-  my @notest  = $app->dist->get_modules_not_to_test;
+  my $ctx  = $self->app->ctx;
+  $ctx->ensure_correct_perlbrew_context;
+
+  my @prepend = $ctx->dist->get_prepended_modules;
+  my @notest  = $ctx->dist->get_modules_not_to_test;
 
   my @prereqs = grep{
     my $this = $_;
@@ -24,9 +25,9 @@ sub execute {
     ! grep{
       $this =~ m/^${_}(?:~.*)$/ and $_ = $this # pick up version string
     } ( @prepend, @notest );
-  } $app->fetch_prereqs;
+  } $ctx->fetch_prereqs;
 
-  my $do = sub{ $app->execute_command( $app->prepare_command( @_ )) };
+  my $do = sub{ $ctx->execute_command( $ctx->prepare_command( @_ )) };
 
   $do->( 'inject',             @$args, @prepend ) if @prepend;
   $do->( 'inject', '--notest', @$args, @notest  ) if @notest;

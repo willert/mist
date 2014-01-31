@@ -18,9 +18,9 @@ use App::cpanminus::fatscript;
 sub execute {
   my ( $self, $opt, $args ) = @_;
 
-  my $app       = $self->app;
-  my $home      = $app->project_root;
-  my $mpan      = $app->mpan_dist;
+  my $ctx  = $self->app->ctx;
+  my $home = $ctx->project_root;
+  my $mpan = $ctx->mpan_dist;
 
   chdir $home->stringify;
 
@@ -28,11 +28,11 @@ sub execute {
 
     my $assert  = "\n# TODO: assertions not yet implemented\n";
 
-    my @prepend = $app->dist->get_prepended_modules;
-    my @notest  = $app->dist->get_modules_not_to_test;
-    my @prereqs = sort $app->fetch_prereqs;
+    my @prepend = $ctx->dist->get_prepended_modules;
+    my @notest  = $ctx->dist->get_modules_not_to_test;
+    my @prereqs = sort $ctx->fetch_prereqs;
 
-    my $perl_version = $self->app->perl_version;
+    my $perl_version = $ctx->perl_version;
 
     print "Generating mpan-install\n";
 
@@ -52,7 +52,7 @@ sub execute {
     append_module_source( 'Mist::Distribution' => $out );
     append_module_source( 'Mist::Environment'  => $out );
 
-    print $out $app->mist_environment->as_code( package => 'DISTRIBUTION' );
+    print $out $ctx->mist_environment->as_code( package => 'DISTRIBUTION' );
 
     append_text_file(
       dist_file( 'App-Mist', 'cmd-wrapper.bash' ) => $out,
@@ -62,7 +62,7 @@ sub execute {
     # has to be included before Mist::Script::install so it has unfettered
     # access to @ARGV
     append_module_source('Mist::Script::perlbrew' => $out, VARS => [
-      PERLBREW_ROOT            => $self->app->perlbrew_root,
+      PERLBREW_ROOT            => $ctx->perlbrew_root,
       PERLBREW_DEFAULT_VERSION => $perl_version,
     ]);
 
