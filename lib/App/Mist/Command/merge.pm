@@ -51,6 +51,10 @@ sub execute {
       $work_dir = $project->work_dir;
     }
     $dist = $work_dir->dist();
+  } catch {
+    /Minilla::Error::CommandExit/ and return;
+    printf STDERR "%s\n", $_;
+    exit 1;
   } finally {
     chdir "$current_pwd";
   };
