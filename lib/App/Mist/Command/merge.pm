@@ -9,6 +9,8 @@ use File::Basename qw/ basename /;
 use File::Copy qw/ copy /;
 use File::Path ();
 
+use Mist::PackageManager::MPAN;
+
 use Minilla::Project;
 use Minilla::Util qw/ check_git /;
 
@@ -57,9 +59,17 @@ sub execute {
 
   printf "Injecting distribution %s", $dist;
 
-  my $app = $self->app;
-  my $do  = sub{ $app->execute_command( $app->prepare_command( @_ )) };
-  $do->( 'inject', @$args, $dist ) if $dist;
+  my $package_manager = Mist::PackageManager::MPAN->new({
+    project_root => $ctx->project_root,
+    local_lib    => $ctx->local_lib,
+    workspace    => $ctx->workspace_lib,
+  });
+
+  $package_manager->begin_work;
+
+  $package_manager->install( @$args, $dist );
+
+  $package_manager->commit;
 
   printf "Removing %s\n", $work_dir->as_string;
   File::Path::rmtree( $work_dir->as_string );
