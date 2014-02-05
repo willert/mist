@@ -55,6 +55,19 @@ sub begin_work {
   });
 }
 
+around _build_mirror_list => sub {
+  my ( $orig, $self, @args ) = @_;
+  return [
+    sprintf( 'file://%s/', $self->mpan_dist ),
+    @{ $self->$orig( @args ) }
+  ];
+};
+
+sub cpanm_mirror_options {
+  my $self = shift;
+  return ( map {( '--mirror' => $_ )} $self->mirror_list );
+}
+
 sub install {
   my ( $self, @cmd_args ) = @_;
 
@@ -65,8 +78,9 @@ sub install {
     '--quiet',
     '--local-lib-contained' => $self->local_lib,
     '--save-dists'          => $self->mpan_dist,
-    '--mirror'              => 'file://' . $self->mpan_dist . '/',
-    '--mirror'              => 'http://www.cpan.org/',
+
+    $self->cpanm_mirror_options,
+
     '--mirror-only',
     '--cascade-search'
   );

@@ -35,7 +35,7 @@ sub execute {
   die "$0: ${path} is not Minilla distribution\n"
     unless -d q{}. $path and -f -r q{}. $path->file('cpanfile');
 
-  printf "Merging Minilla distribution from %s", $path;
+  printf "Merging Minilla distribution from %s\n\n", $path;
 
   my $current_pwd = dir( getcwd());
 
@@ -44,24 +44,18 @@ sub execute {
     chdir( "$path" );
     check_git;
     $project = Minilla::Project->new({ cleanup => 0 });
-    {
-      # activating $Minilla::DEBUG seems to be the only way to
-      # avoid Minillas own workdir cleanup for now
-      local $Minilla::DEBUG = 1;
-      $work_dir = $project->work_dir;
-    }
+    $work_dir = $project->work_dir;
     $dist = $work_dir->dist();
   } catch {
     /Minilla::Error::CommandExit/ and return;
     printf STDERR "%s\n", $_;
-    exit 1;
   } finally {
     chdir "$current_pwd";
   };
 
-  return unless $dist;
+  exit 1 unless $dist;
 
-  printf "Injecting distribution %s", $dist;
+  printf "Injecting distribution %s\n", $dist;
 
   my $package_manager = Mist::PackageManager::MPAN->new({
     project_root => $ctx->project_root,
@@ -69,14 +63,15 @@ sub execute {
     workspace    => $ctx->workspace_lib,
   });
 
+  $package_manager->add_mirror(
+    sprintf( 'file://%s/', $path->subdir( 'mpan-dist' ))
+  ) if -d -r $path->subdir( 'mpan-dist' )->stringify;
+
   $package_manager->begin_work;
 
   $package_manager->install( @$args, $dist );
 
   $package_manager->commit;
-
-  printf "Removing %s\n", $work_dir->as_string;
-  File::Path::rmtree( $work_dir->as_string );
 }
 
 1;

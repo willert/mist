@@ -1,0 +1,9 @@
+Revision history for this perl module 
+
+{{$NEXT}}
+
+0.20 2014-02-05T14:30:37Z
+
+  - Merging a Minilla and Mist managed source directory now also uses
+	  the MPAN distributions from the other dist
+

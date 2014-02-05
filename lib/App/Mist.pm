@@ -15,5 +15,12 @@ sub ctx {
   $self->{ctx} //= App::Mist::Context->new;
 }
 
-
 1;
+
+__END__
+
+=head1 AUTHORS
+
+Sebastian Willert <s.willert@wecare.de>
+
+=cut

@@ -18,7 +18,7 @@ my %fatpacked;
 
 $fatpacked{"App/cpanminus.pm"} = <<'APP_CPANMINUS';
   package App::cpanminus;
-  our $VERSION = "1.5017";
+  our $VERSION = "0.20";
   
   =head1 NAME
   
@@ -326,7 +326,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
   use constant WIN32 => $^O eq 'MSWin32';
   use constant SUNOS => $^O eq 'solaris';
   
-  our $VERSION = "1.5017";
+  our $VERSION = "0.20";
   
   my $quote = WIN32 ? q/"/ : q/'/;
   
@@ -2345,7 +2345,7 @@ $fatpacked{"CPAN/DistnameInfo.pm"} = <<'CPAN_DISTNAMEINFO';
   
   package CPAN::DistnameInfo;
   
-  $VERSION = "0.11";
+  $VERSION = "0.20";
   use strict;
   
   sub distname_info {
@@ -2454,7 +2454,7 @@ $fatpacked{"CPAN/Meta.pm"} = <<'CPAN_META';
   use warnings;
   package CPAN::Meta;
   BEGIN {
-    $CPAN::Meta::VERSION = '2.110930';
+    $CPAN::Meta::VERSION = '0.20';
   }
   # ABSTRACT: the distribution metadata for a CPAN dist
   
@@ -2808,7 +2808,7 @@ $fatpacked{"CPAN/Meta/Converter.pm"} = <<'CPAN_META_CONVERTER';
   use warnings;
   package CPAN::Meta::Converter;
   BEGIN {
-    $CPAN::Meta::Converter::VERSION = '2.110930';
+    $CPAN::Meta::Converter::VERSION = '0.20';
   }
   # ABSTRACT: Convert CPAN distribution metadata structures
   
@@ -4062,7 +4062,7 @@ $fatpacked{"CPAN/Meta/Feature.pm"} = <<'CPAN_META_FEATURE';
   use warnings;
   package CPAN::Meta::Feature;
   BEGIN {
-    $CPAN::Meta::Feature::VERSION = '2.110930';
+    $CPAN::Meta::Feature::VERSION = '0.20';
   }
   # ABSTRACT: an optional feature provided by a CPAN distribution
   
@@ -4108,7 +4108,7 @@ $fatpacked{"CPAN/Meta/History.pm"} = <<'CPAN_META_HISTORY';
   use warnings;
   package CPAN::Meta::History;
   BEGIN {
-    $CPAN::Meta::History::VERSION = '2.110930';
+    $CPAN::Meta::History::VERSION = '0.20';
   }
   # ABSTRACT: history of CPAN Meta Spec changes
   1;
@@ -4126,7 +4126,7 @@ $fatpacked{"CPAN/Meta/Prereqs.pm"} = <<'CPAN_META_PREREQS';
   use warnings;
   package CPAN::Meta::Prereqs;
   BEGIN {
-    $CPAN::Meta::Prereqs::VERSION = '2.110930';
+    $CPAN::Meta::Prereqs::VERSION = '0.20';
   }
   # ABSTRACT: a set of distribution prerequisites by phase and type
   
@@ -4279,7 +4279,7 @@ $fatpacked{"CPAN/Meta/Spec.pm"} = <<'CPAN_META_SPEC';
   use warnings;
   package CPAN::Meta::Spec;
   BEGIN {
-    $CPAN::Meta::Spec::VERSION = '2.110930';
+    $CPAN::Meta::Spec::VERSION = '0.20';
   }
   # ABSTRACT: specification for CPAN distribution metadata
   1;
@@ -4297,7 +4297,7 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = <<'CPAN_META_VALIDATOR';
   use warnings;
   package CPAN::Meta::Validator;
   BEGIN {
-    $CPAN::Meta::Validator::VERSION = '2.110930';
+    $CPAN::Meta::Validator::VERSION = '0.20';
   }
   # ABSTRACT: validate CPAN distribution metadata structures
   
@@ -5135,7 +5135,7 @@ CPAN_META_VALIDATOR
 $fatpacked{"CPAN/Meta/YAML.pm"} = <<'CPAN_META_YAML';
   package CPAN::Meta::YAML;
   BEGIN {
-    $CPAN::Meta::YAML::VERSION = '0.003';
+    $CPAN::Meta::YAML::VERSION = '0.20';
   }
   
   use strict;
@@ -5792,7 +5792,7 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
   #
   package HTTP::Tiny;
   BEGIN {
-    $HTTP::Tiny::VERSION = '0.009';
+    $HTTP::Tiny::VERSION = '0.20';
   }
   use strict;
   use warnings;
@@ -6552,7 +6552,7 @@ $fatpacked{"JSON/PP.pm"} = <<'JSON_PP';
   use B ();
   #use Devel::Peek;
   
-  $JSON::PP::VERSION = '2.27200';
+  $JSON::PP::VERSION = '0.20';
   
   @JSON::PP::EXPORT = qw(encode_json decode_json from_json to_json);
   
@@ -7966,7 +7966,7 @@ $fatpacked{"JSON/PP.pm"} = <<'JSON_PP';
   use constant INCR_M_C0   => 4;
   use constant INCR_M_C1   => 5;
   
-  $JSON::PP::IncrParser::VERSION = '1.01';
+  $JSON::PP::IncrParser::VERSION = '0.20';
   
   my $unpack_format = $] < 5.006 ? 'C*' : 'U*';
   
@@ -8156,7 +8156,7 @@ $fatpacked{"Module/CPANfile.pm"} = <<'MODULE_CPANFILE';
   use warnings;
   use Cwd;
   
-  our $VERSION = '0.9007';
+  our $VERSION = '0.20';
   
   sub new {
       my($class, $file) = @_;
@@ -8353,7 +8353,7 @@ $fatpacked{"Module/Metadata.pm"} = <<'MODULE_METADATA';
   
   use strict;
   use vars qw($VERSION);
-  $VERSION = '1.000007';
+  $VERSION = '0.20';
   $VERSION = eval $VERSION;
   
   use File::Spec;
@@ -9025,7 +9025,7 @@ $fatpacked{"Parse/CPAN/Meta.pm"} = <<'PARSE_CPAN_META';
   	# Class structure
   	require 5.004;
   	require Exporter;
-  	$Parse::CPAN::Meta::VERSION   = '1.4401';
+  	$Parse::CPAN::Meta::VERSION   = '0.20';
   	@Parse::CPAN::Meta::ISA       = qw{ Exporter      };
   	@Parse::CPAN::Meta::EXPORT_OK = qw{ Load LoadFile };
   }
@@ -9146,7 +9146,7 @@ $fatpacked{"Try/Tiny.pm"} = <<'TRY_TINY';
   	@ISA = qw(Exporter);
   }
   
-  $VERSION = "0.09";
+  $VERSION = "0.20";
   
   $VERSION = eval $VERSION;
   
@@ -9316,7 +9316,7 @@ $fatpacked{"local/lib.pm"} = <<'LOCAL_LIB';
   use Carp ();
   use Config;
   
-  our $VERSION = '1.008001'; # 1.8.1
+  our $VERSION = '0.20'; # 1.8.1
   
   our @KNOWN_FLAGS = qw(--self-contained);
   
@@ -9610,7 +9610,7 @@ $fatpacked{"parent.pm"} = <<'PARENT';
   package parent;
   use strict;
   use vars qw($VERSION);
-  $VERSION = '0.225';
+  $VERSION = '0.20';
   
   sub import {
       my $class = shift;
@@ -9651,7 +9651,7 @@ $fatpacked{"version.pm"} = <<'VERSION';
   
   use vars qw(@ISA $VERSION $CLASS $STRICT $LAX *declare *qv);
   
-  $VERSION = 0.88;
+  $VERSION = 0.20;
   
   $CLASS = 'version';
   
@@ -9863,7 +9863,7 @@ $fatpacked{"Version/Requirements.pm"} = <<'VERSION_REQUIREMENTS';
   use warnings;
   package Version::Requirements;
   BEGIN {
-    $Version::Requirements::VERSION = '0.101020';
+    $Version::Requirements::VERSION = '0.20';
   }
   # ABSTRACT: a set of version requirements for a CPAN dist
   
@@ -10046,7 +10046,7 @@ $fatpacked{"Version/Requirements.pm"} = <<'VERSION_REQUIREMENTS';
     package
       Version::Requirements::_Range::Exact;
   BEGIN {
-    $Version::Requirements::_Range::Exact::VERSION = '0.101020';
+    $Version::Requirements::_Range::Exact::VERSION = '0.20';
   }
     sub _new     { bless { version => $_[1] } => $_[0] }
   
@@ -10093,7 +10093,7 @@ $fatpacked{"Version/Requirements.pm"} = <<'VERSION_REQUIREMENTS';
     package
       Version::Requirements::_Range::Range;
   BEGIN {
-    $Version::Requirements::_Range::Range::VERSION = '0.101020';
+    $Version::Requirements::_Range::Range::VERSION = '0.20';
   }
   
     sub _self { ref($_[0]) ? $_[0] : (bless { } => $_[0]) }
@@ -10373,7 +10373,7 @@ $fatpacked{"version/vpp.pm"} = <<'VERSION_VPP';
   use POSIX qw/locale_h/;
   use locale;
   use vars qw ($VERSION @ISA @REGEXS);
-  $VERSION = 0.88;
+  $VERSION = 0.20;
   
   use overload (
       '""'       => \&stringify,
