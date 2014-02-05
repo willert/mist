@@ -1,6 +1,10 @@
-Revision history for this perl module 
+Revision history for App::Mist
 
 {{$NEXT}}
+
+0.21 2014-02-05T14:34:16Z
+
+  - Cleanup for dist tarball
 
 0.20 2014-02-05T14:30:37Z
 

@@ -1,0 +1,70 @@
+# don't package examples
+^examples/
+
+# Avoid version control files.
+\bRCS\b
+\bCVS\b
+,v$
+\B\.svn\b
+\B\.git\b
+\B\.gitignore$
+
+# Avoid Module::Release stuff
+\B\.releaserc$
+\bDebian_CPANTS.txt$
+
+# Avoid Makemaker generated and utility files.
+\bMakefile$
+\bblib
+\bMakeMaker-\d
+\bpm_to_blib$
+\bblibdirs$
+^MANIFEST\.SKIP$
+
+# Avoid Module::Build generated and utility files.
+\bBuild$
+\b_build
+
+# Avoid temp and backup files.
+~$
+\.tmp$
+\.old$
+\.bak$
+\#$
+\b\.#
+\.DS_Store$
+\.org$
+\.org/
+
+# Avoid Apache::Test files
+t/conf/apache_test_config.pm
+t/conf/extra.conf$
+t/conf/httpd.conf
+t/conf/mime.types
+t/htdocs
+t/logs
+t/var
+
+# No tarballs!
+\.gz$
+
+# No coverage reports
+cover_db
+
+# No local lib
+^perl5/
+
+# no mist environment
+^mpan-dist/
+^mpan-install
+mistfile
+
+# No temp and local files
+\btmp[\._]*
+\blocal_
+
+# ignore project files
+/^.PerlySenseProject
+
+# build files
+^contrib
