@@ -1,4 +1,5 @@
 requires "App::Cmd";
+requires "Capture::Tiny";
 requires "CPAN::PackageDetails";
 requires "CPAN::ParseDistribution";
 requires "Digest::MD5";

@@ -34,3 +34,9 @@ _build_params
 
 /t/**/mpan-dist/
 /t/**/perl5/
+
+/contrib/cpan-outdated/fatlib/
+
+/contrib/cpan-outdated/cpan-outdated
+/contrib/cpan-outdated/fatpacker.trace
+/contrib/cpan-outdated/packlists

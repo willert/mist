@@ -1,0 +1,274 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+use Getopt::Long;
+use Pod::Usage;
+use File::Temp;
+use File::Spec;
+use Config;
+use version;
+use LWP::Simple ();
+use IO::Zlib;
+use CPAN::DistnameInfo;
+use Module::CoreList ();
+use Module::Metadata;
+use constant WIN32 => $^O eq 'MSWin32';
+
+our $VERSION = "0.28";
+
+my $mirror = 'http://www.cpan.org/';
+my $quote = WIN32 ? q/"/ : q/'/;
+my $local_lib;
+my $self_contained = 0;
+Getopt::Long::Configure("bundling");
+Getopt::Long::GetOptions(
+    'h|help'          => \my $help,
+    'verbose'         => \my $verbose,
+    'm|mirror=s'      => \$mirror,
+    'p|print-package' => \my $print_package,
+    'I=s'             => sub { die "this option was deprecated" },
+    'l|local-lib=s'   => \$local_lib,
+    'L|local-lib-contained=s' =>
+      sub { $local_lib = $_[1]; $self_contained = 1; },
+    'compare-changes' => sub {
+        die "--compare-changes option was deprecated.\n"
+          . "You can use 'cpan-listchanges `cpan-outdated -p`' instead.\n"
+          . "cpanm cpan-listchanges # install from CPAN\n"
+    },
+    'exclude-core' => \my $exclude_core,
+) or pod2usage();
+pod2usage() if $help;
+
+$mirror =~ s:/$::;
+my $index_url = "${mirror}/modules/02packages.details.txt.gz";
+
+my $core_modules = $Module::CoreList::version{$]};
+
+unless ($ENV{HARNESS_ACTIVE}) {
+    &main;
+    exit;
+}
+
+sub main {
+    my @libpath = make_inc($local_lib, $self_contained);
+    # warn join("\n", @libpath);
+
+    my $tmpfile = File::Temp->new(UNLINK => 1, SUFFIX => '.gz');
+    getstore($index_url, $tmpfile->filename);
+
+    my $fh = zopen($tmpfile) or die "cannot open $tmpfile";
+    # skip header part
+    while (my $line = <$fh>) {
+        last if $line eq "\n";
+    }
+    # body part
+    my %seen;
+    my %dist_latest_version;
+    LINES: while (my $line = <$fh>) {
+        my ($pkg, $version, $dist) = split /\s+/, $line;
+        next if $version eq 'undef';
+
+        # $Mail::SpamAssassin::Conf::VERSION is 'bogus'
+        # https://rt.cpan.org/Public/Bug/Display.html?id=73465
+        next unless $version =~ /[0-9]/;
+
+        # if excluding core modules
+        next if $exclude_core && exists $core_modules->{$pkg};
+
+        next if $dist =~ m{/perl-[0-9._]+\.tar\.(gz|bz2)$};
+        (my $file = $pkg) =~ s!::!/!g;
+        $file = "${file}.pm";
+        SCAN_INC: for my $dir (@libpath) {
+            my $path = "$dir/$file";
+            next SCAN_INC unless -f $path;
+
+            # ignore old distribution.
+            #   This is a heuristic approach. It is not a strict.
+            #   If you want a strict check, cpan-outdated looks 02packages.details.txt.gz twice.
+            #   It is too slow.
+            #
+            #   But, 02packages.details.txt.gz is sorted.
+            #   Submodules are listed after main module most of the time.
+            #   This strategy works well for now.
+            # ref https://github.com/tokuhirom/cpan-outdated/issues#issue/4
+            my $info = CPAN::DistnameInfo->new($dist);
+            if (my $latest = $dist_latest_version{$info->dist}) {
+                # $info->version < $latest
+                if (compare_version($info->version, $latest)) {
+                    # warn "SKIP old distribution ($pkg): $dist < ", $latest, "\n";
+                    next LINES; # skip old version
+                }
+            }
+            $dist_latest_version{$info->dist} = $info->version;
+
+            my $meta = do {
+                local $SIG{__WARN__} = sub {};
+                Module::Metadata->new_from_file($path);
+            };
+            my $inst_version = $meta->version($pkg);
+            next unless defined $inst_version;
+            if (compare_version($inst_version, $version)) {
+                next if $seen{$dist}++;
+                if ($verbose) {
+                    printf "%-30s %-7s %-7s %s\n", $pkg, $inst_version, $version, $dist;
+                } elsif ($print_package) {
+                    print "$pkg\n";
+                } else {
+                    print "$dist\n";
+                }
+            }
+            last SCAN_INC;
+        }
+    }
+}
+
+
+# return true if $inst_version is less than $version
+sub compare_version {
+    my ($inst_version, $version) = @_;
+    return 0 if $inst_version eq $version;
+
+    my $inst_version_obj = eval { version->new($inst_version) } || version->new(permissive_filter($inst_version));
+    my $version_obj      = eval { version->new($version) } || version->new(permissive_filter($version));
+
+    return $inst_version_obj < $version_obj ? 1 : 0;
+}
+
+# for broken packages.
+sub permissive_filter {
+    local $_ = $_[0];
+    s/^[Vv](\d)/$1/;                   # Bioinf V2.0
+    s/^(\d+)_(\d+)$/$1.$2/;            # VMS-IndexedFile 0_02
+    s/-[a-zA-Z]+$//;                   # Math-Polygon-Tree 0.035-withoutworldwriteables
+    s/([a-j])/ord($1)-ord('a')/gie;    # DBD-Solid 0.20a
+    s/[_h-z-]/./gi;                    # makepp 1.50.2vs.070506
+    s/\.{2,}/./g;
+    $_;
+}
+
+# taken from cpanminus
+sub which {
+    my($name) = @_;
+    my $exe_ext = $Config{_exe};
+    foreach my $dir(File::Spec->path){
+        my $fullpath = File::Spec->catfile($dir, $name);
+        if (-x $fullpath || -x ($fullpath .= $exe_ext)){
+            if ($fullpath =~ /\s/ && $fullpath !~ /^$quote/) {
+                $fullpath = "$quote$fullpath$quote"
+            }
+            return $fullpath;
+        }
+    }
+    return;
+}
+
+sub getstore {
+    my ($url, $fname) = @_;
+    my $ua = LWP::UserAgent->new(
+        parse_head => 0,
+    );
+    $ua->env_proxy();
+    my $request = HTTP::Request->new(GET => $url);
+    my $response = $ua->request($request, $fname);
+    if (my $died = $response->header('X-Died')) {
+        die "Cannot getstore $url to $fname: $died";
+    } elsif ($response->code == 200) {
+        return 1;
+    } else {
+        die "Cannot getstore $url to $fname: " . $response->status_line;
+    }
+}
+
+sub zopen {
+    IO::Zlib->new($_[0], "rb");
+}
+
+sub make_inc {
+    my ($base, $self_contained) = @_;
+
+    if ($base) {
+        require local::lib;
+        my @modified_inc = (
+            local::lib->install_base_perl_path($base),
+            local::lib->install_base_arch_path($base),
+        );
+        if ($self_contained) {
+            push @modified_inc, @Config{qw(privlibexp archlibexp)};
+        } else {
+            push @modified_inc, @INC;
+        }
+        return @modified_inc;
+    } else {
+        return @INC;
+    }
+}
+
+__END__
+
+=head1 NAME
+
+cpan-outdated - detect outdated CPAN modules in your environment
+
+=head1 SYNOPSIS
+
+    # print the list of distribution that contains outdated modules
+    % cpan-outdated
+
+    # print the list of outdated modules in packages
+    % cpan-outdated -p
+
+    # verbose
+    % cpan-outdated --verbose
+
+    # alternate mirrors
+    % cpan-outdated --mirror file:///home/user/minicpan/
+
+    # additional module path(same as cpanminus)
+    % cpan-outdated -l extlib/
+    % cpan-outdated -L extlib/
+
+    # install with cpan
+    % cpan-outdated | xargs cpan -i
+
+    # install with cpanm
+    % cpan-outdated    | cpanm
+    % cpan-outdated -p | cpanm
+
+=head1 DESCRIPTION
+
+This script prints the list of outdated CPAN modules in your machine.
+
+It's same feature of 'CPAN::Shell->r', but C<cpan-outdated> is much faster and uses less memory.
+
+This script can be integrated with L<cpanm> command.
+
+=head1 PRINTING PACKAGES VS DISTRIBUTIONS
+
+This script by default prints the outdated distribution as in the CPAN
+distro format, i.e: C<A/AU/AUTHOR/Distribution-Name-0.10.tar.gz> so
+you can pipe into CPAN installers, but with C<-p> option it can be
+twaked to print the module's package names.
+
+For some tools such as L<cpanm> installing from packages could be a
+bit more useful since you can track to see the old version number
+where you upgrade from.
+
+=head1 AUTHOR
+
+Tokuhiro Matsuno
+
+=head1 LICENSE
+
+Copyright (C) 2009 Tokuhiro Matsuno.
+
+This library is free software; you can redistribute it and/or modify it under the same terms as Perl itself.
+
+=head1 SEE ALSO
+
+L<CPAN>
+
+L<App::cpanminus>
+
+If you want to see what's changed for modules that require upgrades, use L<cpan-listchanges>
+
+=cut
