@@ -18,6 +18,7 @@ requires 'Probe::Perl';
 
 requires "App::cpanminus" => "1.7";
 requires 'Minilla' => '0.11.0';
+requires "local::lib";
 
 on 'configure' => sub {
   requires "ExtUtils::MakeMaker" => "6.30";
