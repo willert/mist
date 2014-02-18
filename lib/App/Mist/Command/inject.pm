@@ -21,10 +21,10 @@ sub execute {
   });
 
   $package_manager->begin_work;
-
-  $package_manager->install( @$args );
-
+  eval { $package_manager->install( @$args ) };
+  my $install_error = $@;
   $package_manager->commit;
+  die $install_error if $install_error;
 }
 
 1;
