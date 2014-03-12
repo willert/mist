@@ -48,6 +48,7 @@
             "App::cpanminus" : "1.7",
             "CPAN::PackageDetails" : "0",
             "CPAN::ParseDistribution" : "0",
+            "Capture::Tiny" : "0",
             "Devel::CheckBin" : "0",
             "Devel::CheckCompiler" : "0",
             "Devel::CheckLib" : "0",
@@ -62,6 +63,7 @@
             "Moose" : "0",
             "Path::Class" : "0",
             "Probe::Perl" : "0",
+            "local::lib" : "0",
             "perl" : "5.010"
          }
       }
@@ -75,7 +77,7 @@
          "web" : "https://github.com/willert/mist"
       }
    },
-   "version" : "0.21",
+   "version" : "0.22",
    "x_contributors" : [
       "Susanne Schmidt <sushee@outlook.com>",
       "Sebastian Willert <willert@cpan.org>",
