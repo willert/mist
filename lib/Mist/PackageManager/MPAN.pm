@@ -2,7 +2,9 @@ package Mist::PackageManager::MPAN;
 use 5.014;
 use utf8;
 
-use Moose;
+use Moo;
+use MooX::late;
+use MooX::HandlesVia;
 
 extends 'Mist::PackageManager';
 with (
@@ -143,8 +145,5 @@ sub commit_mpan_package_index {
 
   return;
 }
-
-__PACKAGE__->meta->make_immutable;
-no Moose;
 
 1;

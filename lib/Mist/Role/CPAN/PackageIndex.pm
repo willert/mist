@@ -1,7 +1,8 @@
 package Mist::Role::CPAN::PackageIndex;
 
 use 5.010;
-use Moose::Role;
+use Moo::Role;
+use MooX::late;
 
 use Path::Class ();
 use Carp;
@@ -190,7 +191,5 @@ sub write_index {
 
   return;
 }
-
-no Moose::Role;
 
 1;

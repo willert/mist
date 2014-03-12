@@ -1,7 +1,7 @@
 package Mist::Role::cpanminus;
 
 use 5.010;
-use Moose::Role;
+use Moo::Role;
 
 use Carp ();
 use File::Share ();
@@ -27,7 +27,5 @@ sub run_cpanm {
   exit $exit if $exit != 0;
 }
 
-
-no Moose::Role;
 
 1;

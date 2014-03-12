@@ -2,7 +2,7 @@ package Mist::CPAN::PackageIndex;
 use 5.014;
 use utf8;
 
-use Moose;
+use Moo;
 
 has cpan_dist_root => (
   is       => 'ro',

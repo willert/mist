@@ -1,29 +1,32 @@
 requires "App::Cmd";
+requires "App::cpanminus" => "1.7";
+
 requires "Capture::Tiny";
-requires 'CPAN::Meta' => '2.132830';
-requires "CPAN::PackageDetails";
-requires "CPAN::ParseDistribution";
+requires "List::MoreUtils";
 requires "Digest::MD5";
+requires "local::lib";
+requires "Module::Path";
+
+requires "Path::Class";
 requires "File::Find::Upwards";
 requires "File::HomeDir";
 requires "File::Share";
-requires "Module::Path";
-requires "Path::Class";
-requires "List::MoreUtils";
-requires "Module::CPANfile" => "1.0002";
-requires "Moose";
-requires 'Devel::CheckBin';
-requires 'Devel::CheckLib';
-requires 'Devel::CheckCompiler';
-requires 'Probe::Perl';
-requires "App::cpanminus" => "1.7";
-requires 'Minilla' => '0.11.0';
-requires "local::lib";
 
 requires 'Moo';
 requires 'MooX::late';
 requires 'MooX::HandlesVia';
 
+requires 'CPAN::Meta' => '2.132830';
+requires "CPAN::PackageDetails";
+requires "CPAN::ParseDistribution";
+requires "Module::CPANfile" => "1.0002";
+
+requires 'Devel::CheckBin';
+requires 'Devel::CheckLib';
+requires 'Devel::CheckCompiler';
+requires 'Probe::Perl';
+
+requires 'Minilla' => '0.11.0';
 
 on 'configure' => sub {
   requires "ExtUtils::MakeMaker" => "6.30";

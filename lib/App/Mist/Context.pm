@@ -2,7 +2,8 @@ package App::Mist::Context;
 use 5.014;
 use utf8;
 
-use Moose;
+use Moo;
+use MooX::late;
 
 use Carp;
 use Config;
@@ -14,7 +15,7 @@ use File::Find::Upwards;
 use File::Share qw/ dist_file /;
 
 use Module::CPANfile;
-use CPAN::Meta::Prereqs;
+use CPAN::Meta::Prereqs 2.132830;
 
 use Mist::Distribution;
 use Mist::Environment;
