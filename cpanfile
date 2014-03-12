@@ -1,5 +1,6 @@
 requires "App::Cmd";
 requires "Capture::Tiny";
+requires 'CPAN::Meta' => '2.132830';
 requires "CPAN::PackageDetails";
 requires "CPAN::ParseDistribution";
 requires "Digest::MD5";
@@ -15,10 +16,14 @@ requires 'Devel::CheckBin';
 requires 'Devel::CheckLib';
 requires 'Devel::CheckCompiler';
 requires 'Probe::Perl';
-
 requires "App::cpanminus" => "1.7";
 requires 'Minilla' => '0.11.0';
 requires "local::lib";
+
+requires 'Moo';
+requires 'MooX::late';
+requires 'MooX::HandlesVia';
+
 
 on 'configure' => sub {
   requires "ExtUtils::MakeMaker" => "6.30";

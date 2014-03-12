@@ -22437,6 +22437,7 @@ SUCCESS
 $PREREQUISITE_DISTS = [
                         'App::Cmd',
                         'App::cpanminus~1.7',
+                        'CPAN::Meta~2.132830',
                         'CPAN::PackageDetails',
                         'CPAN::ParseDistribution',
                         'Capture::Tiny',
@@ -22451,6 +22452,9 @@ $PREREQUISITE_DISTS = [
                         'Minilla~v0.11.0',
                         'Module::CPANfile~1.0002',
                         'Module::Path',
+                        'Moo',
+                        'MooX::HandlesVia',
+                        'MooX::late',
                         'Moose',
                         'Path::Class',
                         'Probe::Perl',
