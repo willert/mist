@@ -12,6 +12,14 @@ use Cwd;
 sub execute {
   my ( $self, $opt, $args ) = @_;
 
+  my $app = $self->app;
+  my $do  = sub{ $app->execute_command( $app->prepare_command( @_ )) };
+
+  # compile needs to run before switching context because it
+  # will dynamically load some modules from mist's local::lib
+  $do->( 'compile' ) unless $ENV{__MIST_COMPILATION_DONE};
+  $ENV{__MIST_COMPILATION_DONE} = 1;
+
   my $ctx  = $self->app->ctx;
   $ctx->ensure_correct_perlbrew_context;
 
@@ -26,14 +34,9 @@ sub execute {
     } ( @prepend, @notest );
   } $ctx->fetch_prereqs;
 
-  my $app = $self->app;
-  my $do  = sub{ $app->execute_command( $app->prepare_command( @_ )) };
-
   $do->( 'inject',             @$args, @prepend ) if @prepend;
   $do->( 'inject', '--notest', @$args, @notest  ) if @notest;
   $do->( 'inject',             @$args, @prereqs ) if @prereqs;
-
-  $do->( 'compile' );
 
   print "Packaging and compilation successful!\n\n";
 
