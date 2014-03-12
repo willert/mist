@@ -2,6 +2,10 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+0.23 2014-03-12T21:01:52Z
+
+  - Bugfix release
+
 0.22 2014-03-12T19:31:19Z
 
   - Added command to print library paths
