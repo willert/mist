@@ -12,8 +12,6 @@ use File::Share qw/ dist_file /;
 use Path::Class qw/ dir /;
 use Cwd;
 
-use App::cpanminus::fatscript;
-
 sub execute {
   my ( $self, $opt, $args ) = @_;
 
