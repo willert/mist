@@ -274,12 +274,12 @@ MSG
     $ENV{PERLBREW_ROOT} = $pb_root;
     $ENV{MIST_PERLBREW_VERSION} = $pb_version;
 
-    local::lib->import('--deactivate-all');
+    { local $SIG{__WARN__} = sub{}; local::lib->import('--deactivate-all') }
+
     exec $pb_exec, 'exec', '--quiet', '--with', $pb_version,
       dist_file( 'App-Mist', 'perlbrew-wrapper.bash' ), $0, @ARGV;
   } else {
-    local::lib->import('--deactivate-all');
-
+    { local $SIG{__WARN__} = sub{}; local::lib->import('--deactivate-all') }
     eval 'require local::lib;' or die join(
       qq{\n},
       "FATAL: missing local::lib ",
