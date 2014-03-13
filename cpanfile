@@ -1,10 +1,11 @@
+requires "local::lib" => '2.00';
+
 requires "App::Cmd";
 requires "App::cpanminus" => "1.7";
 
 requires "Capture::Tiny";
 requires "List::MoreUtils";
 requires "Digest::MD5";
-requires "local::lib";
 requires "Module::Path";
 
 requires "Path::Class";

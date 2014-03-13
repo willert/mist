@@ -22457,7 +22457,7 @@ $PREREQUISITE_DISTS = [
                         'MooX::late',
                         'Path::Class',
                         'Probe::Perl',
-                        'local::lib'
+                        'local::lib~2.00'
                       ];
 ;
 };};
