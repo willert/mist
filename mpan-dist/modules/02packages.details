@@ -266,7 +266,7 @@ Minilla::Logger                        0  T/TO/TOKUHIROM/Minilla-v0.11.1.tar.gz
 Minilla::Metadata                      0  T/TO/TOKUHIROM/Minilla-v0.11.1.tar.gz
 Minilla::Migrate                       0  T/TO/TOKUHIROM/Minilla-v0.11.1.tar.gz
 Minilla::ModuleMaker::ModuleBuild      0  T/TO/TOKUHIROM/Minilla-v0.11.1.tar.gz
-Minilla::Profile::Base             <%  %>  T/TO/TOKUHIROM/Minilla-v0.11.1.tar.gz
+Minilla::Profile::Base                <%  %>
 Minilla::Profile::Default              0  T/TO/TOKUHIROM/Minilla-v0.11.1.tar.gz
 Minilla::Profile::ModuleBuild          0  T/TO/TOKUHIROM/Minilla-v0.11.1.tar.gz
 Minilla::Profile::XS                   0  T/TO/TOKUHIROM/Minilla-v0.11.1.tar.gz
@@ -306,6 +306,8 @@ Moo::_Utils                            0  H/HA/HAARG/Moo-1.004002.tar.gz
 Moo::_mro                              0  H/HA/HAARG/Moo-1.004002.tar.gz
 Moo::sification                        0  H/HA/HAARG/Moo-1.004002.tar.gz
 MooX::HandlesVia                   0.001005  M/MA/MATTP/MooX-HandlesVia-0.001005.tar.gz
+MooX::Types::MooseLike              0.25  M/MA/MATEU/MooX-Types-MooseLike-0.25.tar.gz
+MooX::Types::MooseLike::Base        0.25  M/MA/MATEU/MooX-Types-MooseLike-0.25.tar.gz
 MooX::late                         0.014  T/TO/TOBYINK/MooX-late-0.014.tar.gz
 Number::Compare                     0.03  R/RC/RCLAMP/Number-Compare-0.03.tar.gz
 Package::Stash                      0.36  D/DO/DOY/Package-Stash-0.36.tar.gz
@@ -382,11 +384,19 @@ TAP::Parser::YAMLish::Writer        3.30  L/LE/LEONT/Test-Harness-3.30.tar.gz
 TOML                                0.92  D/DA/DARREN/TOML-0.92.tar.gz
 Term::ReadKey                       2.31  J/JS/JSTOWE/TermReadKey-2.31.tar.gz
 TermReadKey                         2.31  J/JS/JSTOWE/TermReadKey-2.31.tar.gz
+Test::Builder                      1.001002  R/RJ/RJBS/Test-Simple-1.001002.tar.gz
+Test::Builder::IO::Scalar          2.110  R/RJ/RJBS/Test-Simple-1.001002.tar.gz
+Test::Builder::Module              1.001002  R/RJ/RJBS/Test-Simple-1.001002.tar.gz
+Test::Builder::Tester              1.23_002  R/RJ/RJBS/Test-Simple-1.001002.tar.gz
+Test::Builder::Tester::Color       1.23_002  R/RJ/RJBS/Test-Simple-1.001002.tar.gz
+Test::Exception                     0.32  A/AD/ADIE/Test-Exception-0.32.tar.gz
 Test::Fatal                        0.013  R/RJ/RJBS/Test-Fatal-0.013.tar.gz
 Test::Harness                       3.30  L/LE/LEONT/Test-Harness-3.30.tar.gz
+Test::More                         1.001002  R/RJ/RJBS/Test-Simple-1.001002.tar.gz
 Test::Output                        1.03  B/BD/BDFOY/Test-Output-1.03.tar.gz
 Test::Requires                      0.07  T/TO/TOKUHIROM/Test-Requires-0.07.tar.gz
 Test::Script                        1.07  A/AD/ADAMK/Test-Script-1.07.tar.gz
+Test::Simple                       1.001002  R/RJ/RJBS/Test-Simple-1.001002.tar.gz
 Test::Tester                       0.109  F/FD/FDALY/Test-Tester-0.109.tar.gz
 Test::Tester::Capture                  0  F/FD/FDALY/Test-Tester-0.109.tar.gz
 Test::Tester::CaptureRunner            0  F/FD/FDALY/Test-Tester-0.109.tar.gz
