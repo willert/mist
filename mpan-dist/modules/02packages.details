@@ -338,6 +338,7 @@ Sub::Exporter::Progressive         0.001011  F/FR/FREW/Sub-Exporter-Progressive-
 Sub::Exporter::Util                0.987  R/RJ/RJBS/Sub-Exporter-0.987.tar.gz
 Sub::Install                       0.927  R/RJ/RJBS/Sub-Install-0.927.tar.gz
 Sub::Quote                         1.004002  H/HA/HAARG/Moo-1.004002.tar.gz
+Sub::Uplevel                        0.24  D/DA/DAGOLDEN/Sub-Uplevel-0.24.tar.gz
 TAP::Base                           3.30  L/LE/LEONT/Test-Harness-3.30.tar.gz
 TAP::Formatter::Base                3.30  L/LE/LEONT/Test-Harness-3.30.tar.gz
 TAP::Formatter::Color               3.30  L/LE/LEONT/Test-Harness-3.30.tar.gz
