@@ -49,8 +49,22 @@ PERL
   return;
 }
 
+
+my %header_appended;
 sub append_module_source {
   my ( $module, $fh, %p ) = @_;
+
+  print $fh <<'PERL' unless $header_appended{ $fh };
+sub __mist::no_thanks {
+  my $file = __FILE__;
+  for my $mod ( @_ ) {
+    ( my $basename = $mod ) =~ s!(::|')!/!g;
+    $INC{ "${basename}.pm" } = $file;
+  }
+}
+PERL
+
+  $header_appended{ $fh } = 1;
 
   my $path = module_path( $module )
     or croak "Can't find module ${module}";
@@ -58,7 +72,7 @@ sub append_module_source {
   open my $module_source, "<", $path
     or croak "Can't open ${module}: $!";
 
-  print $fh ";{\n";
+  printf $fh "\n;%s{\n", $p{begin_lift} ? 'BEGIN' : '';
 
   while ( <$module_source> ) {
     next if $_ eq "\n";
@@ -87,10 +101,10 @@ sub append_module_source {
       printf $fh "%s;\n",  Data::Dumper->Dump([ $value ], [ $key ]);
     }
 
-    print $fh "};";
+    print $fh "}; ";
   }
-
-  print $fh "};";
+  print $fh " BEGIN{ __mist::no_thanks( '${module}' ) }";
+  print $fh " };";
 }
 
 1;
