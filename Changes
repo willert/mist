@@ -2,6 +2,11 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+0.25 2014-03-17T23:55:39Z
+
+  - Added support for --branch parameter to support multiple perl5 directories
+    for a single project.
+
 0.24 2014-03-12T22:43:17Z
 
   - Replace Moose by Moo and MooX::late, shaving off about 60% of
