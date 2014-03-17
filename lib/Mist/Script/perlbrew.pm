@@ -15,7 +15,7 @@ our $PERLBREW_DEFAULT_VERSION || die '$PERL5_DEFAULT_VERSION not set';
 
 use FindBin ();
 use File::Spec ();
-use Getopt::Long;
+use Getopt::Long 2.42;
 use Config;
 
 my $run_quiet = 0;
@@ -33,16 +33,9 @@ my $pb_version;
 my @CMD_ARGS = @INITIAL_ARGS;
 
 {
-  local $SIG{__WARN__} = sub{}; # silence warnings from unknown options
-
-  if ( Getopt::Long->can( 'GetOptionsFromArray' ) ) {
-    Getopt::Long::GetOptionsFromArray( \@CMD_ARGS, "perl=s" => \$pb_version );
-  } else {
-    my @org_argv = @ARGV;
-    @ARGV = @CMD_ARGS;
-    Getopt::Long::GetOptions( "perl=s" => \$pb_version );
-    @ARGV = @org_argv;
-  }
+  my $p = Getopt::Long::Parser->new;
+  $p->configure(qw/ default require_order pass_through /);
+  $p->getoptionsfromarray( \@CMD_ARGS, "perl=s" => \$pb_version );
 }
 
 $pb_version ||= $ENV{MIST_PERLBREW_VERSION};
