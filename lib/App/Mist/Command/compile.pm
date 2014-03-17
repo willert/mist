@@ -36,15 +36,17 @@ sub execute {
     open my $out, ">", "mpan-install.tmp" or die $!;
     print $out "#!/usr/bin/env perl\n\n";
 
+    append_module_source( 'Getopt::Long' => $out, begin_lift => 1 );
+
     append_module_source(
       'App::cpanminus::fatscript' => $out,
       until => qr/# END OF FATPACK CODE\s*$/,
     );
 
-    append_module_source( 'Devel::CheckBin'      => $out );
-    append_module_source( 'Devel::CheckLib'      => $out );
-    append_module_source( 'Devel::CheckCompiler' => $out );
-    append_module_source( 'Probe::Perl'          => $out );
+    append_module_source( 'Devel::CheckBin'      => $out, begin_lift => 1 );
+    append_module_source( 'Devel::CheckLib'      => $out, begin_lift => 1 );
+    append_module_source( 'Devel::CheckCompiler' => $out, begin_lift => 1 );
+    append_module_source( 'Probe::Perl'          => $out, begin_lift => 1 );
 
     append_module_source( 'Mist::Distribution' => $out );
     append_module_source( 'Mist::Environment'  => $out );
