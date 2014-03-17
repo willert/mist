@@ -40,3 +40,4 @@ _build_params
 /contrib/cpan-outdated/cpan-outdated
 /contrib/cpan-outdated/fatpacker.trace
 /contrib/cpan-outdated/packlists
+/perl5-*/

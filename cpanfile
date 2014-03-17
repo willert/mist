@@ -1,4 +1,5 @@
 requires "local::lib" => '2.00';
+requires "Getopt::Long" => '2.42';
 
 requires "App::Cmd";
 requires "App::cpanminus" => "1.7";
