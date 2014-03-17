@@ -8,9 +8,22 @@ our @CMD_OPTS;
 
 BEGIN { @CMD_OPTS = @ARGV; @ARGV = () }
 
+use Getopt::Long 2.42;
+
 our $MPAN_DIST_DIR || die '$MPAN_DIST_DIR not set';
 
 our $PERL5_BASE_LIB = 'perl5';
+
+{
+  my $p = Getopt::Long::Parser->new;
+  $p->configure(qw/ default require_order pass_through /);
+
+  my $branch;
+  $p->getoptionsfromarray( \@CMD_OPTS, "branch=s" => \$branch );
+
+  $PERL5_BASE_LIB = join( q{-}, $PERL5_BASE_LIB, $branch ) if $branch;
+}
+
 our $LOCAL_LIB_DIR = File::Spec->catdir(
   $PERL5_BASE_LIB,
   join( q{-}, 'perl', $Config{version}, $Config{archname} )
