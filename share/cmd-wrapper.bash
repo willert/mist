@@ -23,10 +23,10 @@ if [ $SELF_PATH == $CALL_PATH ] ; then
   exit 1
 fi
 
-# try to upward-find local::lib directory
+# try to upward-find mist directory
 for UPDIR in . .. ../.. ../../.. ../../../.. ; do
-  TEST="$WRAPPER/$UPDIR/perl5";
-  if [ -d $TEST ] ; then
+  TEST="$WRAPPER/$UPDIR/mistfile";
+  if [ -f $TEST ] ; then
       LOCAL_LIB=$( cd -P "$( dirname "$TEST" )" && pwd )
       BASE_DIR="$WRAPPER/$UPDIR"
       break
@@ -35,8 +35,8 @@ done
 
 #exit if we can't find any
 if [ ! $LOCAL_LIB ] ; then
-  echo "$0: No local::lib directory found. Abort!" >&2
+  echo "$0: No mistfile found. Abort!" >&2
   exit 1
 fi
 
-exec "$BASE_DIR/perl5/bin/mist-run" `basename $0` "$@"
+exec "$BASE_DIR/mist-run" `basename $0` "$@"

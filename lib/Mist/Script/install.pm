@@ -56,7 +56,7 @@ my $libexec_dir   = File::Spec->catdir( $perl5_baselib, 'libexec' );
 
 mkpath( $libexec_dir );
 
-my $cmd_wrapper     = File::Spec->catfile( $libexec_dir, 'cmd-wrapper.bash' );
+my $cmd_wrapper = File::Spec->catfile( $libexec_dir, 'cmd-wrapper.bash' );
 {
   my $cmd_wrapper_src = CMD_WRAPPER::Bash->get_content;
   open my $fh, '>', $cmd_wrapper
@@ -111,12 +111,20 @@ unless (caller) {
 
   my $bin_dir = File::Spec->catdir( $p5_dir, 'bin' );
   mkpath( $bin_dir );
-  my $mist_run = File::Spec->catfile( $bin_dir, 'mist-run');
-  open my $wrapper, '>', $mist_run; # to catch write errors early on
+  my $mist_run_fn = File::Spec->catfile( $bin_dir, 'mist-run');
+
+  open my $mist_run, '>', $mist_run_fn; # to catch write errors early on
   {
-    my $perm = ( stat $mist_run )[2] & 07777;
-    chmod( $perm | 0755, $mist_run );
+    my $perm = ( stat $mist_run_fn )[2] & 07777;
+    chmod( $perm | 0755, $mist_run_fn );
   }
+
+  print $mist_run <<'BASH';
+#!/bin/bash
+
+echo "Mist environment not correctly installed"
+exit 1'
+BASH
 
   local $ENV{HOME} = $workspace;
 
@@ -154,7 +162,10 @@ MIST_ENV
   }
   close $env;
 
-  printf $wrapper <<'WRAPPER', $mist_home, $mist_rc;
+  close $mist_run;
+  open $mist_run, '>', $mist_run_fn; # reopen mist-run and flesh it out
+
+  printf $mist_run <<'WRAPPER', $mist_home, $mist_rc;
 #!/bin/bash
 
 MIST_ROOT="%s"
@@ -185,6 +196,9 @@ export PERL5LIB="$MIST_ROOT/lib:$PERL5LIB"
 
 mist_exec "${@}"
 WRAPPER
+
+  unlink File::Spec->catfile( $mist_home, 'mist-run' );
+  symlink $mist_run_fn, File::Spec->catfile( $mist_home, 'mist-run' );
 
   for my $script_dir (qw/ bin sbin script /) {
 
@@ -236,7 +250,7 @@ To enable it put the following line in your scripts:
 
 To run binaries from this distribution (\$HOME/bin and \$HOME/sbin are in
 automatically prepended to \$PATH) you can also use this wrapper script:
-  $mist_run my_script.pl [OPTIONS ..]
+  $mist_run_fn my_script.pl [OPTIONS ..]
 
 SUCCESS
 }
