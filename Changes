@@ -2,6 +2,12 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+0.26 2014-03-18T02:10:10Z
+
+  - Create a mist-run script in project root that uses the current branch
+  - Import libs useful for assert-blocks in mistfile:
+    Devel::CheckBin, Devel::CheckLib, Devel::CheckCompiler, Probe::Perl
+
 0.25 2014-03-17T23:55:39Z
 
   - Added support for --branch parameter to support multiple perl5 directories
