@@ -2,6 +2,10 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+0.27 2014-03-18T03:43:10Z
+
+  - Fixes to notest option and merge command
+
 0.26 2014-03-18T02:10:10Z
 
   - Create a mist-run script in project root that uses the current branch
