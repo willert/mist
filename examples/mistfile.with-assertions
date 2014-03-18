@@ -1,0 +1,17 @@
+perl '5.14.2';
+
+assert {
+
+  # unfortunately Devel::CheckCompiler offers no assert_compile
+  check_c99() or die "No C compiler found";
+
+	# .. same with Devel::CheckBin
+  check_bin( "mysql_config" ) or exit 1;
+
+  # Debian naming fuckup, package is not named libzlib-dev as expected,
+  # but zlib1g-dev, so build a more helpful message
+  eval{ assert_lib( lib => 'z', header => '' ) };
+  die "$@\nOn Debian, try installing zlib1g-dev\n" if $@;
+
+  assert_lib( lib => [qw/ ssl xml2 expat Imlib2 /] );
+};
