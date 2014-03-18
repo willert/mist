@@ -137,8 +137,12 @@ BASH
   my @prereqs = ( @$PREREQUISITE_DISTS );
 
   run_cpanm( $_ ) for @prepend;
-  run_cpanm( '--installdeps', @notest ) if @notest;
-  run_cpanm( '--notest',      @notest ) if @notest;
+  for my $module ( @notest ) {
+    # in some wired cases, two modules depending on each other fail
+    # so we have to build them one by one to ensure correct order
+    run_cpanm( '--installdeps', $module );
+    run_cpanm( '--notest',      $module );
+  }
   run_cpanm( @prereqs ) if @prereqs;
 
   printf $env <<'MIST_ENV', $mist_home;
