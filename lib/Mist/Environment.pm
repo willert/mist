@@ -56,6 +56,11 @@ sub as_code {
   no warnings;
   my \$_result;
 
+  use Devel::CheckBin;
+  use Devel::CheckLib;
+  use Devel::CheckCompiler;
+  use Probe::Perl;
+
   BEGIN { \$_result = Mist::Environment->bind }
 
   $line_pos; $code;
