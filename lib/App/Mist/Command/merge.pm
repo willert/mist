@@ -21,25 +21,21 @@ sub execute {
   my ( $self, $opt, $args ) = @_;
   my $ctx = $self->app->ctx;
 
+  my ( $dist, $project, $work_dir );
+
   die "$0: No Minilla directory to merge\n"
     unless $args and ref $args eq 'ARRAY' and @$args;
 
-  my ( $path, $guard ) = map{
-    dir( $_ )->absolute->resolve
-  }  grep{ !/^-/ } @$args;
-
-  die "$0: Too many arguments\n" if $guard;
-
-  $ctx->ensure_correct_perlbrew_context;
+  my $path = dir( pop @$args )->absolute->resolve;
 
   die "$0: ${path} is not Minilla distribution\n"
     unless -d q{}. $path and -f -r q{}. $path->file('cpanfile');
 
+  goto SWITCH_CONTEXT if $dist = $ENV{MIST_MERGE_DIST_FILE};
+
   printf "Merging Minilla distribution from %s\n\n", $path;
 
   my $current_pwd = dir( getcwd());
-
-  my ( $dist, $project, $work_dir );
   try {
     chdir( "$path" );
     check_git;
@@ -56,6 +52,10 @@ sub execute {
   exit 1 unless $dist;
 
   printf "Injecting distribution %s\n", $dist;
+
+ SWITCH_CONTEXT:
+  $ENV{MIST_MERGE_DIST_FILE} = $dist;
+  $ctx->ensure_correct_perlbrew_context;
 
   my $package_manager = Mist::PackageManager::MPAN->new({
     project_root => $ctx->project_root,
