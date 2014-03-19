@@ -45,7 +45,12 @@ my $pb_exec;
 
 if ( $pb_version ) {
 
-  $pb_exec = qx{ which perlbrew } || "${pb_root}/bin/perlbrew";
+  $pb_exec = qx{ which perlbrew 2> /dev/null };
+  if ( not $pb_exec ) {
+    ( $pb_root ) = grep { -e File::Spec->catfile( $_, qw/ bin perlbrew /) }
+      $pb_root, '/opt/perlbrew', '/opt/perl5';
+    $pb_exec = File::Spec->catfile( $pb_root, qw/ bin perlbrew /);
+  }
   chomp $pb_exec;
 
   system( "$pb_exec version >/dev/null" ) == 0 or die <<"MSG";
