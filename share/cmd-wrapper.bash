@@ -33,10 +33,12 @@ for UPDIR in . .. ../.. ../../.. ../../../.. ; do
   fi
 done
 
+BASE_DIR=$( readlink -f -- "$BASE_DIR" )
+
 #exit if we can't find any
 if [ ! $LOCAL_LIB ] ; then
   echo "$0: No mistfile found. Abort!" >&2
   exit 1
 fi
 
-exec "$BASE_DIR/mist-run" `basename $0` "$@"
+exec "$BASE_DIR/perl5/bin/mist-run" `basename $0` "$@"

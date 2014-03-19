@@ -14,20 +14,16 @@ our $MPAN_DIST_DIR || die '$MPAN_DIST_DIR not set';
 
 our $PERL5_BASE_LIB = 'perl5';
 
+my $branch;
 {
   my $p = Getopt::Long::Parser->new;
   $p->configure(qw/ default require_order pass_through /);
-
-  my $branch;
   $p->getoptionsfromarray( \@CMD_OPTS, "branch=s" => \$branch );
-
-  $PERL5_BASE_LIB = join( q{-}, $PERL5_BASE_LIB, $branch ) if $branch;
 }
 
-our $LOCAL_LIB_DIR = File::Spec->catdir(
-  $PERL5_BASE_LIB,
-  join( q{-}, 'perl', $Config{version}, $Config{archname} )
-);
+our $LOCAL_LIB_DIR = File::Spec->catdir( $PERL5_BASE_LIB,  join(
+  q{-}, 'perl', $Config{version}, $Config{archname}, $branch ? $branch : ()
+));
 
 our $PREPEND_DISTS ||= eval {[ DISTRIBUTION->distinfo->get_prepended_modules ]};
 die '$PREPEND_DISTS not set' . $@ unless $PREPEND_DISTS;
@@ -169,7 +165,8 @@ MIST_ENV
   close $mist_run;
   open $mist_run, '>', $mist_run_fn; # reopen mist-run and flesh it out
 
-  printf $mist_run <<'WRAPPER', $mist_home, $mist_rc;
+  my $arch_path = File::Spec->abs2rel( $LOCAL_LIB_DIR, $PERL5_BASE_LIB );
+  printf $mist_run <<'WRAPPER', $mist_home, $mist_rc, $arch_path;
 #!/bin/bash
 
 MIST_ROOT="%s"
@@ -191,7 +188,7 @@ function mist_run {
 
 source $MIST_ENV
 
-VERSION_ARCH_PATH=`mist_run perl -MConfig -e 'print join( q{-}, "perl", $Config{version}, $Config{archname})'`
+VERSION_ARCH_PATH="%s"
 LOCAL_LIB="$MIST_ROOT/$VERSION_ARCH_PATH"
 
 export PATH="$LOCAL_LIB/bin:$LOCAL_LIB/sbin:$PATH"
@@ -201,8 +198,10 @@ export PERL5LIB="$MIST_ROOT/lib:$PERL5LIB"
 mist_exec "${@}"
 WRAPPER
 
-  unlink File::Spec->catfile( $mist_home, 'mist-run' );
-  symlink $mist_run_fn, File::Spec->catfile( $mist_home, 'mist-run' );
+  my $global_mist_run = File::Spec->catfile( $mist_home, 'mist-run' );
+  unlink $global_mist_run;
+  symlink( $mist_run_fn, $global_mist_run )
+    or warn "Permission denied while creating ./mpan-run\n";
 
   for my $script_dir (qw/ bin sbin script /) {
 
