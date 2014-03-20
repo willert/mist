@@ -3,7 +3,7 @@ package App::Mist;
 use 5.010;
 use App::Cmd::Setup -app;
 
-our $VERSION = '0.27';
+our $VERSION = '0.28';
 
 # preload all commands
 # use Module::Pluggable search_path => [ 'App::Mist::Command' ];

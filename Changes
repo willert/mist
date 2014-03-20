@@ -2,6 +2,11 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+0.28 2014-03-20T03:13:36Z
+
+  - Default value for --branch can now be determined by git
+  - EXPERIMENTAL: --parent for branches using cp's --link feature
+
 0.27 2014-03-18T03:43:10Z
 
   - Fixes to notest option and merge command
