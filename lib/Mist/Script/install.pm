@@ -14,16 +14,35 @@ our $MPAN_DIST_DIR || die '$MPAN_DIST_DIR not set';
 
 our $PERL5_BASE_LIB = 'perl5';
 
-my $branch;
+my ( $branch, $parent );
 {
   my $p = Getopt::Long::Parser->new;
   $p->configure(qw/ default require_order pass_through /);
-  $p->getoptionsfromarray( \@CMD_OPTS, "branch=s" => \$branch );
+  $p->getoptionsfromarray( \@CMD_OPTS, 'branch:s' => \$branch, 'parent=s' => \$parent );
 }
 
-our $LOCAL_LIB_DIR = File::Spec->catdir( $PERL5_BASE_LIB,  join(
-  q{-}, 'perl', $Config{version}, $Config{archname}, $branch ? $branch : ()
-));
+# let git determine branch name if no explicit name is given
+( $branch ) =  `git status --porcelain --branch` =~ m{## ([\w-]+)}
+  if defined $branch and not $branch;
+
+my $arch_path = join( q{-}, 'perl', $Config{version}, $Config{archname} );
+our $LOCAL_LIB_DIR = File::Spec->catdir(
+  $PERL5_BASE_LIB, join( q{-}, $arch_path, $branch ? $branch : () )
+);
+
+# hard-link parent's local::lib content to new branch to get CoW-like behavior
+if ( $parent ) {
+  die "--parent needs --branch to be specified\n"
+    unless $branch;
+
+  my $parent_lib_dir = File::Spec->catdir(
+    $PERL5_BASE_LIB, join( q{-}, $arch_path, $parent )
+  );
+  die "Parent branch lib $parent_lib_dir doesn't exist"
+    unless -d $parent_lib_dir;
+  print "Hard-linking contents of $parent branch to $branch\n";
+  system cp => ( '--link', '--no-clobber', '--archive', $parent_lib_dir => $LOCAL_LIB_DIR );
+}
 
 our $PREPEND_DISTS ||= eval {[ DISTRIBUTION->distinfo->get_prepended_modules ]};
 die '$PREPEND_DISTS not set' . $@ unless $PREPEND_DISTS;
