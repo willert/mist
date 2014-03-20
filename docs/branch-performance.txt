@@ -1,0 +1,30 @@
+Huge Catalyst-based web project, huge differences between staging and master:
+
+With --parent:
+
+time ./mpan-install --branch staging --parent master
+74 distributions installed
+user	14m56.295s
+sys	1m19.553s
+
+du -hsc perl-5.14.2-x86_64-linux-master/ perl-5.14.2-x86_64-linux-staging-with-parent/
+181M	total
+
+---
+
+Without --parent:
+
+time ./mpan-install --branch staging-without-parent 
+441 distributions installed
+user	31m21.239s
+sys	4m25.095s
+
+du -hsc perl-5.14.2-x86_64-linux-master/ perl-5.14.2-x86_64-linux-staging-without-parent/
+291M	total
+
+---
+
+Also:
+
+Creating a new local::lib from a parent much closer resembles what will happen at merge
+time than recreating the whole tree, allowing you to catch errors before trying to go live.
