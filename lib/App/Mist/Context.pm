@@ -139,21 +139,10 @@ has perlbrew_root => (
 
 sub _build_perlbrew_root {
   my $self = shift;
-  $ENV{PERLBREW_ROOT} ? dir( $ENV{PERLBREW_ROOT} ) : dir( '', 'opt', 'perl5' );
+  $ENV{PERLBREW_ROOT} ? dir( $ENV{PERLBREW_ROOT} ) :
+    -d dir( '', 'opt', 'perl5' )->stringify ? dir( '', 'opt', 'perl5' ) :
+    dir( '', 'opt', 'perlbrew' );
 }
-
-
-has perlbrew_home => (
-  is         => 'ro',
-  isa        => 'Path::Class::Dir',
-  lazy_build => 1,
-);
-
-sub _build_perlbrew_home {
-  my $self = shift;
-  $self->mpan_dist->subdir('perlbrew');
-}
-
 
 has perl5_base_lib => (
   is         => 'ro',
@@ -221,7 +210,6 @@ sub ensure_correct_perlbrew_context {
   my $self = shift;
 
   my $pb_root    = $self->perlbrew_root;
-  my $pb_home    = $self->perlbrew_home;
   my $pb_version = $self->perl_version || return;
 
   my $pb_exec = qx{ which perlbrew } || "${pb_root}/bin/perlbrew";
@@ -238,7 +226,6 @@ MSG
 
   my @pb_versions = qx# bash -c '
       export PERLBREW_ROOT=${pb_root}
-      export PERLBREW_HOME=${pb_home}
 
       echo Root: \${PERLBREW_ROOT}
 
