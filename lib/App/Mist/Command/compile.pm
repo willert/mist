@@ -27,7 +27,7 @@ sub execute {
 
     my @prepend = $ctx->dist->get_prepended_modules;
     my @notest  = $ctx->dist->get_modules_not_to_test;
-    my @prereqs = sort $ctx->fetch_prereqs;
+    my @prereqs = $ctx->fetch_prereqs;
 
     my $perl_version = $ctx->perl_version;
 
