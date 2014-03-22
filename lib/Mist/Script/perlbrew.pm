@@ -103,7 +103,9 @@ MSG
 
       $ENV{MIST_PERLBREW_VERSION} = $pb_version;
 
-      printf "Restarting $0 @CMD_ARGS under %s [%s]\n", $pb_version, $pb_archname;
+      ( my $cmd_name = "$0 @CMD_ARGS") =~ s/[\n\r\s]+$//;
+      $cmd_name =~ s/\s{2,}/ /;
+      printf "Restarting $cmd_name under %s [%s]\n", $pb_version, $pb_archname;
       exec $pb_exec, 'exec', @pb_options, $0, @CMD_ARGS;
     }
   }

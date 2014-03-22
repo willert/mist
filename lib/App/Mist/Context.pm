@@ -259,7 +259,8 @@ MSG
     my $pb_archname =  qx{ $pb_cmd perl -MConfig -E "say \\\$Config{archname}" };
     chomp $pb_archname;
 
-    printf "Restarting $0 under %s [%s]\n", $pb_version, $pb_archname;
+    ( my $cmd_name = $0 ) =~ s/[\n\r\s]+$//;
+    printf "Restarting $cmd_name under %s [%s]\n", $pb_version, $pb_archname;
     $ENV{PERLBREW_ROOT} = $pb_root;
     $ENV{MIST_PERLBREW_VERSION} = $pb_version;
 
