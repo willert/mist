@@ -24221,7 +24221,7 @@ notest 'Term::ReadKey';
   package CMD_WRAPPER::Bash;
 
   sub get_content {
-    my $content = <<'TEXTFILE_F4BEF06F38018F02838EE37EA3114906';
+    my $content = <<'TEXTFILE_9AC2A4D4877C6566855296DE9BA3C00A';
 #!/bin/bash
 
 # get the absolute path of the executable
@@ -24257,15 +24257,17 @@ for UPDIR in . .. ../.. ../../.. ../../../.. ; do
   fi
 done
 
+BASE_DIR=$( readlink -f -- "$BASE_DIR" )
+
 #exit if we can't find any
 if [ ! $LOCAL_LIB ] ; then
   echo "$0: No mistfile found. Abort!" >&2
   exit 1
 fi
 
-exec "$BASE_DIR/mist-run" `basename $0` "$@"
+exec "$BASE_DIR/perl5/bin/mist-run" `basename $0` "$@"
 
-TEXTFILE_F4BEF06F38018F02838EE37EA3114906
+TEXTFILE_9AC2A4D4877C6566855296DE9BA3C00A
     chomp $content;
     return $content;
   }
@@ -24306,7 +24308,12 @@ $pb_version ||= $ENV{MIST_PERLBREW_VERSION};
 $pb_version ||= $PERLBREW_DEFAULT_VERSION;
 my $pb_exec;
 if ( $pb_version ) {
-  $pb_exec = qx{ which perlbrew } || "${pb_root}/bin/perlbrew";
+  $pb_exec = qx{ which perlbrew 2> /dev/null };
+  if ( not $pb_exec ) {
+    ( $pb_root ) = grep { -e File::Spec->catfile( $_, qw/ bin perlbrew /) }
+      $pb_root, '/opt/perlbrew', '/opt/perl5';
+    $pb_exec = File::Spec->catfile( $pb_root, qw/ bin perlbrew /);
+  }
   chomp $pb_exec;
   system( "$pb_exec version >/dev/null" ) == 0 or die <<"MSG";
 No local installation of perlbrew was found ($?). You can install it
@@ -24318,7 +24325,6 @@ or just for this account simply via:
 MSG
   my @pb_installed_versions = qx# bash -c '
     export PERLBREW_ROOT=${pb_root}
-    export PERLBREW_HOME=${pb_home}
     if ( ! . \${PERLBREW_ROOT}/etc/bashrc ) ; then
       perlbrew init 2>/dev/null
       if ( ! . \${PERLBREW_ROOT}/etc/bashrc ) ; then
@@ -24346,7 +24352,6 @@ MSG
   if ( not $ENV{MIST_PERLBREW_VERSION} ) {
     if ( !$ENV{PERLBREW_PERL} or $ENV{PERLBREW_PERL} ne $pb_version ) {
       $ENV{PERLBREW_ROOT} = $pb_root;
-      $ENV{PERLBREW_HOME} = $pb_home;
       my $pb_archname = get_archname();
       $ENV{MIST_PERLBREW_VERSION} = $pb_version;
       printf "Restarting $0 @CMD_ARGS under %s [%s]\n", $pb_version, $pb_archname;
@@ -24420,17 +24425,31 @@ BEGIN { @CMD_OPTS = @ARGV; @ARGV = () }
 use Getopt::Long 2.42;
 our $MPAN_DIST_DIR || die '$MPAN_DIST_DIR not set';
 our $PERL5_BASE_LIB = 'perl5';
+my ( $branch, $parent );
 {
   my $p = Getopt::Long::Parser->new;
   $p->configure(qw/ default require_order pass_through /);
-  my $branch;
-  $p->getoptionsfromarray( \@CMD_OPTS, "branch=s" => \$branch );
-  $PERL5_BASE_LIB = join( q{-}, $PERL5_BASE_LIB, $branch ) if $branch;
+  $p->getoptionsfromarray( \@CMD_OPTS, 'branch:s' => \$branch, 'parent=s' => \$parent );
 }
+# let git determine branch name if no explicit name is given
+( $branch ) =  `git status --porcelain --branch` =~ m{## ([\w-]+)}
+  if defined $branch and not $branch;
+my $arch_path = join( q{-}, 'perl', $Config{version}, $Config{archname} );
 our $LOCAL_LIB_DIR = File::Spec->catdir(
-  $PERL5_BASE_LIB,
-  join( q{-}, 'perl', $Config{version}, $Config{archname} )
+  $PERL5_BASE_LIB, join( q{-}, $arch_path, $branch ? $branch : () )
 );
+# hard-link parent's local::lib content to new branch to get CoW-like behavior
+if ( $parent ) {
+  die "--parent needs --branch to be specified\n"
+    unless $branch;
+  my $parent_lib_dir = File::Spec->catdir(
+    $PERL5_BASE_LIB, join( q{-}, $arch_path, $parent )
+  );
+  die "Parent branch lib $parent_lib_dir doesn't exist"
+    unless -d $parent_lib_dir;
+  print "Hard-linking contents of $parent branch to $branch\n";
+  system cp => ( '--link', '--no-clobber', '--archive', $parent_lib_dir => $LOCAL_LIB_DIR );
+}
 our $PREPEND_DISTS ||= eval {[ DISTRIBUTION->distinfo->get_prepended_modules ]};
 die '$PREPEND_DISTS not set' . $@ unless $PREPEND_DISTS;
 our $DONT_TEST_DISTS ||= eval {[ DISTRIBUTION->distinfo->get_modules_not_to_test ]};
@@ -24536,7 +24555,8 @@ MIST_ENV
   close $env;
   close $mist_run;
   open $mist_run, '>', $mist_run_fn; # reopen mist-run and flesh it out
-  printf $mist_run <<'WRAPPER', $mist_home, $mist_rc;
+  my $arch_path = File::Spec->abs2rel( $LOCAL_LIB_DIR, $PERL5_BASE_LIB );
+  printf $mist_run <<'WRAPPER', $mist_home, $mist_rc, $arch_path;
 #!/bin/bash
 MIST_ROOT="%s"
 MIST_ENV="%s"
@@ -24552,15 +24572,17 @@ function mist_run {
    eval "${@}"
 }
 source $MIST_ENV
-VERSION_ARCH_PATH=`mist_run perl -MConfig -e 'print join( q{-}, "perl", $Config{version}, $Config{archname})'`
+VERSION_ARCH_PATH="%s"
 LOCAL_LIB="$MIST_ROOT/$VERSION_ARCH_PATH"
 export PATH="$LOCAL_LIB/bin:$LOCAL_LIB/sbin:$PATH"
 export PATH="$MIST_ROOT/bin:$MIST_ROOT/sbin:$MIST_ROOT/script:$PATH"
 export PERL5LIB="$MIST_ROOT/lib:$PERL5LIB"
 mist_exec "${@}"
 WRAPPER
-  unlink File::Spec->catfile( $mist_home, 'mist-run' );
-  symlink $mist_run_fn, File::Spec->catfile( $mist_home, 'mist-run' );
+  my $global_mist_run = File::Spec->catfile( $mist_home, 'mist-run' );
+  unlink $global_mist_run;
+  symlink( $mist_run_fn, $global_mist_run )
+    or warn "Permission denied while creating ./mpan-run\n";
   for my $script_dir (qw/ bin sbin script /) {
     my $loc_script_dir = File::Spec->catdir( $perl5_baselib, $script_dir );
     my @binaries;
@@ -24630,6 +24652,7 @@ $PREREQUISITE_DISTS = [
   'Path::Class',
   'Probe::Perl',
   'Software::License',
+  'Sort::Key',
   'local::lib~2.00'
 ];
 ;

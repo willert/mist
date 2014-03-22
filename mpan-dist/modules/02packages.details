@@ -366,6 +366,12 @@ Software::License::SSLeay          0.103009  R/RJ/RJBS/Software-License-0.103009
 Software::License::Sun             0.103009  R/RJ/RJBS/Software-License-0.103009.tar.gz
 Software::License::Zlib            0.103009  R/RJ/RJBS/Software-License-0.103009.tar.gz
 Software::LicenseUtils             0.103009  R/RJ/RJBS/Software-License-0.103009.tar.gz
+Sort::Key                           1.32  S/SA/SALVA/Sort-Key-1.32.tar.gz
+Sort::Key::Maker                    0.02  S/SA/SALVA/Sort-Key-1.32.tar.gz
+Sort::Key::Multi                    1.30  S/SA/SALVA/Sort-Key-1.32.tar.gz
+Sort::Key::Natural                  0.04  S/SA/SALVA/Sort-Key-1.32.tar.gz
+Sort::Key::Register                 1.30  S/SA/SALVA/Sort-Key-1.32.tar.gz
+Sort::Key::Types                    1.30  S/SA/SALVA/Sort-Key-1.32.tar.gz
 String::RewritePrefix              0.007  R/RJ/RJBS/String-RewritePrefix-0.007.tar.gz
 Sub::Defer                         1.004002  H/HA/HAARG/Moo-1.004002.tar.gz
 Sub::Exporter                      0.987  R/RJ/RJBS/Sub-Exporter-0.987.tar.gz

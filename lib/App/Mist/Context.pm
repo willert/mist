@@ -20,6 +20,8 @@ use CPAN::Meta::Prereqs 2.132830;
 use Mist::Distribution;
 use Mist::Environment;
 
+use Sort::Key qw/keysort/;
+
 has project_root => (
   is         => 'ro',
   isa        => 'Path::Class::Dir',
@@ -325,7 +327,8 @@ sub fetch_prereqs {
     push @reqs, $req_str;
   }
 
-  return @reqs;
+  # sort by module name without version requirements
+  return keysort { s/~.*//r } @reqs;
 }
 
 

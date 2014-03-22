@@ -8,6 +8,7 @@ requires "Capture::Tiny";
 requires "List::MoreUtils";
 requires "Digest::MD5";
 requires "Module::Path";
+requires "Sort::Key";
 
 requires "Path::Class";
 requires "File::Find::Upwards";
