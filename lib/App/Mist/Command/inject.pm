@@ -3,8 +3,6 @@ use 5.010;
 
 use App::Mist -command;
 
-use Mist::PackageManager::MPAN;
-
 sub execute {
   my ( $self, $opt, $args ) = @_;
   my $ctx = $self->app->ctx;
@@ -14,6 +12,7 @@ sub execute {
 
   $ctx->ensure_correct_perlbrew_context;
 
+  require Mist::PackageManager::MPAN;
   my $package_manager = Mist::PackageManager::MPAN->new({
     project_root => $ctx->project_root,
     local_lib    => $ctx->local_lib,

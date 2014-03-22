@@ -3,9 +3,6 @@ use 5.010;
 
 use App::Mist -command;
 
-use Mist::Role::cpanminus;
-use Mist::PackageManager::MPAN;
-
 sub execute {
   my ( $self, $opt, $args ) = @_;
   my $ctx = $self->app->ctx;
@@ -26,6 +23,7 @@ sub execute {
   my @modules  = grep{ !/^-/ } @$args;
   my @cmd_args = grep{ /^-/ } @$args;
 
+  require Mist::Role::cpanminus;
   Mist::Role::cpanminus->run_cpanm( @cpanm_options, @cmd_args, @modules );
 }
 

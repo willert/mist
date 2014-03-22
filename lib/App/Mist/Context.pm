@@ -15,7 +15,7 @@ use File::Find::Upwards;
 use File::Share qw/ dist_file /;
 
 use Module::CPANfile;
-use CPAN::Meta::Prereqs 2.132830;
+use CPAN::Meta::Prereqs;
 
 use Mist::Distribution;
 use Mist::Environment;
@@ -312,6 +312,8 @@ sub slurp_file {
 
 sub fetch_prereqs {
   my $self = shift;
+
+  CPAN::Meta::Prereqs->VERSION( '2.132830' );
 
   my $cpanfile = Module::CPANfile->load( $self->cpanfile->stringify );
   my $prereqs  = $cpanfile->prereqs->merged_requirements;

@@ -3,8 +3,6 @@ use 5.010;
 
 use App::Mist -command;
 
-use Mist::PackageManager::MPAN;
-
 use Capture::Tiny qw/ capture /;
 
 sub execute {
@@ -32,6 +30,7 @@ sub execute {
     exit 0;
   }
 
+  require Mist::PackageManager::MPAN;
   my $package_manager = Mist::PackageManager::MPAN->new({
     project_root => $ctx->project_root,
     local_lib    => $ctx->local_lib,

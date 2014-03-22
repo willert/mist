@@ -9,11 +9,6 @@ use File::Basename qw/ basename /;
 use File::Copy qw/ copy /;
 use File::Path ();
 
-use Mist::PackageManager::MPAN;
-
-use Minilla::Project;
-use Minilla::Util qw/ check_git /;
-
 use Cwd;
 use Try::Tiny;
 
@@ -39,10 +34,13 @@ sub execute {
 
   my $current_pwd = dir( getcwd());
 
+  require Minilla::Project;
+  require Minilla::Util;
+
   my ( $dist, $project, $work_dir );
   try {
     chdir( "$path" );
-    check_git;
+    Minilla::Util::check_git();
     $project = Minilla::Project->new({ cleanup => 0 });
     $work_dir = $project->work_dir;
     $dist = $work_dir->dist();
@@ -57,6 +55,7 @@ sub execute {
 
   printf "Injecting distribution %s\n", $dist;
 
+  require Mist::PackageManager::MPAN;
   my $package_manager = Mist::PackageManager::MPAN->new({
     project_root => $ctx->project_root,
     local_lib    => $ctx->local_lib,
