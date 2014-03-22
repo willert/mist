@@ -64,7 +64,6 @@ MSG
 
   my @pb_installed_versions = qx# bash -c '
     export PERLBREW_ROOT=${pb_root}
-    export PERLBREW_HOME=${pb_home}
 
     if ( ! . \${PERLBREW_ROOT}/etc/bashrc ) ; then
       perlbrew init 2>/dev/null
@@ -100,7 +99,6 @@ MSG
   if ( not $ENV{MIST_PERLBREW_VERSION} ) {
     if ( !$ENV{PERLBREW_PERL} or $ENV{PERLBREW_PERL} ne $pb_version ) {
       $ENV{PERLBREW_ROOT} = $pb_root;
-      $ENV{PERLBREW_HOME} = $pb_home;
       my $pb_archname = get_archname();
 
       $ENV{MIST_PERLBREW_VERSION} = $pb_version;
