@@ -26,7 +26,8 @@ my ( $branch, $parent );
   if defined $branch and not $branch;
 
 my $arch_path = join( q{-}, 'perl', $Config{version}, $Config{archname} );
-our $LOCAL_LIB_DIR = File::Spec->catdir(
+
+our $LOCAL_LIB_DIR   = File::Spec->catdir(
   $PERL5_BASE_LIB, join( q{-}, $arch_path, $branch ? $branch : () )
 );
 
@@ -65,9 +66,11 @@ my $mist_home = $ENV{MIST_APP_ROOT} ? $ENV{MIST_APP_ROOT} : $Bin;
 my $perl5_baselib = File::Spec->catdir( $mist_home, $PERL5_BASE_LIB );
 mkpath( $perl5_baselib );
 
-my $mpan          = File::Spec->catdir( $Bin, $MPAN_DIST_DIR );
-my $local_lib     = File::Spec->catdir( $mist_home, $LOCAL_LIB_DIR );
-my $libexec_dir   = File::Spec->catdir( $perl5_baselib, 'libexec' );
+my $mpan           = File::Spec->catdir( $Bin, $MPAN_DIST_DIR );
+my $local_lib      = File::Spec->catdir( $mist_home, $LOCAL_LIB_DIR );
+my $libexec_dir    = File::Spec->catdir( $perl5_baselib, 'libexec' );
+my $generic_libdir = File::Spec->catdir( $mist_home, $PERL5_BASE_LIB, $arch_path );
+
 
 mkpath( $libexec_dir );
 
@@ -106,6 +109,14 @@ unless (caller) {
   die "mpan-install can not run as root\n" if $> == 0;
 
   my $workspace = tempdir();
+
+  die <<"MSG" if -l $local_lib;
+Directory
+  $local_lib
+is a symlink to a branch, please remove it manually and
+restart ./mpan-install or specify a branch to install to.
+MSG
+
   mkpath( $local_lib );
 
   if ( not -r $mpan or not -w $local_lib ) {
@@ -263,6 +274,17 @@ WRAPPER
     }
   }
 
+  # try to relink branch-less local lib to branch
+  if ( $branch ) {
+    if ( -l $generic_libdir or not -e $generic_libdir ) {
+      print "Re-linking $generic_libdir to current branch\n";
+      unlink $generic_libdir;
+      symlink $LOCAL_LIB_DIR, $generic_libdir
+        or die "Failed to create symlink for $generic_libdir";
+    } else {
+      warn "$generic_libdir exists but isn't a symlink, leaving it alone.\n";
+    }
+  }
 
   print <<"SUCCESS";
 

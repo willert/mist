@@ -166,8 +166,9 @@ sub _build_local_lib {
   my $self = shift;
 
   my $version = join( q{-}, 'perl', $Config{version}, $Config{archname} );
-
-  return $self->perl5_base_lib->subdir( $version );
+  my $lib_dir = $self->perl5_base_lib->subdir( $version );
+  $lib_dir = dir( readlink $lib_dir->stringify ) if -l $lib_dir;
+  return $lib_dir;
 }
 
 
