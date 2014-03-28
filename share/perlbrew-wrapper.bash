@@ -27,6 +27,4 @@ export PATH="$LOCAL_LIB/bin:$LOCAL_LIB/sbin:$PATH"
 export PATH="$MIST_ROOT/bin:$MIST_ROOT/sbin:$MIST_ROOT/script:$PATH"
 export PERL5LIB="$MIST_ROOT/lib:$PERL5LIB"
 
-eval `perlbrew $PERLBREW_OPTS perl -Mlocal::lib=$LOCAL_LIB`
-
 perlbrew $PERLBREW_OPTS "$@"
