@@ -20,6 +20,11 @@ sub run_cpanm {
   Carp::carp( sprintf qq{$cpanm '%s'\n}, join( q{', '}, @cmd_opts ))
       if $DEBUG;
 
+  # use Data::Dumper;
+  # printf STDERR "[Dumper] at Mist::Role::cpanminus line 26: %s\n",
+  #   Dumper([ local::lib->active_paths ]);
+
+
   my $exit = system( $cpanm, @cmd_opts );
   Carp::croak( "cpanm @cmd_opts failed [$exit] : $?" )
     if $exit != 0 and $DEBUG;

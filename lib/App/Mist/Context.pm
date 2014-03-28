@@ -270,7 +270,7 @@ MSG
     exec $pb_exec, 'exec', '--quiet', '--with', $pb_version,
       dist_file( 'App-Mist', 'perlbrew-wrapper.bash' ), $0, @ARGV;
   } else {
-    { local $SIG{__WARN__} = sub{}; local::lib->import('--deactivate-all') }
+    local $SIG{__WARN__} = sub{};
     eval 'require local::lib;' or die join(
       qq{\n},
       "FATAL: missing local::lib ",
@@ -279,6 +279,7 @@ MSG
         "sudo -E perlbrew exec --with ${pb_version} cpanm local::lib",
       "to install it as root"
     );
+    local::lib->import('--deactivate-all');
     local::lib->import( $self->local_lib );
   }
 }
