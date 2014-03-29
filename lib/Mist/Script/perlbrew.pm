@@ -133,11 +133,13 @@ sub ensure_runtime_is_correct_perl_version {
 sub check_runtime_environment {
   return unless $pb_version;
 
-  # ensure cpanm is installed
-  print "Ensuring cpanm is installed in this environment\n";
-  my $cpanm_exit = system( "$pb_exec install-cpanm </dev/null >/dev/null" );
-  die "Installing cpanm failed (try running `perlbrew install-cpanm` as root)\n"
-    unless $cpanm_exit == 0;
+  # not sure why we would need an external cpanm anymore
+
+  # # ensure cpanm is installed
+  # print "Ensuring cpanm is installed in this environment\n";
+  # my $cpanm_exit = system( "$pb_exec install-cpanm </dev/null >/dev/null" );
+  # die "Installing cpanm failed (try running `perlbrew install-cpanm` as root)\n"
+  #   unless $cpanm_exit == 0;
 }
 
 
