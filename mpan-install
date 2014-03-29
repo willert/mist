@@ -1,15 +1,16 @@
 #!/usr/bin/env perl
 
-sub __mist::no_thanks {
-  my $file = __FILE__;
-  for my $mod ( @_ ) {
-    ( my $basename = $mod ) =~ s!(::|')!/!g;
-    $INC{ "${basename}.pm" } = $file;
+  sub __mist::no_thanks {
+    my $file = __FILE__;
+    for my $mod ( @_ ) {
+      ( my $basename = $mod ) =~ s!(::|')!/!g;
+      $INC{ "${basename}.pm" } = $file;
+    }
   }
-}
 
 ;BEGIN{
 #! perl
+
 # Getopt::Long.pm -- Universal options parsing
 # Author          : Johan Vromans
 # Created On      : Tue Sep 11 15:00:12 1990
@@ -17,18 +18,25 @@ sub __mist::no_thanks {
 # Last Modified On: Tue Oct  1 08:25:52 2013
 # Update Count    : 1651
 # Status          : Released
+
 ################ Module Preamble ################
+
 package Getopt::Long;
+
 use 5.004;
+
 use strict;
+
 use vars qw($VERSION);
 $VERSION        =  2.42;
 # For testing versions only.
 use vars qw($VERSION_STRING);
 $VERSION_STRING = "2.42";
+
 use Exporter;
 use vars qw(@ISA @EXPORT @EXPORT_OK);
 @ISA = qw(Exporter);
+
 # Exported subroutines.
 sub GetOptions(@);		# always
 sub GetOptionsFromArray(@);	# on demand
@@ -36,12 +44,14 @@ sub GetOptionsFromString(@);	# on demand
 sub Configure(@);		# on demand
 sub HelpMessage(@);		# on demand
 sub VersionMessage(@);		# in demand
+
 BEGIN {
     # Init immediately so their contents can be used in the 'use vars' below.
     @EXPORT    = qw(&GetOptions $REQUIRE_ORDER $PERMUTE $RETURN_IN_ORDER);
     @EXPORT_OK = qw(&HelpMessage &VersionMessage &Configure
 		    &GetOptionsFromArray &GetOptionsFromString);
 }
+
 # User visible variables.
 use vars @EXPORT, @EXPORT_OK;
 use vars qw($error $debug $major_version $minor_version);
@@ -50,20 +60,26 @@ use vars qw($autoabbrev $getopt_compat $ignorecase $bundling $order
 	    $passthrough);
 # Official invisible variables.
 use vars qw($genprefix $caller $gnu_compat $auto_help $auto_version $longprefix);
+
 # Public subroutines.
 sub config(@);			# deprecated name
+
 # Private subroutines.
 sub ConfigDefaults();
 sub ParseOptionSpec($$);
 sub OptCtl($);
 sub FindOption($$$$$);
 sub ValidValue ($$$$$);
+
 ################ Local Variables ################
+
 # $requested_version holds the version that was mentioned in the 'use'
 # or 'require', if any. It can be used to enable or disable specific
 # features.
 my $requested_version = 0;
+
 ################ Resident subroutines ################
+
 sub ConfigDefaults() {
     # Handle POSIX compliancy.
     if ( defined $ENV{"POSIXLY_CORRECT"} ) {
@@ -88,6 +104,7 @@ sub ConfigDefaults() {
     $gnu_compat = 0;		# require --opt=val if value is optional
     $longprefix = "(--)";       # what does a long prefix look like
 }
+
 # Override import.
 sub import {
     my $pkg = shift;		# package
@@ -109,26 +126,36 @@ sub import {
     # And configure.
     Configure(@config) if @config;
 }
+
 ################ Initialization ################
+
 # Values for $order. See GNU getopt.c for details.
 ($REQUIRE_ORDER, $PERMUTE, $RETURN_IN_ORDER) = (0..2);
 # Version major/minor numbers.
 ($major_version, $minor_version) = $VERSION =~ /^(\d+)\.(\d+)/;
+
 ConfigDefaults();
+
 ################ OO Interface ################
+
 package Getopt::Long::Parser;
+
 # Store a copy of the default configuration. Since ConfigDefaults has
 # just been called, what we get from Configure is the default.
 my $default_config = do {
     Getopt::Long::Configure ()
 };
+
 sub new {
     my $that = shift;
     my $class = ref($that) || $that;
     my %atts = @_;
+
     # Register the callers package.
     my $self = { caller_pkg => (caller)[0] };
+
     bless ($self, $class);
+
     # Process config attributes.
     if ( defined $atts{config} ) {
 	my $save = Getopt::Long::Configure ($default_config, @{$atts{config}});
@@ -139,30 +166,41 @@ sub new {
     else {
 	$self->{settings} = $default_config;
     }
+
     if ( %atts ) {		# Oops
 	die(__PACKAGE__.": unhandled attributes: ".
 	    join(" ", sort(keys(%atts)))."\n");
     }
+
     $self;
 }
+
 sub configure {
     my ($self) = shift;
+
     # Restore settings, merge new settings in.
     my $save = Getopt::Long::Configure ($self->{settings}, @_);
+
     # Restore orig config and save the new config.
     $self->{settings} = Getopt::Long::Configure ($save);
 }
+
 sub getoptions {
     my ($self) = shift;
+
     return $self->getoptionsfromarray(\@ARGV, @_);
 }
+
 sub getoptionsfromarray {
     my ($self) = shift;
+
     # Restore config settings.
     my $save = Getopt::Long::Configure ($self->{settings});
+
     # Call main routine.
     my $ret = 0;
     $Getopt::Long::caller = $self->{caller_pkg};
+
     eval {
 	# Locally set exception handler to default, otherwise it will
 	# be called implicitly here, and again explicitly when we try
@@ -170,14 +208,19 @@ sub getoptionsfromarray {
 	local ($SIG{__DIE__}) = 'DEFAULT';
 	$ret = Getopt::Long::GetOptionsFromArray (@_);
     };
+
     # Restore saved settings.
     Getopt::Long::Configure ($save);
+
     # Handle errors and return value.
     die ($@) if $@;
     return $ret;
 }
+
 package Getopt::Long;
+
 ################ Back to Normal ################
+
 # Indices in option control info.
 # Note that ParseOptions uses the fields directly. Search for 'hard-wired'.
 use constant CTL_TYPE    => 0;
@@ -189,18 +232,24 @@ use constant CTL_TYPE    => 0;
 #use constant   CTL_TYPE_XINT   => 'o';
 #use constant   CTL_TYPE_FLOAT  => 'f';
 #use constant   CTL_TYPE_STRING => 's';
+
 use constant CTL_CNAME   => 1;
+
 use constant CTL_DEFAULT => 2;
+
 use constant CTL_DEST    => 3;
  use constant   CTL_DEST_SCALAR => 0;
  use constant   CTL_DEST_ARRAY  => 1;
  use constant   CTL_DEST_HASH   => 2;
  use constant   CTL_DEST_CODE   => 3;
+
 use constant CTL_AMIN    => 4;
 use constant CTL_AMAX    => 5;
+
 # FFU.
 #use constant CTL_RANGE   => ;
 #use constant CTL_REPEAT  => ;
+
 # Rather liberal patterns to match numbers.
 use constant PAT_INT   => "[-+]?_*[0-9][0-9_]*";
 use constant PAT_XINT  =>
@@ -214,12 +263,14 @@ use constant PAT_XINT  =>
 	  "0[0-7_]*".
   ")";
 use constant PAT_FLOAT => "[-+]?[0-9_]+(\.[0-9_]+)?([eE][-+]?[0-9_]+)?";
+
 sub GetOptions(@) {
     # Shift in default array.
     unshift(@_, \@ARGV);
     # Try to keep caller() and Carp consistent.
     goto &GetOptionsFromArray;
 }
+
 sub GetOptionsFromString(@) {
     my ($string) = shift;
     require Text::ParseWords;
@@ -233,7 +284,9 @@ sub GetOptionsFromString(@) {
     }
     $ret;
 }
+
 sub GetOptionsFromArray(@) {
+
     my ($argv, @optionlist) = @_;	# local copy of the option descriptions
     my $argend = '--';		# option list terminator
     my %opctl = ();		# table of option specs
@@ -244,7 +297,9 @@ sub GetOptionsFromArray(@) {
     my $userlinkage;		# user supplied HASH
     my $opt;			# current option
     my $prefix = $genprefix;	# current prefix
+
     $error = '';
+
     if ( $debug ) {
 	# Avoid some warnings if debugging.
 	local ($^W) = 0;
@@ -267,6 +322,7 @@ sub GetOptionsFromArray(@) {
 	   "longprefix=\"$longprefix\".",
 	   "\n");
     }
+
     # Check for ref HASH as first argument.
     # First argument may be an object. It's OK to use this as long
     # as it is really a hash underneath.
@@ -276,6 +332,7 @@ sub GetOptionsFromArray(@) {
 	$userlinkage = shift (@optionlist);
 	print STDERR ("=> user linkage: $userlinkage\n") if $debug;
     }
+
     # See if the first element of the optionlist contains option
     # starter characters.
     # Be careful not to interpret '<>' as option starters.
@@ -289,16 +346,20 @@ sub GetOptionsFromArray(@) {
 	$prefix = "([" . $prefix . "])";
 	print STDERR ("=> prefix=\"$prefix\"\n") if $debug;
     }
+
     # Verify correctness of optionlist.
     %opctl = ();
     while ( @optionlist ) {
 	my $opt = shift (@optionlist);
+
 	unless ( defined($opt) ) {
 	    $error .= "Undefined argument in option spec\n";
 	    next;
 	}
+
 	# Strip leading prefix so people can specify "--foo=i" if they like.
 	$opt = $+ if $opt =~ /^$prefix+(.*)$/s;
+
 	if ( $opt eq '<>' ) {
 	    if ( (defined $userlinkage)
 		&& !(@optionlist > 0 && ref($optionlist[0]))
@@ -317,6 +378,7 @@ sub GetOptionsFromArray(@) {
 	    $linkage{'<>'} = shift (@optionlist);
 	    next;
 	}
+
 	# Parse option spec.
 	my ($name, $orig) = ParseOptionSpec ($opt, \%opctl);
 	unless ( defined $name ) {
@@ -327,6 +389,7 @@ sub GetOptionsFromArray(@) {
 	      if @optionlist && ref($optionlist[0]);
 	    next;
 	}
+
 	# If no linkage is supplied in the @optionlist, copy it from
 	# the userlinkage if available.
 	if ( defined $userlinkage ) {
@@ -344,11 +407,13 @@ sub GetOptionsFromArray(@) {
 		}
 	    }
 	}
+
 	# Copy the linkage. If omitted, link to global variable.
 	if ( @optionlist > 0 && ref($optionlist[0]) ) {
 	    print STDERR ("=> link \"$orig\" to $optionlist[0]\n")
 		if $debug;
 	    my $rl = ref($linkage{$orig} = shift (@optionlist));
+
 	    if ( $rl eq "ARRAY" ) {
 		$opctl{$name}[CTL_DEST] = CTL_DEST_ARRAY;
 	    }
@@ -394,16 +459,20 @@ sub GetOptionsFromArray(@) {
 		eval ("\$linkage{\$orig} = \\\$".$pkg."::opt_$ov;");
 	    }
 	}
+
 	if ( $opctl{$name}[CTL_TYPE] eq 'I'
 	     && ( $opctl{$name}[CTL_DEST] == CTL_DEST_ARRAY
 		  || $opctl{$name}[CTL_DEST] == CTL_DEST_HASH )
 	   ) {
 	    $error .= "Invalid option linkage for \"$opt\"\n";
 	}
+
     }
+
     # Bail out if errors found.
     die ($error) if $error;
     $error = 0;
+
     # Supply --version and --help support, if needed and allowed.
     if ( defined($auto_version) ? $auto_version : ($requested_version >= 2.3203) ) {
 	if ( !defined($opctl{version}) ) {
@@ -419,6 +488,7 @@ sub GetOptionsFromArray(@) {
 	}
 	$auto_help = 1;
     }
+
     # Show the options tables if debugging.
     if ( $debug ) {
 	my ($arrow, $k, $v);
@@ -428,37 +498,48 @@ sub GetOptionsFromArray(@) {
 	    $arrow = "   ";
 	}
     }
+
     # Process argument list
     my $goon = 1;
     while ( $goon && @$argv > 0 ) {
+
 	# Get next argument.
 	$opt = shift (@$argv);
 	print STDERR ("=> arg \"", $opt, "\"\n") if $debug;
+
 	# Double dash is option list terminator.
 	if ( defined($opt) && $opt eq $argend ) {
 	  push (@ret, $argend) if $passthrough;
 	  last;
 	}
+
 	# Look it up.
 	my $tryopt = $opt;
 	my $found;		# success status
 	my $key;		# key (if hash type)
 	my $arg;		# option argument
 	my $ctl;		# the opctl entry
+
 	($found, $opt, $ctl, $arg, $key) =
 	  FindOption ($argv, $prefix, $argend, $opt, \%opctl);
+
 	if ( $found ) {
+
 	    # FindOption undefines $opt in case of errors.
 	    next unless defined $opt;
+
 	    my $argcnt = 0;
 	    while ( defined $arg ) {
+
 		# Get the canonical name.
 		print STDERR ("=> cname for \"$opt\" is ") if $debug;
 		$opt = $ctl->[CTL_CNAME];
 		print STDERR ("\"$ctl->[CTL_CNAME]\"\n") if $debug;
+
 		if ( defined $linkage{$opt} ) {
 		    print STDERR ("=> ref(\$L{$opt}) -> ",
 				  ref($linkage{$opt}), "\n") if $debug;
+
 		    if ( ref($linkage{$opt}) eq 'SCALAR'
 			 || ref($linkage{$opt}) eq 'REF' ) {
 			if ( $ctl->[CTL_TYPE] eq '+' ) {
@@ -588,9 +669,11 @@ sub GetOptionsFromArray(@) {
 			$userlinkage->{$opt} = $arg;
 		    }
 		}
+
 		$argcnt++;
 		last if $argcnt >= $ctl->[CTL_AMAX] && $ctl->[CTL_AMAX] != -1;
 		undef($arg);
+
 		# Need more args?
 		if ( $argcnt < $ctl->[CTL_AMIN] ) {
 		    if ( @$argv ) {
@@ -614,6 +697,7 @@ sub GetOptionsFromArray(@) {
 			$error++;
 		    }
 		}
+
 		# Any more args?
 		if ( @$argv && ValidValue($ctl, $argv->[0], 0, $argend, $prefix) ) {
 		    $arg = shift(@$argv);
@@ -629,6 +713,7 @@ sub GetOptionsFromArray(@) {
 		}
 	    }
 	}
+
 	# Not an option. Save it if we $PERMUTE and don't have a <>.
 	elsif ( $order == $PERMUTE ) {
 	    # Try non-options call-back.
@@ -667,13 +752,16 @@ sub GetOptionsFromArray(@) {
 	    }
 	    next;
 	}
+
 	# ...otherwise, terminate.
 	else {
 	    # Push this one back and exit.
 	    unshift (@$argv, $tryopt);
 	    return ($error == 0);
 	}
+
     }
+
     # Finish.
     if ( @ret && $order == $PERMUTE ) {
 	#  Push back accumulated arguments
@@ -681,8 +769,10 @@ sub GetOptionsFromArray(@) {
 	    if $debug;
 	unshift (@$argv, @ret);
     }
+
     return ($error == 0);
 }
+
 # A readable representation of what's in an optbl.
 sub OptCtl ($) {
     my ($v) = @_;
@@ -699,9 +789,11 @@ sub OptCtl ($) {
 #	   $v[CTL_REPEAT] || '',
 	  ). "]";
 }
+
 # Parse an option specification and fill the tables.
 sub ParseOptionSpec ($$) {
     my ($opt, $opctl) = @_;
+
     # Match option spec.
     if ( $opt !~ m;^
 		   (
@@ -725,8 +817,10 @@ sub ParseOptionSpec ($$) {
 		   $;x ) {
 	return (undef, "Error in option spec: \"$opt\"\n");
     }
+
     my ($names, $spec) = ($1, $2);
     $spec = '' unless defined $spec;
+
     # $orig keeps track of the primary name the user specified.
     # This name will be used for the internal or external linkage.
     # In other words, if the user specifies "FoO|BaR", it will
@@ -734,6 +828,7 @@ sub ParseOptionSpec ($$) {
     # variable needs to be set, it will be $opt_FoO in the exact case
     # as specified.
     my $orig;
+
     my @names;
     if ( defined $names ) {
 	@names =  split (/\|/, $names);
@@ -743,6 +838,7 @@ sub ParseOptionSpec ($$) {
 	@names = ('');
 	$orig = '';
     }
+
     # Construct the opctl entries.
     my $entry;
     if ( $spec eq '' || $spec eq '+' || $spec eq '!' ) {
@@ -768,6 +864,7 @@ sub ParseOptionSpec ($$) {
 	my ($mi, $cm, $ma) = ($5, $6, $7);
 	return (undef, "{0} is useless in option spec: \"$opt\"\n")
 	  if defined($mi) && !$mi && !defined($ma) && !defined($cm);
+
 	$type = 'i' if $type eq 'n';
 	$dest ||= '$';
 	$dest = $dest eq '@' ? CTL_DEST_ARRAY
@@ -782,17 +879,22 @@ sub ParseOptionSpec ($$) {
 	  if defined($ma) && !$ma;
 	return (undef, "Max less than min in option spec: \"$opt\"\n")
 	  if defined($ma) && $ma < $mi;
+
 	# Fields are hard-wired here.
 	$entry = [$type,$orig,undef,$dest,$mi,$ma||-1];
     }
+
     # Process all names. First is canonical, the rest are aliases.
     my $dups = '';
     foreach ( @names ) {
+
 	$_ = lc ($_)
 	  if $ignorecase > (($bundling && length($_) == 1) ? 1 : 0);
+
 	if ( exists $opctl->{$_} ) {
 	    $dups .= "Duplicate specification \"$opt\" for option \"$_\"\n";
 	}
+
 	if ( $spec eq '!' ) {
 	    $opctl->{"no$_"} = $entry;
 	    $opctl->{"no-$_"} = $entry;
@@ -803,6 +905,7 @@ sub ParseOptionSpec ($$) {
 	    $opctl->{$_} = $entry;
 	}
     }
+
     if ( $dups && $^W ) {
 	foreach ( split(/\n+/, $dups) ) {
 	    warn($_."\n");
@@ -810,21 +913,30 @@ sub ParseOptionSpec ($$) {
     }
     ($names[0], $orig);
 }
+
 # Option lookup.
 sub FindOption ($$$$$) {
+
     # returns (1, $opt, $ctl, $arg, $key) if okay,
     # returns (1, undef) if option in error,
     # returns (0) otherwise.
+
     my ($argv, $prefix, $argend, $opt, $opctl) = @_;
+
     print STDERR ("=> find \"$opt\"\n") if $debug;
+
     return (0) unless defined($opt);
     return (0) unless $opt =~ /^($prefix)(.*)$/s;
     return (0) if $opt eq "-" && !defined $opctl->{''};
+
     $opt = substr( $opt, length($1) ); # retain taintedness
     my $starter = $1;
+
     print STDERR ("=> split \"$starter\"+\"$opt\"\n") if $debug;
+
     my $optarg;			# value supplied with --opt=value
     my $rest;			# remainder from unbundling
+
     # If it is a long option, it may include the value.
     # With getopt_compat, only if not bundling.
     if ( ($starter=~/^$longprefix$/
@@ -836,11 +948,16 @@ sub FindOption ($$$$$) {
 	print STDERR ("=> option \"", $opt,
 		      "\", optarg = \"$optarg\"\n") if $debug;
     }
+
     #### Look it up ###
+
     my $tryopt = $opt;		# option to try
+
     if ( $bundling && $starter eq '-' ) {
+
 	# To try overrides, obey case ignore.
 	$tryopt = $ignorecase ? lc($opt) : $opt;
+
 	# If bundling == 2, long options can override bundles.
 	if ( $bundling == 2 && length($tryopt) > 1
 	     && defined ($opctl->{$tryopt}) ) {
@@ -858,6 +975,7 @@ sub FindOption ($$$$$) {
 	    $rest = undef unless $rest ne '';
 	}
     }
+
     # Try auto-abbreviation.
     elsif ( $autoabbrev && $opt ne "" ) {
 	# Sort the possible long option names.
@@ -871,6 +989,7 @@ sub FindOption ($$$$$) {
 	my @hits = grep (/^$pat/, @names);
 	print STDERR ("=> ", scalar(@hits), " hits (@hits) with \"$pat\" ",
 		      "out of ", scalar(@names), "\n") if $debug;
+
 	# Check for ambiguous results.
 	unless ( (@hits <= 1) || (grep ($_ eq $opt, @hits) == 1) ) {
 	    # See if all matches are for the same option.
@@ -900,6 +1019,7 @@ sub FindOption ($$$$$) {
 	    }
 	    @hits = keys(%hit);
 	}
+
 	# Complete the option name, if appropriate.
 	if ( @hits == 1 && $hits[0] ne $opt ) {
 	    $tryopt = $hits[0];
@@ -908,10 +1028,12 @@ sub FindOption ($$$$$) {
 		if $debug;
 	}
     }
+
     # Map to all lowercase if ignoring case.
     elsif ( $ignorecase ) {
 	$tryopt = lc ($opt);
     }
+
     # Check validity by fetching the info.
     my $ctl = $opctl->{$tryopt};
     unless  ( defined $ctl ) {
@@ -934,10 +1056,13 @@ sub FindOption ($$$$$) {
     $opt = $tryopt;
     print STDERR ("=> found ", OptCtl($ctl),
 		  " for \"", $opt, "\"\n") if $debug;
+
     #### Determine argument status ####
+
     # If it is an option w/o argument, we're almost finished with it.
     my $type = $ctl->[CTL_TYPE];
     my $arg;
+
     if ( $type eq '' || $type eq '!' || $type eq '+' ) {
 	if ( defined $optarg ) {
 	    return (0) if $passthrough;
@@ -956,13 +1081,16 @@ sub FindOption ($$$$$) {
 	unshift (@$argv, $starter.$rest) if defined $rest;
 	return (1, $opt, $ctl, $arg);
     }
+
     # Get mandatory status and type info.
     my $mand = $ctl->[CTL_AMIN];
+
     # Check if there is an option argument available.
     if ( $gnu_compat && defined $optarg && $optarg eq '' ) {
 	return (1, $opt, $ctl, $type eq 's' ? '' : 0) ;#unless $mand;
 	$optarg = 0 unless $type eq 's';
     }
+
     # Check if there is an option argument available.
     if ( defined $optarg
 	 ? ($optarg eq '')
@@ -985,9 +1113,11 @@ sub FindOption ($$$$$) {
 		defined($ctl->[CTL_DEFAULT]) ? $ctl->[CTL_DEFAULT] :
 		$type eq 's' ? '' : 0);
     }
+
     # Get (possibly optional) argument.
     $arg = (defined $rest ? $rest
 	    : (defined $optarg ? $optarg : shift (@$argv)));
+
     # Get key if this is a "name=value" pair for a hash option.
     my $key;
     if ($ctl->[CTL_DEST] == CTL_DEST_HASH && defined $arg) {
@@ -1002,18 +1132,24 @@ sub FindOption ($$$$$) {
 	    return (1, undef);
 	}
     }
+
     #### Check if the argument is valid for this option ####
+
     my $key_valid = $ctl->[CTL_DEST] == CTL_DEST_HASH ? "[^=]+=" : "";
+
     if ( $type eq 's' ) {	# string
 	# A mandatory string takes anything.
 	return (1, $opt, $ctl, $arg, $key) if $mand;
+
 	# Same for optional string as a hash value
 	return (1, $opt, $ctl, $arg, $key)
 	  if $ctl->[CTL_DEST] == CTL_DEST_HASH;
+
 	# An optional string takes almost anything.
 	return (1, $opt, $ctl, $arg, $key)
 	  if defined $optarg || defined $rest;
 	return (1, $opt, $ctl, $arg, $key) if $arg eq "-"; # ??
+
 	# Check for option or option list terminator.
 	if ($arg eq $argend ||
 	    $arg =~ /^$prefix.+/) {
@@ -1023,10 +1159,13 @@ sub FindOption ($$$$$) {
 	    $arg = '';
 	}
     }
+
     elsif ( $type eq 'i'	# numeric/integer
             || $type eq 'I'	# numeric/integer w/ incr default
 	    || $type eq 'o' ) { # dec/oct/hex/bin value
+
 	my $o_valid = $type eq 'o' ? PAT_XINT : PAT_INT;
+
 	if ( $bundling && defined $rest
 	     && $rest =~ /^($key_valid)($o_valid)(.*)$/si ) {
 	    ($key, $arg, $rest) = ($1, $2, $+);
@@ -1068,6 +1207,7 @@ sub FindOption ($$$$$) {
 	    }
 	}
     }
+
     elsif ( $type eq 'f' ) { # real number, int is also ok
 	# We require at least one digit before a point or 'e',
 	# and at least one digit following the point and 'e'.
@@ -1109,27 +1249,36 @@ sub FindOption ($$$$$) {
     }
     return (1, $opt, $ctl, $arg, $key);
 }
+
 sub ValidValue ($$$$$) {
     my ($ctl, $arg, $mand, $argend, $prefix) = @_;
+
     if ( $ctl->[CTL_DEST] == CTL_DEST_HASH ) {
 	return 0 unless $arg =~ /[^=]+=(.*)/;
 	$arg = $1;
     }
+
     my $type = $ctl->[CTL_TYPE];
+
     if ( $type eq 's' ) {	# string
 	# A mandatory string takes anything.
 	return (1) if $mand;
+
 	return (1) if $arg eq "-";
+
 	# Check for option or option list terminator.
 	return 0 if $arg eq $argend || $arg =~ /^$prefix.+/;
 	return 1;
     }
+
     elsif ( $type eq 'i'	# numeric/integer
             || $type eq 'I'	# numeric/integer w/ incr default
 	    || $type eq 'o' ) { # dec/oct/hex/bin value
+
 	my $o_valid = $type eq 'o' ? PAT_XINT : PAT_INT;
 	return $arg =~ /^$o_valid$/si;
     }
+
     elsif ( $type eq 'f' ) { # real number, int is also ok
 	# We require at least one digit before a point or 'e',
 	# and at least one digit following the point and 'e'.
@@ -1139,20 +1288,24 @@ sub ValidValue ($$$$$) {
     }
     die("ValidValue: Cannot happen\n");
 }
+
 # Getopt::Long Configuration.
 sub Configure (@) {
     my (@options) = @_;
+
     my $prevconfig =
       [ $error, $debug, $major_version, $minor_version,
 	$autoabbrev, $getopt_compat, $ignorecase, $bundling, $order,
 	$gnu_compat, $passthrough, $genprefix, $auto_version, $auto_help,
 	$longprefix ];
+
     if ( ref($options[0]) eq 'ARRAY' ) {
 	( $error, $debug, $major_version, $minor_version,
 	  $autoabbrev, $getopt_compat, $ignorecase, $bundling, $order,
 	  $gnu_compat, $passthrough, $genprefix, $auto_version, $auto_help,
 	  $longprefix ) = @{shift(@options)};
     }
+
     my $opt;
     foreach $opt ( @options ) {
 	my $try = lc ($opt);
@@ -1247,10 +1400,12 @@ sub Configure (@) {
     }
     $prevconfig;
 }
+
 # Deprecated name.
 sub config (@) {
     Configure (@_);
 }
+
 # Issue a standard message for --version.
 #
 # The arguments are mostly the same as for Pod::Usage::pod2usage:
@@ -1262,9 +1417,11 @@ sub config (@) {
 sub VersionMessage(@) {
     # Massage args.
     my $pa = setup_pa_args("version", @_);
+
     my $v = $main::VERSION;
     my $fh = $pa->{-output} ||
       ($pa->{-exitval} eq "NOEXIT" || $pa->{-exitval} < 2) ? \*STDOUT : \*STDERR;
+
     print $fh (defined($pa->{-message}) ? $pa->{-message} : (),
 	       $0, defined $v ? " version $v" : (),
 	       "\n",
@@ -1277,6 +1434,7 @@ sub VersionMessage(@) {
 	       ")\n");
     exit($pa->{-exitval}) unless $pa->{-exitval} eq "NOEXIT";
 }
+
 # Issue a standard message for --help.
 #
 # The arguments are the same as for Pod::Usage::pod2usage:
@@ -1291,16 +1449,21 @@ sub HelpMessage(@) {
 	import Pod::Usage;
 	1;
     } || die("Cannot provide help: cannot load Pod::Usage\n");
+
     # Note that pod2usage will issue a warning if -exitval => NOEXIT.
     pod2usage(setup_pa_args("help", @_));
+
 }
+
 # Helper routine to set up a normalized hash ref to be used as
 # argument to pod2usage.
 sub setup_pa_args($@) {
     my $tag = shift;		# who's calling
+
     # If called by direct binding to an option, it will get the option
     # name and value as arguments. Remove these, if so.
     @_ = () if @_ == 2 && $_[0] eq $tag;
+
     my $pa;
     if ( @_ > 1 ) {
 	$pa = { @_ };
@@ -1308,8 +1471,10 @@ sub setup_pa_args($@) {
     else {
 	$pa = shift || {};
     }
+
     # At this point, $pa can be a number (exit value), string
     # (message) or hash with options.
+
     if ( UNIVERSAL::isa($pa, 'HASH') ) {
 	# Get rid of -msg vs. -message ambiguity.
 	$pa->{-message} = $pa->{-msg};
@@ -1321,823 +1486,41 @@ sub setup_pa_args($@) {
     else {
 	$pa = { -message => $pa };
     }
+
     # These are _our_ defaults.
     $pa->{-verbose} = 0 unless exists($pa->{-verbose});
     $pa->{-exitval} = 0 unless exists($pa->{-exitval});
     $pa;
 }
+
 # Sneak way to know what version the user requested.
 sub VERSION {
     $requested_version = $_[1];
     shift->SUPER::VERSION(@_);
 }
+
 package Getopt::Long::CallBack;
+
 sub new {
     my ($pkg, %atts) = @_;
     bless { %atts }, $pkg;
 }
+
 sub name {
     my $self = shift;
     ''.$self->{name};
 }
+
 use overload
   # Treat this object as an ordinary string for legacy API.
   '""'	   => \&name,
   fallback => 1;
+
 1;
+
 ################ Documentation ################
-=head1 NAME
-Getopt::Long - Extended processing of command line options
-=head1 SYNOPSIS
-  use Getopt::Long;
-  my $data   = "file.dat";
-  my $length = 24;
-  my $verbose;
-  GetOptions ("length=i" => \$length,    # numeric
-              "file=s"   => \$data,      # string
-              "verbose"  => \$verbose)   # flag
-  or die("Error in command line arguments\n");
-=head1 DESCRIPTION
-The Getopt::Long module implements an extended getopt function called
-GetOptions(). It parses the command line from C<@ARGV>, recognizing
-and removing specified options and their possible values.
-This function adheres to the POSIX syntax for command
-line options, with GNU extensions. In general, this means that options
-have long names instead of single letters, and are introduced with a
-double dash "--". Support for bundling of command line options, as was
-the case with the more traditional single-letter approach, is provided
-but not enabled by default.
-=head1 Command Line Options, an Introduction
-Command line operated programs traditionally take their arguments from
-the command line, for example filenames or other information that the
-program needs to know. Besides arguments, these programs often take
-command line I<options> as well. Options are not necessary for the
-program to work, hence the name 'option', but are used to modify its
-default behaviour. For example, a program could do its job quietly,
-but with a suitable option it could provide verbose information about
-what it did.
-Command line options come in several flavours. Historically, they are
-preceded by a single dash C<->, and consist of a single letter.
-    -l -a -c
-Usually, these single-character options can be bundled:
-    -lac
-Options can have values, the value is placed after the option
-character. Sometimes with whitespace in between, sometimes not:
-    -s 24 -s24
-Due to the very cryptic nature of these options, another style was
-developed that used long names. So instead of a cryptic C<-l> one
-could use the more descriptive C<--long>. To distinguish between a
-bundle of single-character options and a long one, two dashes are used
-to precede the option name. Early implementations of long options used
-a plus C<+> instead. Also, option values could be specified either
-like
-    --size=24
-or
-    --size 24
-The C<+> form is now obsolete and strongly deprecated.
-=head1 Getting Started with Getopt::Long
-Getopt::Long is the Perl5 successor of C<newgetopt.pl>. This was the
-first Perl module that provided support for handling the new style of
-command line options, in particular long option names, hence the Perl5
-name Getopt::Long. This module also supports single-character options
-and bundling.
-To use Getopt::Long from a Perl program, you must include the
-following line in your Perl program:
-    use Getopt::Long;
-This will load the core of the Getopt::Long module and prepare your
-program for using it. Most of the actual Getopt::Long code is not
-loaded until you really call one of its functions.
-In the default configuration, options names may be abbreviated to
-uniqueness, case does not matter, and a single dash is sufficient,
-even for long option names. Also, options may be placed between
-non-option arguments. See L<Configuring Getopt::Long> for more
-details on how to configure Getopt::Long.
-=head2 Simple options
-The most simple options are the ones that take no values. Their mere
-presence on the command line enables the option. Popular examples are:
-    --all --verbose --quiet --debug
-Handling simple options is straightforward:
-    my $verbose = '';	# option variable with default value (false)
-    my $all = '';	# option variable with default value (false)
-    GetOptions ('verbose' => \$verbose, 'all' => \$all);
-The call to GetOptions() parses the command line arguments that are
-present in C<@ARGV> and sets the option variable to the value C<1> if
-the option did occur on the command line. Otherwise, the option
-variable is not touched. Setting the option value to true is often
-called I<enabling> the option.
-The option name as specified to the GetOptions() function is called
-the option I<specification>. Later we'll see that this specification
-can contain more than just the option name. The reference to the
-variable is called the option I<destination>.
-GetOptions() will return a true value if the command line could be
-processed successfully. Otherwise, it will write error messages using
-die() and warn(), and return a false result.
-=head2 A little bit less simple options
-Getopt::Long supports two useful variants of simple options:
-I<negatable> options and I<incremental> options.
-A negatable option is specified with an exclamation mark C<!> after the
-option name:
-    my $verbose = '';	# option variable with default value (false)
-    GetOptions ('verbose!' => \$verbose);
-Now, using C<--verbose> on the command line will enable C<$verbose>,
-as expected. But it is also allowed to use C<--noverbose>, which will
-disable C<$verbose> by setting its value to C<0>. Using a suitable
-default value, the program can find out whether C<$verbose> is false
-by default, or disabled by using C<--noverbose>.
-An incremental option is specified with a plus C<+> after the
-option name:
-    my $verbose = '';	# option variable with default value (false)
-    GetOptions ('verbose+' => \$verbose);
-Using C<--verbose> on the command line will increment the value of
-C<$verbose>. This way the program can keep track of how many times the
-option occurred on the command line. For example, each occurrence of
-C<--verbose> could increase the verbosity level of the program.
-=head2 Mixing command line option with other arguments
-Usually programs take command line options as well as other arguments,
-for example, file names. It is good practice to always specify the
-options first, and the other arguments last. Getopt::Long will,
-however, allow the options and arguments to be mixed and 'filter out'
-all the options before passing the rest of the arguments to the
-program. To stop Getopt::Long from processing further arguments,
-insert a double dash C<--> on the command line:
-    --size 24 -- --all
-In this example, C<--all> will I<not> be treated as an option, but
-passed to the program unharmed, in C<@ARGV>.
-=head2 Options with values
-For options that take values it must be specified whether the option
-value is required or not, and what kind of value the option expects.
-Three kinds of values are supported: integer numbers, floating point
-numbers, and strings.
-If the option value is required, Getopt::Long will take the
-command line argument that follows the option and assign this to the
-option variable. If, however, the option value is specified as
-optional, this will only be done if that value does not look like a
-valid command line option itself.
-    my $tag = '';	# option variable with default value
-    GetOptions ('tag=s' => \$tag);
-In the option specification, the option name is followed by an equals
-sign C<=> and the letter C<s>. The equals sign indicates that this
-option requires a value. The letter C<s> indicates that this value is
-an arbitrary string. Other possible value types are C<i> for integer
-values, and C<f> for floating point values. Using a colon C<:> instead
-of the equals sign indicates that the option value is optional. In
-this case, if no suitable value is supplied, string valued options get
-an empty string C<''> assigned, while numeric options are set to C<0>.
-=head2 Options with multiple values
-Options sometimes take several values. For example, a program could
-use multiple directories to search for library files:
-    --library lib/stdlib --library lib/extlib
-To accomplish this behaviour, simply specify an array reference as the
-destination for the option:
-    GetOptions ("library=s" => \@libfiles);
-Alternatively, you can specify that the option can have multiple
-values by adding a "@", and pass a scalar reference as the
-destination:
-    GetOptions ("library=s@" => \$libfiles);
-Used with the example above, C<@libfiles> (or C<@$libfiles>) would
-contain two strings upon completion: C<"lib/stdlib"> and
-C<"lib/extlib">, in that order. It is also possible to specify that
-only integer or floating point numbers are acceptable values.
-Often it is useful to allow comma-separated lists of values as well as
-multiple occurrences of the options. This is easy using Perl's split()
-and join() operators:
-    GetOptions ("library=s" => \@libfiles);
-    @libfiles = split(/,/,join(',',@libfiles));
-Of course, it is important to choose the right separator string for
-each purpose.
-Warning: What follows is an experimental feature.
-Options can take multiple values at once, for example
-    --coordinates 52.2 16.4 --rgbcolor 255 255 149
-This can be accomplished by adding a repeat specifier to the option
-specification. Repeat specifiers are very similar to the C<{...}>
-repeat specifiers that can be used with regular expression patterns.
-For example, the above command line would be handled as follows:
-    GetOptions('coordinates=f{2}' => \@coor, 'rgbcolor=i{3}' => \@color);
-The destination for the option must be an array or array reference.
-It is also possible to specify the minimal and maximal number of
-arguments an option takes. C<foo=s{2,4}> indicates an option that
-takes at least two and at most 4 arguments. C<foo=s{1,}> indicates one
-or more values; C<foo:s{,}> indicates zero or more option values.
-=head2 Options with hash values
-If the option destination is a reference to a hash, the option will
-take, as value, strings of the form I<key>C<=>I<value>. The value will
-be stored with the specified key in the hash.
-    GetOptions ("define=s" => \%defines);
-Alternatively you can use:
-    GetOptions ("define=s%" => \$defines);
-When used with command line options:
-    --define os=linux --define vendor=redhat
-the hash C<%defines> (or C<%$defines>) will contain two keys, C<"os">
-with value C<"linux"> and C<"vendor"> with value C<"redhat">. It is
-also possible to specify that only integer or floating point numbers
-are acceptable values. The keys are always taken to be strings.
-=head2 User-defined subroutines to handle options
-Ultimate control over what should be done when (actually: each time)
-an option is encountered on the command line can be achieved by
-designating a reference to a subroutine (or an anonymous subroutine)
-as the option destination. When GetOptions() encounters the option, it
-will call the subroutine with two or three arguments. The first
-argument is the name of the option. (Actually, it is an object that
-stringifies to the name of the option.) For a scalar or array destination,
-the second argument is the value to be stored. For a hash destination,
-the second argument is the key to the hash, and the third argument
-the value to be stored. It is up to the subroutine to store the value,
-or do whatever it thinks is appropriate.
-A trivial application of this mechanism is to implement options that
-are related to each other. For example:
-    my $verbose = '';	# option variable with default value (false)
-    GetOptions ('verbose' => \$verbose,
-	        'quiet'   => sub { $verbose = 0 });
-Here C<--verbose> and C<--quiet> control the same variable
-C<$verbose>, but with opposite values.
-If the subroutine needs to signal an error, it should call die() with
-the desired error message as its argument. GetOptions() will catch the
-die(), issue the error message, and record that an error result must
-be returned upon completion.
-If the text of the error message starts with an exclamation mark C<!>
-it is interpreted specially by GetOptions(). There is currently one
-special command implemented: C<die("!FINISH")> will cause GetOptions()
-to stop processing options, as if it encountered a double dash C<-->.
-In version 2.37 the first argument to the callback function was
-changed from string to object. This was done to make room for
-extensions and more detailed control. The object stringifies to the
-option name so this change should not introduce compatibility
-problems.
-Here is an example of how to access the option name and value from within
-a subroutine:
-    GetOptions ('opt=i' => \&handler);
-    sub handler {
-        my ($opt_name, $opt_value) = @_;
-        print("Option name is $opt_name and value is $opt_value\n");
-    }
-=head2 Options with multiple names
-Often it is user friendly to supply alternate mnemonic names for
-options. For example C<--height> could be an alternate name for
-C<--length>. Alternate names can be included in the option
-specification, separated by vertical bar C<|> characters. To implement
-the above example:
-    GetOptions ('length|height=f' => \$length);
-The first name is called the I<primary> name, the other names are
-called I<aliases>. When using a hash to store options, the key will
-always be the primary name.
-Multiple alternate names are possible.
-=head2 Case and abbreviations
-Without additional configuration, GetOptions() will ignore the case of
-option names, and allow the options to be abbreviated to uniqueness.
-    GetOptions ('length|height=f' => \$length, "head" => \$head);
-This call will allow C<--l> and C<--L> for the length option, but
-requires a least C<--hea> and C<--hei> for the head and height options.
-=head2 Summary of Option Specifications
-Each option specifier consists of two parts: the name specification
-and the argument specification.
-The name specification contains the name of the option, optionally
-followed by a list of alternative names separated by vertical bar
-characters.
-    length	      option name is "length"
-    length|size|l     name is "length", aliases are "size" and "l"
-The argument specification is optional. If omitted, the option is
-considered boolean, a value of 1 will be assigned when the option is
-used on the command line.
-The argument specification can be
-=over 4
-=item !
-The option does not take an argument and may be negated by prefixing
-it with "no" or "no-". E.g. C<"foo!"> will allow C<--foo> (a value of
-1 will be assigned) as well as C<--nofoo> and C<--no-foo> (a value of
-0 will be assigned). If the option has aliases, this applies to the
-aliases as well.
-Using negation on a single letter option when bundling is in effect is
-pointless and will result in a warning.
-=item +
-The option does not take an argument and will be incremented by 1
-every time it appears on the command line. E.g. C<"more+">, when used
-with C<--more --more --more>, will increment the value three times,
-resulting in a value of 3 (provided it was 0 or undefined at first).
-The C<+> specifier is ignored if the option destination is not a scalar.
-=item = I<type> [ I<desttype> ] [ I<repeat> ]
-The option requires an argument of the given type. Supported types
-are:
-=over 4
-=item s
-String. An arbitrary sequence of characters. It is valid for the
-argument to start with C<-> or C<-->.
-=item i
-Integer. An optional leading plus or minus sign, followed by a
-sequence of digits.
-=item o
-Extended integer, Perl style. This can be either an optional leading
-plus or minus sign, followed by a sequence of digits, or an octal
-string (a zero, optionally followed by '0', '1', .. '7'), or a
-hexadecimal string (C<0x> followed by '0' .. '9', 'a' .. 'f', case
-insensitive), or a binary string (C<0b> followed by a series of '0'
-and '1').
-=item f
-Real number. For example C<3.14>, C<-6.23E24> and so on.
-=back
-The I<desttype> can be C<@> or C<%> to specify that the option is
-list or a hash valued. This is only needed when the destination for
-the option value is not otherwise specified. It should be omitted when
-not needed.
-The I<repeat> specifies the number of values this option takes per
-occurrence on the command line. It has the format C<{> [ I<min> ] [ C<,> [ I<max> ] ] C<}>.
-I<min> denotes the minimal number of arguments. It defaults to 1 for
-options with C<=> and to 0 for options with C<:>, see below. Note that
-I<min> overrules the C<=> / C<:> semantics.
-I<max> denotes the maximum number of arguments. It must be at least
-I<min>. If I<max> is omitted, I<but the comma is not>, there is no
-upper bound to the number of argument values taken.
-=item : I<type> [ I<desttype> ]
-Like C<=>, but designates the argument as optional.
-If omitted, an empty string will be assigned to string values options,
-and the value zero to numeric options.
-Note that if a string argument starts with C<-> or C<-->, it will be
-considered an option on itself.
-=item : I<number> [ I<desttype> ]
-Like C<:i>, but if the value is omitted, the I<number> will be assigned.
-=item : + [ I<desttype> ]
-Like C<:i>, but if the value is omitted, the current value for the
-option will be incremented.
-=back
-=head1 Advanced Possibilities
-=head2 Object oriented interface
-Getopt::Long can be used in an object oriented way as well:
-    use Getopt::Long;
-    $p = Getopt::Long::Parser->new;
-    $p->configure(...configuration options...);
-    if ($p->getoptions(...options descriptions...)) ...
-    if ($p->getoptionsfromarray( \@array, ...options descriptions...)) ...
-Configuration options can be passed to the constructor:
-    $p = new Getopt::Long::Parser
-             config => [...configuration options...];
-=head2 Thread Safety
-Getopt::Long is thread safe when using ithreads as of Perl 5.8.  It is
-I<not> thread safe when using the older (experimental and now
-obsolete) threads implementation that was added to Perl 5.005.
-=head2 Documentation and help texts
-Getopt::Long encourages the use of Pod::Usage to produce help
-messages. For example:
-    use Getopt::Long;
-    use Pod::Usage;
-    my $man = 0;
-    my $help = 0;
-    GetOptions('help|?' => \$help, man => \$man) or pod2usage(2);
-    pod2usage(1) if $help;
-    pod2usage(-exitval => 0, -verbose => 2) if $man;
-    __END__
-    =head1 NAME
-    sample - Using Getopt::Long and Pod::Usage
-    =head1 SYNOPSIS
-    sample [options] [file ...]
-     Options:
-       -help            brief help message
-       -man             full documentation
-    =head1 OPTIONS
-    =over 8
-    =item B<-help>
-    Print a brief help message and exits.
-    =item B<-man>
-    Prints the manual page and exits.
-    =back
-    =head1 DESCRIPTION
-    B<This program> will read the given input file(s) and do something
-    useful with the contents thereof.
-    =cut
-See L<Pod::Usage> for details.
-=head2 Parsing options from an arbitrary array
-By default, GetOptions parses the options that are present in the
-global array C<@ARGV>. A special entry C<GetOptionsFromArray> can be
-used to parse options from an arbitrary array.
-    use Getopt::Long qw(GetOptionsFromArray);
-    $ret = GetOptionsFromArray(\@myopts, ...);
-When used like this, options and their possible values are removed
-from C<@myopts>, the global C<@ARGV> is not touched at all.
-The following two calls behave identically:
-    $ret = GetOptions( ... );
-    $ret = GetOptionsFromArray(\@ARGV, ... );
-This also means that a first argument hash reference now becomes the
-second argument:
-    $ret = GetOptions(\%opts, ... );
-    $ret = GetOptionsFromArray(\@ARGV, \%opts, ... );
-=head2 Parsing options from an arbitrary string
-A special entry C<GetOptionsFromString> can be used to parse options
-from an arbitrary string.
-    use Getopt::Long qw(GetOptionsFromString);
-    $ret = GetOptionsFromString($string, ...);
-The contents of the string are split into arguments using a call to
-C<Text::ParseWords::shellwords>. As with C<GetOptionsFromArray>, the
-global C<@ARGV> is not touched.
-It is possible that, upon completion, not all arguments in the string
-have been processed. C<GetOptionsFromString> will, when called in list
-context, return both the return status and an array reference to any
-remaining arguments:
-    ($ret, $args) = GetOptionsFromString($string, ... );
-If any arguments remain, and C<GetOptionsFromString> was not called in
-list context, a message will be given and C<GetOptionsFromString> will
-return failure.
-As with GetOptionsFromArray, a first argument hash reference now
-becomes the second argument.
-=head2 Storing options values in a hash
-Sometimes, for example when there are a lot of options, having a
-separate variable for each of them can be cumbersome. GetOptions()
-supports, as an alternative mechanism, storing options values in a
-hash.
-To obtain this, a reference to a hash must be passed I<as the first
-argument> to GetOptions(). For each option that is specified on the
-command line, the option value will be stored in the hash with the
-option name as key. Options that are not actually used on the command
-line will not be put in the hash, on other words,
-C<exists($h{option})> (or defined()) can be used to test if an option
-was used. The drawback is that warnings will be issued if the program
-runs under C<use strict> and uses C<$h{option}> without testing with
-exists() or defined() first.
-    my %h = ();
-    GetOptions (\%h, 'length=i');	# will store in $h{length}
-For options that take list or hash values, it is necessary to indicate
-this by appending an C<@> or C<%> sign after the type:
-    GetOptions (\%h, 'colours=s@');	# will push to @{$h{colours}}
-To make things more complicated, the hash may contain references to
-the actual destinations, for example:
-    my $len = 0;
-    my %h = ('length' => \$len);
-    GetOptions (\%h, 'length=i');	# will store in $len
-This example is fully equivalent with:
-    my $len = 0;
-    GetOptions ('length=i' => \$len);	# will store in $len
-Any mixture is possible. For example, the most frequently used options
-could be stored in variables while all other options get stored in the
-hash:
-    my $verbose = 0;			# frequently referred
-    my $debug = 0;			# frequently referred
-    my %h = ('verbose' => \$verbose, 'debug' => \$debug);
-    GetOptions (\%h, 'verbose', 'debug', 'filter', 'size=i');
-    if ( $verbose ) { ... }
-    if ( exists $h{filter} ) { ... option 'filter' was specified ... }
-=head2 Bundling
-With bundling it is possible to set several single-character options
-at once. For example if C<a>, C<v> and C<x> are all valid options,
-    -vax
-would set all three.
-Getopt::Long supports two levels of bundling. To enable bundling, a
-call to Getopt::Long::Configure is required.
-The first level of bundling can be enabled with:
-    Getopt::Long::Configure ("bundling");
-Configured this way, single-character options can be bundled but long
-options B<must> always start with a double dash C<--> to avoid
-ambiguity. For example, when C<vax>, C<a>, C<v> and C<x> are all valid
-options,
-    -vax
-would set C<a>, C<v> and C<x>, but
-    --vax
-would set C<vax>.
-The second level of bundling lifts this restriction. It can be enabled
-with:
-    Getopt::Long::Configure ("bundling_override");
-Now, C<-vax> would set the option C<vax>.
-When any level of bundling is enabled, option values may be inserted
-in the bundle. For example:
-    -h24w80
-is equivalent to
-    -h 24 -w 80
-When configured for bundling, single-character options are matched
-case sensitive while long options are matched case insensitive. To
-have the single-character options matched case insensitive as well,
-use:
-    Getopt::Long::Configure ("bundling", "ignorecase_always");
-It goes without saying that bundling can be quite confusing.
-=head2 The lonesome dash
-Normally, a lone dash C<-> on the command line will not be considered
-an option. Option processing will terminate (unless "permute" is
-configured) and the dash will be left in C<@ARGV>.
-It is possible to get special treatment for a lone dash. This can be
-achieved by adding an option specification with an empty name, for
-example:
-    GetOptions ('' => \$stdio);
-A lone dash on the command line will now be a legal option, and using
-it will set variable C<$stdio>.
-=head2 Argument callback
-A special option 'name' C<< <> >> can be used to designate a subroutine
-to handle non-option arguments. When GetOptions() encounters an
-argument that does not look like an option, it will immediately call this
-subroutine and passes it one parameter: the argument name. Well, actually
-it is an object that stringifies to the argument name.
-For example:
-    my $width = 80;
-    sub process { ... }
-    GetOptions ('width=i' => \$width, '<>' => \&process);
-When applied to the following command line:
-    arg1 --width=72 arg2 --width=60 arg3
-This will call
-C<process("arg1")> while C<$width> is C<80>,
-C<process("arg2")> while C<$width> is C<72>, and
-C<process("arg3")> while C<$width> is C<60>.
-This feature requires configuration option B<permute>, see section
-L<Configuring Getopt::Long>.
-=head1 Configuring Getopt::Long
-Getopt::Long can be configured by calling subroutine
-Getopt::Long::Configure(). This subroutine takes a list of quoted
-strings, each specifying a configuration option to be enabled, e.g.
-C<ignore_case>, or disabled, e.g. C<no_ignore_case>. Case does not
-matter. Multiple calls to Configure() are possible.
-Alternatively, as of version 2.24, the configuration options may be
-passed together with the C<use> statement:
-    use Getopt::Long qw(:config no_ignore_case bundling);
-The following options are available:
-=over 12
-=item default
-This option causes all configuration options to be reset to their
-default values.
-=item posix_default
-This option causes all configuration options to be reset to their
-default values as if the environment variable POSIXLY_CORRECT had
-been set.
-=item auto_abbrev
-Allow option names to be abbreviated to uniqueness.
-Default is enabled unless environment variable
-POSIXLY_CORRECT has been set, in which case C<auto_abbrev> is disabled.
-=item getopt_compat
-Allow C<+> to start options.
-Default is enabled unless environment variable
-POSIXLY_CORRECT has been set, in which case C<getopt_compat> is disabled.
-=item gnu_compat
-C<gnu_compat> controls whether C<--opt=> is allowed, and what it should
-do. Without C<gnu_compat>, C<--opt=> gives an error. With C<gnu_compat>,
-C<--opt=> will give option C<opt> and empty value.
-This is the way GNU getopt_long() does it.
-=item gnu_getopt
-This is a short way of setting C<gnu_compat> C<bundling> C<permute>
-C<no_getopt_compat>. With C<gnu_getopt>, command line handling should be
-fully compatible with GNU getopt_long().
-=item require_order
-Whether command line arguments are allowed to be mixed with options.
-Default is disabled unless environment variable
-POSIXLY_CORRECT has been set, in which case C<require_order> is enabled.
-See also C<permute>, which is the opposite of C<require_order>.
-=item permute
-Whether command line arguments are allowed to be mixed with options.
-Default is enabled unless environment variable
-POSIXLY_CORRECT has been set, in which case C<permute> is disabled.
-Note that C<permute> is the opposite of C<require_order>.
-If C<permute> is enabled, this means that
-    --foo arg1 --bar arg2 arg3
-is equivalent to
-    --foo --bar arg1 arg2 arg3
-If an argument callback routine is specified, C<@ARGV> will always be
-empty upon successful return of GetOptions() since all options have been
-processed. The only exception is when C<--> is used:
-    --foo arg1 --bar arg2 -- arg3
-This will call the callback routine for arg1 and arg2, and then
-terminate GetOptions() leaving C<"arg3"> in C<@ARGV>.
-If C<require_order> is enabled, options processing
-terminates when the first non-option is encountered.
-    --foo arg1 --bar arg2 arg3
-is equivalent to
-    --foo -- arg1 --bar arg2 arg3
-If C<pass_through> is also enabled, options processing will terminate
-at the first unrecognized option, or non-option, whichever comes
-first.
-=item bundling (default: disabled)
-Enabling this option will allow single-character options to be
-bundled. To distinguish bundles from long option names, long options
-I<must> be introduced with C<--> and bundles with C<->.
-Note that, if you have options C<a>, C<l> and C<all>, and
-auto_abbrev enabled, possible arguments and option settings are:
-    using argument               sets option(s)
-    ------------------------------------------
-    -a, --a                      a
-    -l, --l                      l
-    -al, -la, -ala, -all,...     a, l
-    --al, --all                  all
-The surprising part is that C<--a> sets option C<a> (due to auto
-completion), not C<all>.
-Note: disabling C<bundling> also disables C<bundling_override>.
-=item bundling_override (default: disabled)
-If C<bundling_override> is enabled, bundling is enabled as with
-C<bundling> but now long option names override option bundles.
-Note: disabling C<bundling_override> also disables C<bundling>.
-B<Note:> Using option bundling can easily lead to unexpected results,
-especially when mixing long options and bundles. Caveat emptor.
-=item ignore_case  (default: enabled)
-If enabled, case is ignored when matching option names. If, however,
-bundling is enabled as well, single character options will be treated
-case-sensitive.
-With C<ignore_case>, option specifications for options that only
-differ in case, e.g., C<"foo"> and C<"Foo">, will be flagged as
-duplicates.
-Note: disabling C<ignore_case> also disables C<ignore_case_always>.
-=item ignore_case_always (default: disabled)
-When bundling is in effect, case is ignored on single-character
-options also.
-Note: disabling C<ignore_case_always> also disables C<ignore_case>.
-=item auto_version (default:disabled)
-Automatically provide support for the B<--version> option if
-the application did not specify a handler for this option itself.
-Getopt::Long will provide a standard version message that includes the
-program name, its version (if $main::VERSION is defined), and the
-versions of Getopt::Long and Perl. The message will be written to
-standard output and processing will terminate.
-C<auto_version> will be enabled if the calling program explicitly
-specified a version number higher than 2.32 in the C<use> or
-C<require> statement.
-=item auto_help (default:disabled)
-Automatically provide support for the B<--help> and B<-?> options if
-the application did not specify a handler for this option itself.
-Getopt::Long will provide a help message using module L<Pod::Usage>. The
-message, derived from the SYNOPSIS POD section, will be written to
-standard output and processing will terminate.
-C<auto_help> will be enabled if the calling program explicitly
-specified a version number higher than 2.32 in the C<use> or
-C<require> statement.
-=item pass_through (default: disabled)
-Options that are unknown, ambiguous or supplied with an invalid option
-value are passed through in C<@ARGV> instead of being flagged as
-errors. This makes it possible to write wrapper scripts that process
-only part of the user supplied command line arguments, and pass the
-remaining options to some other program.
-If C<require_order> is enabled, options processing will terminate at
-the first unrecognized option, or non-option, whichever comes first.
-However, if C<permute> is enabled instead, results can become confusing.
-Note that the options terminator (default C<-->), if present, will
-also be passed through in C<@ARGV>.
-=item prefix
-The string that starts options. If a constant string is not
-sufficient, see C<prefix_pattern>.
-=item prefix_pattern
-A Perl pattern that identifies the strings that introduce options.
-Default is C<--|-|\+> unless environment variable
-POSIXLY_CORRECT has been set, in which case it is C<--|->.
-=item long_prefix_pattern
-A Perl pattern that allows the disambiguation of long and short
-prefixes. Default is C<-->.
-Typically you only need to set this if you are using nonstandard
-prefixes and want some or all of them to have the same semantics as
-'--' does under normal circumstances.
-For example, setting prefix_pattern to C<--|-|\+|\/> and
-long_prefix_pattern to C<--|\/> would add Win32 style argument
-handling.
-=item debug (default: disabled)
-Enable debugging output.
-=back
-=head1 Exportable Methods
-=over
-=item VersionMessage
-This subroutine provides a standard version message. Its argument can be:
-=over 4
-=item *
-A string containing the text of a message to print I<before> printing
-the standard message.
-=item *
-A numeric value corresponding to the desired exit status.
-=item *
-A reference to a hash.
-=back
-If more than one argument is given then the entire argument list is
-assumed to be a hash.  If a hash is supplied (either as a reference or
-as a list) it should contain one or more elements with the following
-keys:
-=over 4
-=item C<-message>
-=item C<-msg>
-The text of a message to print immediately prior to printing the
-program's usage message.
-=item C<-exitval>
-The desired exit status to pass to the B<exit()> function.
-This should be an integer, or else the string "NOEXIT" to
-indicate that control should simply be returned without
-terminating the invoking process.
-=item C<-output>
-A reference to a filehandle, or the pathname of a file to which the
-usage message should be written. The default is C<\*STDERR> unless the
-exit value is less than 2 (in which case the default is C<\*STDOUT>).
-=back
-You cannot tie this routine directly to an option, e.g.:
-    GetOptions("version" => \&VersionMessage);
-Use this instead:
-    GetOptions("version" => sub { VersionMessage() });
-=item HelpMessage
-This subroutine produces a standard help message, derived from the
-program's POD section SYNOPSIS using L<Pod::Usage>. It takes the same
-arguments as VersionMessage(). In particular, you cannot tie it
-directly to an option, e.g.:
-    GetOptions("help" => \&HelpMessage);
-Use this instead:
-    GetOptions("help" => sub { HelpMessage() });
-=back
-=head1 Return values and Errors
-Configuration errors and errors in the option definitions are
-signalled using die() and will terminate the calling program unless
-the call to Getopt::Long::GetOptions() was embedded in C<eval { ...
-}>, or die() was trapped using C<$SIG{__DIE__}>.
-GetOptions returns true to indicate success.
-It returns false when the function detected one or more errors during
-option parsing. These errors are signalled using warn() and can be
-trapped with C<$SIG{__WARN__}>.
-=head1 Legacy
-The earliest development of C<newgetopt.pl> started in 1990, with Perl
-version 4. As a result, its development, and the development of
-Getopt::Long, has gone through several stages. Since backward
-compatibility has always been extremely important, the current version
-of Getopt::Long still supports a lot of constructs that nowadays are
-no longer necessary or otherwise unwanted. This section describes
-briefly some of these 'features'.
-=head2 Default destinations
-When no destination is specified for an option, GetOptions will store
-the resultant value in a global variable named C<opt_>I<XXX>, where
-I<XXX> is the primary name of this option. When a program executes
-under C<use strict> (recommended), these variables must be
-pre-declared with our() or C<use vars>.
-    our $opt_length = 0;
-    GetOptions ('length=i');	# will store in $opt_length
-To yield a usable Perl variable, characters that are not part of the
-syntax for variables are translated to underscores. For example,
-C<--fpp-struct-return> will set the variable
-C<$opt_fpp_struct_return>. Note that this variable resides in the
-namespace of the calling program, not necessarily C<main>. For
-example:
-    GetOptions ("size=i", "sizes=i@");
-with command line "-size 10 -sizes 24 -sizes 48" will perform the
-equivalent of the assignments
-    $opt_size = 10;
-    @opt_sizes = (24, 48);
-=head2 Alternative option starters
-A string of alternative option starter characters may be passed as the
-first argument (or the first argument after a leading hash reference
-argument).
-    my $len = 0;
-    GetOptions ('/', 'length=i' => $len);
-Now the command line may look like:
-    /length 24 -- arg
-Note that to terminate options processing still requires a double dash
-C<-->.
-GetOptions() will not interpret a leading C<< "<>" >> as option starters
-if the next argument is a reference. To force C<< "<" >> and C<< ">" >> as
-option starters, use C<< "><" >>. Confusing? Well, B<using a starter
-argument is strongly deprecated> anyway.
-=head2 Configuration variables
-Previous versions of Getopt::Long used variables for the purpose of
-configuring. Although manipulating these variables still work, it is
-strongly encouraged to use the C<Configure> routine that was introduced
-in version 2.17. Besides, it is much easier.
-=head1 Tips and Techniques
-=head2 Pushing multiple values in a hash option
-Sometimes you want to combine the best of hashes and arrays. For
-example, the command line:
-  --list add=first --list add=second --list add=third
-where each successive 'list add' option will push the value of add
-into array ref $list->{'add'}. The result would be like
-  $list->{add} = [qw(first second third)];
-This can be accomplished with a destination routine:
-  GetOptions('list=s%' =>
-               sub { push(@{$list{$_[1]}}, $_[2]) });
-=head1 Troubleshooting
-=head2 GetOptions does not return a false result when an option is not supplied
-That's why they're called 'options'.
-=head2 GetOptions does not split the command line correctly
-The command line is not split by GetOptions, but by the command line
-interpreter (CLI). On Unix, this is the shell. On Windows, it is
-COMMAND.COM or CMD.EXE. Other operating systems have other CLIs.
-It is important to know that these CLIs may behave different when the
-command line contains special characters, in particular quotes or
-backslashes. For example, with Unix shells you can use single quotes
-(C<'>) and double quotes (C<">) to group words together. The following
-alternatives are equivalent on Unix:
-    "two words"
-    'two words'
-    two\ words
-In case of doubt, insert the following statement in front of your Perl
-program:
-    print STDERR (join("|",@ARGV),"\n");
-to verify how your CLI passes the arguments to the program.
-=head2 Undefined subroutine &main::GetOptions called
-Are you running Windows, and did you write
-    use GetOpt::Long;
-(note the capital 'O')?
-=head2 How do I put a "-?" option into a Getopt::Long?
-You can only obtain this using an alias, and Getopt::Long of at least
-version 2.13.
-    use Getopt::Long;
-    GetOptions ("help|?");    # -help and -? will both set $opt_help
-Other characters that can't appear in Perl identifiers are also supported
-as aliases with Getopt::Long of at least version 2.39.
-As of version 2.32 Getopt::Long provides auto-help, a quick and easy way
-to add the options --help and -? to your program, and handle them.
-See C<auto_help> in section L<Configuring Getopt::Long>.
-=head1 AUTHOR
-Johan Vromans <jvromans@squirrel.nl>
-=head1 COPYRIGHT AND DISCLAIMER
-This program is Copyright 1990,2013 by Johan Vromans.
-This program is free software; you can redistribute it and/or
-modify it under the terms of the Perl Artistic License or the
-GNU General Public License as published by the Free Software
-Foundation; either version 2 of the License, or (at your option) any
-later version.
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-If you do not have a copy of the GNU General Public License write to
-the Free Software Foundation, Inc., 675 Mass Ave, Cambridge,
-MA 02139, USA.
-=cut
+
+
  BEGIN{ __mist::no_thanks( 'Getopt::Long' ) } };
 ;{
 package App::cpanminus::fatscript;
@@ -2151,12 +1534,15 @@ package App::cpanminus::fatscript;
 # If you don't have curl but wget, replace `curl -L` with `wget -O -`.
 #
 # For more details about this program, visit http://search.cpan.org/dist/App-cpanminus
+
 our $VERSION = "1.6928";
 # DO NOT EDIT -- this is an auto generated file
+
 # This chunk of stuff was generated by App::FatPacker. To find the original
 # file's code, look for the end of this BEGIN block or the string 'FATPACK'
 BEGIN {
 my %fatpacked;
+
 $fatpacked{"App/cpanminus.pm"} = <<'APP_CPANMINUS';
   package App::cpanminus;
   our $VERSION = "1.7001";
@@ -2445,6 +1831,7 @@ $fatpacked{"App/cpanminus.pm"} = <<'APP_CPANMINUS';
   
   1;
 APP_CPANMINUS
+
 $fatpacked{"App/cpanminus/CPANVersion.pm"} = <<'APP_CPANMINUS_CPANVERSION';
   package App::cpanminus::CPANVersion;
   # copy of CPAN::Version since it's not core on older 5.8
@@ -2577,6 +1964,7 @@ $fatpacked{"App/cpanminus/CPANVersion.pm"} = <<'APP_CPANMINUS_CPANVERSION';
   
   __END__
 APP_CPANMINUS_CPANVERSION
+
 $fatpacked{"App/cpanminus/Dependency.pm"} = <<'APP_CPANMINUS_DEPENDENCY';
   package App::cpanminus::Dependency;
   use strict;
@@ -2629,6 +2017,7 @@ $fatpacked{"App/cpanminus/Dependency.pm"} = <<'APP_CPANMINUS_DEPENDENCY';
   
   1;
 APP_CPANMINUS_DEPENDENCY
+
 $fatpacked{"App/cpanminus/ParsePM.pm"} = <<'APP_CPANMINUS_PARSEPM';
   package App::cpanminus::ParsePM;
   # fork of Parse::PMFile, use JSON::PP instead of JSON
@@ -3172,6 +2561,7 @@ $fatpacked{"App/cpanminus/ParsePM.pm"} = <<'APP_CPANMINUS_PARSEPM';
   
   __END__
 APP_CPANMINUS_PARSEPM
+
 $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
   package App::cpanminus::script;
   use strict;
@@ -6230,6 +5620,7 @@ $fatpacked{"App/cpanminus/script.pm"} = <<'APP_CPANMINUS_SCRIPT';
   
   1;
 APP_CPANMINUS_SCRIPT
+
 $fatpacked{"CPAN/DistnameInfo.pm"} = <<'CPAN_DISTNAMEINFO';
   
   package CPAN::DistnameInfo;
@@ -6437,6 +5828,7 @@ $fatpacked{"CPAN/DistnameInfo.pm"} = <<'CPAN_DISTNAMEINFO';
   =cut
   
 CPAN_DISTNAMEINFO
+
 $fatpacked{"CPAN/Meta.pm"} = <<'CPAN_META';
   use 5.006;
   use strict;
@@ -7240,6 +6632,7 @@ $fatpacked{"CPAN/Meta.pm"} = <<'CPAN_META';
   
   =cut
 CPAN_META
+
 $fatpacked{"CPAN/Meta/Check.pm"} = <<'CPAN_META_CHECK';
   package CPAN::Meta::Check;
   {
@@ -7380,6 +6773,7 @@ $fatpacked{"CPAN/Meta/Check.pm"} = <<'CPAN_META_CHECK';
   
   =cut
 CPAN_META_CHECK
+
 $fatpacked{"CPAN/Meta/Converter.pm"} = <<'CPAN_META_CONVERTER';
   use 5.006;
   use strict;
@@ -8780,6 +8174,7 @@ $fatpacked{"CPAN/Meta/Converter.pm"} = <<'CPAN_META_CONVERTER';
   
   =cut
 CPAN_META_CONVERTER
+
 $fatpacked{"CPAN/Meta/Feature.pm"} = <<'CPAN_META_FEATURE';
   use 5.006;
   use strict;
@@ -8893,6 +8288,7 @@ $fatpacked{"CPAN/Meta/Feature.pm"} = <<'CPAN_META_FEATURE';
   
   =cut
 CPAN_META_FEATURE
+
 $fatpacked{"CPAN/Meta/History.pm"} = <<'CPAN_META_HISTORY';
   # vi:tw=72
   use 5.006;
@@ -9210,6 +8606,7 @@ $fatpacked{"CPAN/Meta/History.pm"} = <<'CPAN_META_HISTORY';
   
   =cut
 CPAN_META_HISTORY
+
 $fatpacked{"CPAN/Meta/Prereqs.pm"} = <<'CPAN_META_PREREQS';
   use 5.006;
   use strict;
@@ -9484,6 +8881,7 @@ $fatpacked{"CPAN/Meta/Prereqs.pm"} = <<'CPAN_META_PREREQS';
   
   =cut
 CPAN_META_PREREQS
+
 $fatpacked{"CPAN/Meta/Requirements.pm"} = <<'CPAN_META_REQUIREMENTS';
   use strict;
   use warnings;
@@ -10216,6 +9614,7 @@ $fatpacked{"CPAN/Meta/Requirements.pm"} = <<'CPAN_META_REQUIREMENTS';
   
   =cut
 CPAN_META_REQUIREMENTS
+
 $fatpacked{"CPAN/Meta/Spec.pm"} = <<'CPAN_META_SPEC';
   # XXX RULES FOR PATCHING THIS FILE XXX
   # Patches that fix typos or formatting are acceptable.  Patches
@@ -11361,6 +10760,7 @@ $fatpacked{"CPAN/Meta/Spec.pm"} = <<'CPAN_META_SPEC';
   
   =cut
 CPAN_META_SPEC
+
 $fatpacked{"CPAN/Meta/Validator.pm"} = <<'CPAN_META_VALIDATOR';
   use 5.006;
   use strict;
@@ -12416,6 +11816,7 @@ $fatpacked{"CPAN/Meta/Validator.pm"} = <<'CPAN_META_VALIDATOR';
   
   =cut
 CPAN_META_VALIDATOR
+
 $fatpacked{"CPAN/Meta/YAML.pm"} = <<'CPAN_META_YAML';
   package CPAN::Meta::YAML;
   {
@@ -13159,6 +12560,7 @@ $fatpacked{"CPAN/Meta/YAML.pm"} = <<'CPAN_META_YAML';
   
   
 CPAN_META_YAML
+
 $fatpacked{"Exporter.pm"} = <<'EXPORTER';
   package Exporter;
   
@@ -13752,6 +13154,7 @@ $fatpacked{"Exporter.pm"} = <<'EXPORTER';
   
   
 EXPORTER
+
 $fatpacked{"Exporter/Heavy.pm"} = <<'EXPORTER_HEAVY';
   package Exporter::Heavy;
   
@@ -14002,6 +13405,7 @@ $fatpacked{"Exporter/Heavy.pm"} = <<'EXPORTER_HEAVY';
   
   1;
 EXPORTER_HEAVY
+
 $fatpacked{"File/pushd.pm"} = <<'FILE_PUSHD';
   use strict;
   use warnings;
@@ -14283,6 +13687,7 @@ $fatpacked{"File/pushd.pm"} = <<'FILE_PUSHD';
   
   =cut
 FILE_PUSHD
+
 $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
   # vim: ts=4 sts=4 sw=4 et:
   package HTTP::Tiny;
@@ -15897,6 +15302,7 @@ $fatpacked{"HTTP/Tiny.pm"} = <<'HTTP_TINY';
   
   =cut
 HTTP_TINY
+
 $fatpacked{"JSON/PP.pm"} = <<'JSON_PP';
   package JSON::PP;
   
@@ -18698,6 +18104,7 @@ $fatpacked{"JSON/PP.pm"} = <<'JSON_PP';
   
   =cut
 JSON_PP
+
 $fatpacked{"JSON/PP/Boolean.pm"} = <<'JSON_PP_BOOLEAN';
   =head1 NAME
   
@@ -18726,6 +18133,7 @@ $fatpacked{"JSON/PP/Boolean.pm"} = <<'JSON_PP_BOOLEAN';
   =cut
   
 JSON_PP_BOOLEAN
+
 $fatpacked{"Module/CPANfile.pm"} = <<'MODULE_CPANFILE';
   package Module::CPANfile;
   use strict;
@@ -19021,6 +18429,7 @@ $fatpacked{"Module/CPANfile.pm"} = <<'MODULE_CPANFILE';
   
   =cut
 MODULE_CPANFILE
+
 $fatpacked{"Module/CPANfile/Environment.pm"} = <<'MODULE_CPANFILE_ENVIRONMENT';
   package Module::CPANfile::Environment;
   use strict;
@@ -19087,6 +18496,7 @@ $fatpacked{"Module/CPANfile/Environment.pm"} = <<'MODULE_CPANFILE_ENVIRONMENT';
   1;
   
 MODULE_CPANFILE_ENVIRONMENT
+
 $fatpacked{"Module/CPANfile/Result.pm"} = <<'MODULE_CPANFILE_RESULT';
   package Module::CPANfile::Result;
   use strict;
@@ -19182,6 +18592,7 @@ $fatpacked{"Module/CPANfile/Result.pm"} = <<'MODULE_CPANFILE_RESULT';
   
   1;
 MODULE_CPANFILE_RESULT
+
 $fatpacked{"Module/Metadata.pm"} = <<'MODULE_METADATA';
   # -*- mode: cperl; tab-width: 8; indent-tabs-mode: nil; basic-offset: 2 -*-
   # vim:ts=8:sw=2:et:sta:sts=2
@@ -20196,6 +19607,7 @@ $fatpacked{"Module/Metadata.pm"} = <<'MODULE_METADATA';
   =cut
   
 MODULE_METADATA
+
 $fatpacked{"Parse/CPAN/Meta.pm"} = <<'PARSE_CPAN_META';
   use strict;
   package Parse::CPAN::Meta;
@@ -20527,6 +19939,7 @@ $fatpacked{"Parse/CPAN/Meta.pm"} = <<'PARSE_CPAN_META';
   
   =cut
 PARSE_CPAN_META
+
 $fatpacked{"String/ShellQuote.pm"} = <<'STRING_SHELLQUOTE';
   # $Id: ShellQuote.pm,v 1.11 2010-06-11 20:08:57 roderick Exp $
   #
@@ -20725,6 +20138,7 @@ $fatpacked{"String/ShellQuote.pm"} = <<'STRING_SHELLQUOTE';
   
   =cut
 STRING_SHELLQUOTE
+
 $fatpacked{"aliased.pm"} = <<'ALIASED';
   package aliased;
   
@@ -21056,6 +20470,7 @@ $fatpacked{"aliased.pm"} = <<'ALIASED';
   
   =cut
 ALIASED
+
 $fatpacked{"lib/core/only.pm"} = <<'LIB_CORE_ONLY';
   package lib::core::only;
   
@@ -21153,6 +20568,7 @@ $fatpacked{"lib/core/only.pm"} = <<'LIB_CORE_ONLY';
   
   1;
 LIB_CORE_ONLY
+
 $fatpacked{"local/lib.pm"} = <<'LOCAL_LIB';
   use strict;
   use warnings;
@@ -22251,6 +21667,7 @@ $fatpacked{"local/lib.pm"} = <<'LOCAL_LIB';
   
   1;
 LOCAL_LIB
+
 $fatpacked{"version.pm"} = <<'VERSION';
   #!perl -w
   package version;
@@ -22472,6 +21889,7 @@ $fatpacked{"version.pm"} = <<'VERSION';
   
   1;
 VERSION
+
 $fatpacked{"version/vpp.pm"} = <<'VERSION_VPP';
   package charstar;
   # a little helper class to emulate C char* semantics in Perl
@@ -23425,7 +22843,9 @@ $fatpacked{"version/vpp.pm"} = <<'VERSION_VPP';
   
   1; #this line is important and will help the module return a true value
 VERSION_VPP
+
 s/^  //mg for values %fatpacked;
+
 unshift @INC, sub {
   if (my $fat = $fatpacked{$_[1]}) {
     if ($] < 5.008) {
@@ -23442,6 +22862,7 @@ unshift @INC, sub {
   }
   return
 };
+
 } # END OF FATPACK CODE
  BEGIN{ __mist::no_thanks( 'App::cpanminus::fatscript' ) } };
 ;BEGIN{
@@ -23451,27 +22872,35 @@ use warnings;
 use 5.008001;
 our $VERSION = "0.02";
 use parent qw(Exporter);
+
 our @EXPORT = qw(can_run check_bin);
+
 use ExtUtils::MakeMaker;
 use File::Spec;
 use Config;
+
 # Check if we can run some command
 sub can_run {
     my ($cmd) = @_;
+
     my $_cmd = $cmd;
     return $_cmd if (-x $_cmd or $_cmd = MM->maybe_command($_cmd));
+
     for my $dir ((split /$Config::Config{path_sep}/, $ENV{PATH}), '.') {
         next if $dir eq '';
         my $abs = File::Spec->catfile($dir, $cmd);
         return $abs if (-x $abs or $abs = MM->maybe_command($abs));
     }
+
     return;
 }
+
 sub check_bin {
     my ( $bin, $version) = @_;
     if ( $version ) {
         die "check_bin does not support versions yet";
     }
+
     # Locate the bin
     print "Locating bin:$bin...";
     my $found_bin = can_run( $bin );
@@ -23486,119 +22915,34 @@ sub check_bin {
         exit(0);
     }
 }
+
 1;
  BEGIN{ __mist::no_thanks( 'Devel::CheckBin' ) } };
 ;BEGIN{
 # $Id: CheckLib.pm,v 1.25 2008/10/27 12:16:23 drhyde Exp $
+
 package Devel::CheckLib;
+
 use 5.00405; #postfix foreach
 use strict;
 use vars qw($VERSION @ISA @EXPORT);
 $VERSION = '1.01';
 use Config qw(%Config);
 use Text::ParseWords 'quotewords';
+
 use File::Spec;
 use File::Temp;
+
 require Exporter;
 @ISA = qw(Exporter);
 @EXPORT = qw(assert_lib check_lib_or_exit check_lib);
+
 # localising prevents the warningness leaking out of this module
 local $^W = 1;    # use warnings is a 5.6-ism
+
 _findcc(); # bomb out early if there's no compiler
-=head1 NAME
-Devel::CheckLib - check that a library is available
-=head1 DESCRIPTION
-Devel::CheckLib is a perl module that checks whether a particular C
-library and its headers are available.
-=head1 SYNOPSIS
-    use Devel::CheckLib;
-    check_lib_or_exit( lib => 'jpeg', header => 'jpeglib.h' );
-    check_lib_or_exit( lib => [ 'iconv', 'jpeg' ] );
-  
-    # or prompt for path to library and then do this:
-    check_lib_or_exit( lib => 'jpeg', libpath => $additional_path );
-=head1 USING IT IN Makefile.PL or Build.PL
-If you want to use this from Makefile.PL or Build.PL, do
-not simply copy the module into your distribution as this may cause
-problems when PAUSE and search.cpan.org index the distro.  Instead, use
-the use-devel-checklib script.
-=head1 HOW IT WORKS
-You pass named parameters to a function, describing to it how to build
-and link to the libraries.
-It works by trying to compile some code - which defaults to this:
-    int main(void) { return 0; }
-and linking it to the specified libraries.  If something pops out the end
-which looks executable, it gets executed, and if main() returns 0 we know
-that it worked.  That tiny program is
-built once for each library that you specify, and (without linking) once
-for each header file.
-If you want to check for the presence of particular functions in a
-library, or even that those functions return particular results, then
-you can pass your own function body for main() thus:
-    check_lib_or_exit(
-        function => 'foo();if(libversion() > 5) return 0; else return 1;'
-        incpath  => ...
-        libpath  => ...
-        lib      => ...
-        header   => ...
-    );
-In that case, it will fail to build if either foo() or libversion() don't
-exist, and main() will return the wrong value if libversion()'s return
-value isn't what you want.
-=head1 FUNCTIONS
-All of these take the same named parameters and are exported by default.
-To avoid exporting them, C<use Devel::CheckLib ()>.
-=head2 assert_lib
-This takes several named parameters, all of which are optional, and dies
-with an error message if any of the libraries listed can
-not be found.  B<Note>: dying in a Makefile.PL or Build.PL may provoke
-a 'FAIL' report from CPAN Testers' automated smoke testers.  Use 
-C<check_lib_or_exit> instead.
-The named parameters are:
-=over
-=item lib
-Must be either a string with the name of a single 
-library or a reference to an array of strings of library names.  Depending
-on the compiler found, library names will be fed to the compiler either as
-C<-l> arguments or as C<.lib> file names.  (E.g. C<-ljpeg> or C<jpeg.lib>)
-=item libpath
-a string or an array of strings
-representing additional paths to search for libraries.
-=item LIBS
-a C<ExtUtils::MakeMaker>-style space-seperated list of
-libraries (each preceded by '-l') and directories (preceded by '-L').
-This can also be supplied on the command-line.
-=item debug
-If true - emit information during processing that can be used for
-debugging.
-=back
-And libraries are no use without header files, so ...
-=over
-=item header
-Must be either a string with the name of a single 
-header file or a reference to an array of strings of header file names.
-=item incpath
-a string or an array of strings
-representing additional paths to search for headers.
-=item INC
-a C<ExtUtils::MakeMaker>-style space-seperated list of
-incpaths, each preceded by '-I'.
-This can also be supplied on the command-line.
-=back
-=head2 check_lib_or_exit
-This behaves exactly the same as C<assert_lib()> except that instead of
-dieing, it warns (with exactly the same error message) and exits.
-This is intended for use in Makefile.PL / Build.PL
-when you might want to prompt the user for various paths and
-things before checking that what they've told you is sane.
-If any library or header is missing, it exits with an exit value of 0 to avoid
-causing a CPAN Testers 'FAIL' report.  CPAN Testers should ignore this
-result -- which is what you want if an external library dependency is not
-available.
-=head2 check_lib
-This behaves exactly the same as C<assert_lib()> except that it is silent,
-returning false instead of dieing, or true otherwise.
-=cut
+
+
 sub check_lib_or_exit {
     eval 'assert_lib(@_)';
     if($@) {
@@ -23606,13 +22950,16 @@ sub check_lib_or_exit {
         exit;
     }
 }
+
 sub check_lib {
     eval 'assert_lib(@_)';
     return $@ ? 0 : 1;
 }
+
 sub assert_lib {
     my %args = @_;
     my (@libs, @libpaths, @headers, @incpaths);
+
     # FIXME: these four just SCREAM "refactor" at me
     @libs = (ref($args{lib}) ? @{$args{lib}} : $args{lib}) 
         if $args{lib};
@@ -23622,6 +22969,7 @@ sub assert_lib {
         if $args{header};
     @incpaths = (ref($args{incpath}) ? @{$args{incpath}} : $args{incpath}) 
         if $args{incpath};
+
     # work-a-like for Makefile.PL's LIBS and INC arguments
     # if given as command-line argument, append to %args
     for my $arg (@ARGV) {
@@ -23634,6 +22982,7 @@ sub assert_lib {
             }
         }
     }
+
     # using special form of split to trim whitespace
     if(defined($args{LIBS})) {
         foreach my $arg (split(' ', $args{LIBS})) {
@@ -23647,10 +22996,12 @@ sub assert_lib {
             push @incpaths, substr($arg, 2);
         }
     }
+
     my ($cc, $ld) = _findcc();
     my @missing;
     my @wrongresult;
     my @use_headers;
+
     # first figure out which headers we can't find ...
     for my $header (@headers) {
         push @use_headers, $header;
@@ -23699,6 +23050,7 @@ sub assert_lib {
         unlink $ofile if -e $ofile;
         unlink $cfile;
     } 
+
     # now do each library in turn with headers
     my($ch, $cfile) = File::Temp::tempfile(
         'assertlibXXXXXXXX', SUFFIX => '.c'
@@ -23759,11 +23111,13 @@ sub assert_lib {
         _cleanup_exe($exefile);
     } 
     unlink $cfile;
+
     my $miss_string = join( q{, }, map { qq{'$_'} } @missing );
     die("Can't link/include C library $miss_string, aborting.\n") if @missing;
     my $wrong_string = join( q{, }, map { qq{'$_'} } @wrongresult);
     die("wrong result: $wrong_string\n") if @wrongresult;
 }
+
 sub _cleanup_exe {
     my ($exefile) = @_;
     my $ofile = $exefile;
@@ -23805,9 +23159,11 @@ sub _findcc {
     }
     die("Couldn't find your C compiler\n");
 }
+
 # code substantially borrowed from IPC::Run3
 sub _quiet_system {
     my (@cmd) = @_;
+
     # save handles
     local *STDOUT_SAVE;
     local *STDERR_SAVE;
@@ -23822,56 +23178,20 @@ sub _quiet_system {
         or die "CheckLib: $! redirecting STDOUT to null handle";
     open STDERR, ">&" . fileno DEV_NULL
         or die "CheckLib: $! redirecting STDERR to null handle";
+
     # run system command
     my $rv = system(@cmd);
+
     # restore handles
     open STDOUT, ">&" . fileno STDOUT_SAVE
         or die "CheckLib: $! restoring STDOUT handle";
     open STDERR, ">&" . fileno STDERR_SAVE
         or die "CheckLib: $! restoring STDERR handle";
+
     return $rv;
 }
-=head1 PLATFORMS SUPPORTED
-You must have a C compiler installed.  We check for C<$Config{cc}>,
-both literally as it is in Config.pm and also in the $PATH.
-It has been tested with varying degrees on rigourousness on:
-=over
-=item gcc (on Linux, *BSD, Mac OS X, Solaris, Cygwin)
-=item Sun's compiler tools on Solaris
-=item IBM's tools on AIX
-=item SGI's tools on Irix 6.5
-=item Microsoft's tools on Windows
-=item MinGW on Windows (with Strawberry Perl)
-=item Borland's tools on Windows
-=item QNX
-=back
-=head1 WARNINGS, BUGS and FEEDBACK
-This is a very early release intended primarily for feedback from
-people who have discussed it.  The interface may change and it has
-not been adequately tested.
-Feedback is most welcome, including constructive criticism.
-Bug reports should be made using L<http://rt.cpan.org/> or by email.
-When submitting a bug report, please include the output from running:
-    perl -V
-    perl -MDevel::CheckLib -e0
-=head1 SEE ALSO
-L<Devel::CheckOS>
-L<Probe::Perl>
-=head1 AUTHORS
-David Cantrell E<lt>david@cantrell.org.ukE<gt>
-David Golden E<lt>dagolden@cpan.orgE<gt>
-Yasuhiro Matsumoto E<lt>mattn@cpan.orgE<gt>
-Thanks to the cpan-testers-discuss mailing list for prompting us to write it
-in the first place;
-to Chris Williams for help with Borland support;
-to Tony Cook for help with Microsoft compiler command-line options
-=head1 COPYRIGHT and LICENCE
-Copyright 2007 David Cantrell. Portions copyright 2007 David Golden.
-This module is free-as-in-speech software, and may be used, distributed,
-and modified under the same conditions as perl itself.
-=head1 CONSPIRACY
-This module is also free-as-in-mason software.
-=cut
+
+
 1;
  BEGIN{ __mist::no_thanks( 'Devel::CheckLib' ) } };
 ;BEGIN{
@@ -23881,8 +23201,10 @@ use warnings;
 use 5.008001;
 our $VERSION = '0.05';
 use parent qw/Exporter/;
+
 our @EXPORT = qw/check_c99 check_c99_or_exit check_compile/;
 use ExtUtils::CBuilder;
+
 my $C99_SOURCE = <<'C99';
 // include a C99 header
 #include <stdbool.h>
@@ -23894,23 +23216,30 @@ int test_c99() {
     return j;
 }
 C99
+
 sub check_c99 {
     check_compile($C99_SOURCE);
 }
+
 sub check_c99_or_exit {
     check_compile($C99_SOURCE) or do {
         warn "Your system is not support C99(OS unsupported)\n";
         exit 0;
     };
 }
+
 sub check_compile {
     my ($src, %opt) = @_;
+
     my $cbuilder = ExtUtils::CBuilder->new(quiet => 1);
     return 0 unless $cbuilder->have_compiler;
+
     require File::Temp;
+
     my $tmpfile = File::Temp->new(SUFFIX => '.c');
     $tmpfile->print($src);
     $tmpfile->close();
+
     my $objname = eval {
         $cbuilder->compile(source => $tmpfile->filename);
     };
@@ -23921,6 +23250,7 @@ sub check_compile {
                 $cbuilder->link_executable(objects => $objname,
                                            extra_linker_flags => $opt{extra_linker_flags});
             };
+
             if ($execfile) {
                 unlink $execfile or warn "Cannot unlink $execfile (ignored): $!";
             } else {
@@ -23933,23 +23263,30 @@ sub check_compile {
         return 0;
     }
 }
+
 1;
  BEGIN{ __mist::no_thanks( 'Devel::CheckCompiler' ) } };
 ;BEGIN{
 use strict;
+
 package Probe::Perl;
 {
   $Probe::Perl::VERSION = '0.03';
 }
+
 # TODO: cache values derived from launching an external perl process
 # TODO: docs refer to Config.pm and $self->{config}
+
+
 use Config;
 use File::Spec;
+
 sub new {
   my $class = shift;
   my $data  = shift || {};
   return bless( $data, $class );
 }
+
 sub config {
   my ($self, $key) = (shift, shift);
   if (@_) {
@@ -23960,12 +23297,14 @@ sub config {
   }
   return ref($self) && exists $self->{$key} ? $self->{$key} : $Config{$key};
 }
+
 sub config_revert {
   my $self = shift;
   die "Can't use config_revert() as a class method" unless ref($self);
   
   delete $self->{$_} foreach @_;
 }
+
 sub perl_version {
   my $self = shift;
   # Check the current perl interpreter
@@ -23973,15 +23312,18 @@ sub perl_version {
   # perlvar' says I'm not supposed to.  Bloody tyrant.
   return $^V ? $self->perl_version_to_float(sprintf( "%vd", $^V )) : $];
 }
+
 sub perl_version_to_float {
   my ($self, $version) = @_;
   $version =~ s/\./../;  # Double up the first dot so the output has one dot remaining
   $version =~ s/\.(\d+)/sprintf( '%03d', $1 )/eg;
   return $version;
 }
+
 sub _backticks {
   my $perl = shift;
   return unless -e $perl;
+
   my $fh;
   eval {open $fh, '-|', $perl, @_ or die $!};
   if (!$@) {
@@ -23989,6 +23331,7 @@ sub _backticks {
     my $tmp = do {local $/=undef; <$fh>};
     return $tmp;
   }
+
   # Quoting only happens on the path to perl - I control the rest of
   # the args and they don't need quoting.
   if ($^O eq 'MSWin32') {
@@ -23996,16 +23339,22 @@ sub _backticks {
   } else {
     $perl =~ s{([^\w\\])}{\\$1}g;
   }
+
   return `$perl @_`;
 }
+
 sub perl_is_same {
   my ($self, $perl) = @_;
   return _backticks($perl, qw(-MConfig=myconfig -e print -e myconfig)) eq Config->myconfig;
 }
+
 sub find_perl_interpreter {
   my $self = shift;
+
   return $^X if File::Spec->file_name_is_absolute($^X);
+
   my $exe = $self->config('exe_ext');
+
   my $thisperl = $^X;
   if ($self->os_type eq 'VMS') {
     # VMS might have a file version at the end
@@ -24013,6 +23362,7 @@ sub find_perl_interpreter {
   } elsif (defined $exe) {
     $thisperl .= $exe unless $thisperl =~ m/$exe$/i;
   }
+
   foreach my $perl ( $self->config('perlpath'),
 		     map( File::Spec->catfile($_, $thisperl),
 			  File::Spec->path() )
@@ -24021,15 +23371,22 @@ sub find_perl_interpreter {
   }
   return;
 }
+
 # Determine the default @INC for this Perl
 sub perl_inc {
   my $self = shift;
+
   local $ENV{PERL5LIB};  # this is not considered part of the default.
+
   my $perl = $self->find_perl_interpreter();
+
   my @inc = _backticks($perl, qw(-l -e print -e for -e @INC));
   chomp @inc;
+
   return @inc;
 }
+
+
 {
   my %OSTYPES = qw(
 		   aix       Unix
@@ -24055,12 +23412,15 @@ sub perl_inc {
 		   sunos     Unix
 		   cygwin    Unix
 		   os2       Unix
+
 		   dos       Windows
 		   MSWin32   Windows
+
 		   os390     EBCDIC
 		   os400     EBCDIC
 		   posix-bc  EBCDIC
 		   vmesa     EBCDIC
+
 		   MacOS     MacOS
 		   VMS       VMS
 		   VOS       VOS
@@ -24068,18 +23428,27 @@ sub perl_inc {
 		   amigaos   Amiga
 		   mpeix     MPEiX
 		  );
+
+
   sub os_type {
     my $class  = shift;
     return $OSTYPES{shift || $^O};
   }
 }
+
+
 1;
+
  BEGIN{ __mist::no_thanks( 'Probe::Perl' ) } };
 ;{
 package Mist::Distribution;
+# ABSTRACT: provides access to build parameters for this project
+
 use strict;
 use warnings;
+
 use Carp;
+
 sub new {
   bless {
     assert  => [],
@@ -24088,48 +23457,143 @@ sub new {
     perl    => undef,
   }, shift;
 }
+
 sub assert(&@) {
   my ( $self, $code ) = @_;
   croak "assert needs a block, not " . ref $code
     unless ref $code eq 'CODE';
   push @{ $self->{ assert }}, $code;
 }
+
 sub get_assertions { my $self = shift; return @{ $self->{ assert }}; }
+
 sub perl ($) {
   my ( $self, $version ) = @_;
   croak "Perl version has been set before" if $self->{perl};
   $self->{perl} = $version;
 }
-sub get_default_perl_version { my $self = shift; return $self->{ perl }; }
+
+sub get_default_perl_version {
+  my $self = shift; return $self->{ perl };
+}
+
 sub prepend ($;$) {
   my ( $self, $module, $version ) = @_;
   $version = sprintf( q{"%s"}, $version ) if $version and $version =~ /[^\d.]/;
   $module  = sprintf( q{%s~%s}, $module, $version ) if $version;
   push @{ $self->{prepend}}, $module;
 }
-sub get_prepended_modules { my $self = shift; return @{ $self->{ prepend }}; }
+
+sub get_prepended_modules {
+  my $self = shift;
+  return @{ $self->{ prepend }};
+}
+
 sub notest ($) {
   my ( $self, $module ) = @_;
   push @{ $self->{notest}}, $module;
 }
-sub get_modules_not_to_test { my $self = shift; return @{ $self->{ notest }}; }
+
+sub get_modules_not_to_test {
+  my $self = shift;
+  return @{ $self->{ notest }};
+}
+
+sub build_cpanm_call_stack {
+  my ( $self, @prereqs ) = @_;
+
+  my %opts;
+  %opts = %{ shift @prereqs }
+    if @prereqs and ref $prereqs[0] eq 'HASH';
+
+  @prereqs = @{ shift @prereqs }
+    if @prereqs == 1 and ref $prereqs[0] eq 'ARRAY';
+
+  my @prepended = $self->get_prepended_modules;
+
+  # state variables
+  my ( %version, %scheduled, %dont_test, @callstack );
+
+  # build hash of modules we don't want to test
+  %dont_test = map{ $_ => 1 } $self->get_modules_not_to_test;
+
+  # push a module on the call stack according to state vars
+  my $push_module_on_stack = sub{
+    my $module = shift;
+    return if $scheduled{ $module };
+
+    my $mod_spec = $version{ $module } ?
+      join( q{~}, $module, $version{$module} ) : $module;
+
+    if ( $dont_test{ $module } and not $opts{'force-tests'} ) {
+      push @callstack, [ '--installdeps', $mod_spec ];
+      push @callstack, [ '--notest', $mod_spec ];
+    } else {
+      push @callstack, [ $mod_spec ];
+    }
+
+    $scheduled{ $module } = 1;
+  };
+
+  # pre-parse version spec from prerequisites
+  for ( @prereqs ) {
+    my ( $module, $version ) = split( q{~}, $_, 2 );
+    $_ = $module;
+    $version{ $module } = $version;
+  }
+
+  # pre-parse version spec from prepended modules
+  for ( @prepended ) {
+    my ( $module, $version ) = split( q{~}, $_, 2 );
+    $_ = $module;
+
+    warn "Conflicting versions for $module in mistfile and painful\n"
+      if $version and $version{$module} and $version ne $version{$module};
+
+    # prepended version requirement superseded cpanfile requirement
+    $version{ $module } = $version if $version;
+  }
+
+  # schedule prepended modules
+  unless ( $opts{'skip-prepended'} ) {
+    $push_module_on_stack->( $_ ) for @prepended;
+  }
+
+  # schedule remaining modules that are not tested before the remaining
+  # prerequisites to avoid prereqs pulling in this module without --notest
+  unless ( $opts{'skip-notest'} ) {
+    $push_module_on_stack->( $_ ) for keys %dont_test;
+  }
+
+  # schedule remaining prerequisites
+  $push_module_on_stack->( $_ ) for @prereqs;
+
+  return @callstack;
+}
+
 1;
  BEGIN{ __mist::no_thanks( 'Mist::Distribution' ) } };
 ;{
 package Mist::Environment;
 use strict;
 use warnings;
+
 use Carp ();
+
 our @bindings;
 BEGIN { @bindings = qw( perl assert prepend notest ) };
+
 my $file_id = 1;
+
 sub new {
   my ( $class, $file ) = @_;
   bless { file => $file }, $class;
 }
-sub bind {
+
+sub _bind {
   my $class = shift;
   my $pkg = caller;
+
   my $result = Mist::Distribution->new;
   for my $binding ( @bindings ) {
     no strict 'refs';
@@ -24137,10 +23601,13 @@ sub bind {
     $proto = sprintf( '(%s)', $proto ) if $proto;
     *{"$pkg\::${binding}"} = eval " sub $proto { \$result->$binding(\@_); return }; ";
   }
+
   return $result;
 }
+
 sub as_code {
   my ( $self, %args ) = @_;
+
   my $code = $args{ source } || do {
     local $/ = undef;
     my $file = $self->{file};
@@ -24150,40 +23617,55 @@ sub as_code {
       <$fh>;
     } : '';
   };
+
   Carp::croak( "Nothing to parse" ) unless defined $code;
+
   my $package_name = $args{ package };
   $package_name ||= 'Mist::Environment::Sandbox' . $file_id++;
+
   my $line_pos = $args{ package } ? '' :
     defined( $self->{file} ) ? qq{\n# line 1 "$self->{file}"\n} : '';
+
   return <<"PERL";
 {
   package $package_name;
   no warnings;
   my \$_result;
+
   use Devel::CheckBin;
   use Devel::CheckLib;
   use Devel::CheckCompiler;
   use Probe::Perl;
-  BEGIN { \$_result = Mist::Environment->bind }
+
+  BEGIN { \$_result = Mist::Environment->_bind }
+
   $line_pos; $code;
+
   sub distinfo { \$_result }
   \$_result;
 }
 PERL
+
 }
+
 sub parse {
   my $self = shift;
+
   my ( $res, $err );
+
   {
     local $@;
     $res = eval $self->as_code( @_ );
     $err = $@;
   }
+
   if ( $err ) {
     die "Parsing $self->{file} failed: $err";
   }
+
   return $res;
 }
+
 1;
  BEGIN{ __mist::no_thanks( 'Mist::Environment' ) } };{
   package DISTRIBUTION;
@@ -24195,7 +23677,7 @@ sub parse {
   use Devel::CheckCompiler;
   use Probe::Perl;
 
-  BEGIN { $_result = Mist::Environment->bind }
+  BEGIN { $_result = Mist::Environment->_bind }
 
   ; # ask perlbrew or perlenv to default to a specific version of perl
 perl '5.14.2';
@@ -24277,42 +23759,56 @@ TEXTFILE_9AC2A4D4877C6566855296DE9BA3C00A
 ;{
 package                         # hide from CPAN
   Mist::Script::perl;
+
 # poor-mans pluggable objects: everything that handles perl versions
 # has to live in Mist::Script::perl
+
 use strict;
 use warnings;
+
 our @INITIAL_ARGS;
 BEGIN { @INITIAL_ARGS = @ARGV; }
+
 our $PERLBREW_ROOT;
 our $PERLBREW_DEFAULT_VERSION;
+
 use File::Spec ();
 use Getopt::Long 2.42;
 use Config;
+
 my $run_quiet = 0;
 my $pb_root   = $ENV{PERLBREW_ROOT} || $PERLBREW_ROOT;
+
 my $pb_version;
+
 {
   my $p = Getopt::Long::Parser->new;
   my %arg_spec = ( "perlbrew=s" => \$pb_version );
   $p->configure(qw/ default pass_through /);
+
   # also remove opts from global argument list
   $p->getoptionsfromarray( \@Mist::Script::install::CMD_OPTS, %arg_spec );
+
   # but let INITIAL_ARGS take precedence (just to be sure, should be the same)
   $p->getoptionsfromarray( \@INITIAL_ARGS, %arg_spec );
 }
+
 $pb_version ||= $ENV{MIST_PERLBREW_VERSION};
 $pb_version ||= $PERLBREW_DEFAULT_VERSION;
 undef $pb_version if $pb_version and $pb_version eq 'system';
+
 sub init {
   find_perl_version_manager_executable();
   assert_availability_of_requested_perl_version();
   ensure_runtime_is_correct_perl_version();
   check_runtime_environment();
 }
+
 # --- Internals ------------------------------------------------------------
 my $pb_exec;
 sub find_perl_version_manager_executable {
   return unless $pb_version;
+
   $pb_exec = qx{ which perlbrew 2> /dev/null };
   if ( not $pb_exec ) {
     ( $pb_root ) = grep { -e File::Spec->catfile( $_, qw/ bin perlbrew /) }
@@ -24320,6 +23816,7 @@ sub find_perl_version_manager_executable {
     $pb_exec = File::Spec->catfile( $pb_root, qw/ bin perlbrew /);
   }
   chomp $pb_exec;
+
   system( "$pb_exec version >/dev/null" ) == 0 or die <<"MSG";
 No local installation of perlbrew was found ($?). You can install it
 as root via:
@@ -24328,14 +23825,17 @@ as root via:
 or just for this account simply via:
   curl -kL http://install.perlbrew.pl | bash
 MSG
+
   # try running quietly
   if ( system( $pb_exec, 'exec', '--quiet', 'true' ) == 0 ) {
     $run_quiet = 1;
   }
 }
+
 sub list_available_perl_versions {
   my @versions = qx# bash -c '
     export PERLBREW_ROOT=${pb_root}
+
     if ( ! . \${PERLBREW_ROOT}/etc/bashrc ) ; then
       perlbrew init 2>/dev/null
       if ( ! . \${PERLBREW_ROOT}/etc/bashrc ) ; then
@@ -24343,33 +23843,44 @@ sub list_available_perl_versions {
         exit 127
       fi
     fi
+
     $pb_exec list
   '#;
   for ( @versions ) { chomp; s/^\s+//; s/\s+$// }
   return @versions;
 }
+
 sub assert_availability_of_requested_perl_version {
   return unless $pb_version;
+
   my @pb_installed_versions = list_available_perl_versions();
+
   my ( $pb_installed ) = grep{ / \b $pb_version \b /x } @pb_installed_versions;
   die "FATAL: $pb_version not found and can't write to $pb_root\n" .
     "Try\n  sudo -E perlbrew install $pb_version\nto install it as root\n"
     unless $pb_installed or -w $pb_root;
+
   my @pb_call = ( $pb_exec, 'install', $pb_version );
   system( @pb_call ) == 0 or die "`@pb_call` failed" unless $pb_installed;
+
   # ensure version is in perlbrew lingo
   $pb_version = "perl-${pb_version}"
     if $pb_version and $pb_version =~ m/^[\d.]+$/;
 }
+
 sub ensure_runtime_is_correct_perl_version {
   return unless $pb_version;
+
   my @pb_options = ( '--with', $pb_version );
   push @pb_options, '--quiet' if $run_quiet;
+
   if ( not $ENV{MIST_PERLBREW_VERSION} ) {
     if ( !$ENV{PERLBREW_PERL} or $ENV{PERLBREW_PERL} ne $pb_version ) {
       $ENV{PERLBREW_ROOT} = $pb_root;
       my $pb_archname = get_archname();
+
       $ENV{MIST_PERLBREW_VERSION} = $pb_version;
+
       ( my $cmd_name = "$0 @INITIAL_ARGS") =~ s/[\n\r\s]+$//;
       $cmd_name =~ s/\s{2,}/ /;
       printf "Restarting $cmd_name under %s [%s]\n", $pb_version, $pb_archname;
@@ -24377,39 +23888,57 @@ sub ensure_runtime_is_correct_perl_version {
     }
   }
 };
+
 sub check_runtime_environment {
   return unless $pb_version;
-  # ensure cpanm is installed
-  print "Ensuring cpanm is installed in this environment\n";
-  my $cpanm_exit = system( "$pb_exec install-cpanm </dev/null >/dev/null" );
-  die "Installing cpanm failed (try running `perlbrew install-cpanm` as root)\n"
-    unless $cpanm_exit == 0;
+
+  # not sure why we would need an external cpanm anymore
+
+  # # ensure cpanm is installed
+  # print "Ensuring cpanm is installed in this environment\n";
+  # my $cpanm_exit = system( "$pb_exec install-cpanm </dev/null >/dev/null" );
+  # die "Installing cpanm failed (try running `perlbrew install-cpanm` as root)\n"
+  #   unless $cpanm_exit == 0;
 }
+
+
 sub get_archname {
   return unless $pb_version;
+
   my $pb_cmd = qq{ $pb_exec exec } . ( $run_quiet ? '--quiet ' : '' ) . qq{--with '$pb_version' };
   my $pb_archname =  qx{ $pb_cmd perl -MConfig -E "say \\\$Config{archname}" };
   chomp $pb_archname;
   return $pb_archname;
 }
+
 sub write_env {
   return unless $pb_version;
+
   my $class = shift;
   my $env = shift;
+
   return unless $ENV{MIST_PERLBREW_VERSION} || $pb_version;
+
   printf $env <<'PERLBREW_RC', $pb_root, $ENV{MIST_PERLBREW_VERSION} || $pb_version;
+
 PERLBREW_DEFAULT_ROOT=%s
 PERLBREW_DEFAULT_VERSION=%s
+
 if [ "x$PERLBREW_ROOT" == "x" ] ; then
   export PERLBREW_ROOT=$PERLBREW_DEFAULT_ROOT
 fi
+
 source "$PERLBREW_ROOT/etc/bashrc"
+
 if [ "x$MIST_PERLBREW_VERSION" == "x" ] ; then
   MIST_PERLBREW_VERSION=$PERLBREW_DEFAULT_VERSION
 fi
+
 perlbrew use "$MIST_PERLBREW_VERSION"
 PERLBREW_RC
+
   if ( $run_quiet ) {
+
     print $env <<'PERLBREW_RC';
 function mist_exec {
    exec perlbrew exec --with "$MIST_PERLBREW_VERSION" --quiet "${@}"
@@ -24418,7 +23947,9 @@ function mist_run {
    perlbrew exec --with "$MIST_PERLBREW_VERSION" --quiet "${@}"
 }
 PERLBREW_RC
+
   } else {
+
     print $env <<'PERLBREW_RC';
 function mist_exec {
    exec perlbrew exec --with "$MIST_PERLBREW_VERSION" "${@}"
@@ -24427,8 +23958,11 @@ function mist_run {
    perlbrew exec --with "$MIST_PERLBREW_VERSION" "${@}"
 }
 PERLBREW_RC
+
   }
+
 }
+
 1;
 ; BEGIN {$PERLBREW_ROOT = '/opt/perl5';
 ;
@@ -24439,26 +23973,50 @@ $PERLBREW_DEFAULT_VERSION = 'perl-5.14.2';
 package Mist::Script::install;
 use strict;
 use warnings;
+
 use Config;
 use Getopt::Long 2.42;
+use Pod::Usage;
+
 our @CMD_OPTS;
+
+BEGIN {
+  my $help = 0;
+  my $p = Getopt::Long::Parser->new;
+  $p->configure(qw/ default pass_through /);
+  $p->getoptions( 'help|?' => \$help );
+  pod2usage( -verbose => 99, -sections => [qw/ NAME SYNOPSIS /]) if $help;
+}
+
+
 my $all_versions;
 BEGIN {
   my $p = Getopt::Long::Parser->new;
   $p->configure(qw/ default pass_through /);
   $p->getoptions( 'all-available-versions' => \$all_versions );
 }
+
 my ( $branch, $parent );
+my %dist_options;
 BEGIN {
   @CMD_OPTS = @ARGV;
   my $p = Getopt::Long::Parser->new;
   $p->configure(qw/ default pass_through /);
   $p->getoptionsfromarray(
     \@CMD_OPTS,
+    \%dist_options,
+
+    # those two are not included in %dist_options
     'branch:s' => \$branch,
     'parent=s' => \$parent,
+
+    # the following are accessible via %dist_options
+    'force-tests',
+    'skip-prepended',
+    'skip-notest',
   );
 }
+
 if ( $all_versions ) {
   my $vm = "Mist::Script::perl";
   die "No version manager installed" unless UNIVERSAL::can( $vm, 'init' );
@@ -24466,24 +24024,33 @@ if ( $all_versions ) {
   my @versions = $vm->list_available_perl_versions;
   for my $version ( 'system', @versions ) {
     system $0 => @ARGV, "--perlbrew=${version}";
+  } continue {
+    print "\n\n";
   }
+
   # finally re-run default so all symlinks will be set up correctly
   system $0 => @ARGV;
   exit;
 }
+
 our $MPAN_DIST_DIR || die '$MPAN_DIST_DIR not set';
 our $PERL5_BASE_LIB = 'perl5';
+
 # let git determine branch name if no explicit name is given
 ( $branch ) =  `git status --porcelain --branch` =~ m{## ([\w-]+)}
   if defined $branch and not $branch;
+
 my $arch_path = join( q{-}, 'perl', $Config{version}, $Config{archname} );
+
 our $LOCAL_LIB_DIR   = File::Spec->catdir(
   $PERL5_BASE_LIB, join( q{-}, $arch_path, $branch ? $branch : () )
 );
+
 # hard-link parent's local::lib content to new branch to get CoW-like behavior
 if ( $parent ) {
   die "--parent needs --branch to be specified\n"
     unless $branch;
+
   my $parent_lib_dir = File::Spec->catdir(
     $PERL5_BASE_LIB, join( q{-}, $arch_path, $parent )
   );
@@ -24492,11 +24059,15 @@ if ( $parent ) {
   print "Hard-linking contents of $parent branch to $branch\n";
   system cp => ( '--link', '--no-clobber', '--archive', $parent_lib_dir => $LOCAL_LIB_DIR );
 }
+
 our $PREPEND_DISTS ||= eval {[ DISTRIBUTION->distinfo->get_prepended_modules ]};
 die '$PREPEND_DISTS not set' . $@ unless $PREPEND_DISTS;
+
 our $DONT_TEST_DISTS ||= eval {[ DISTRIBUTION->distinfo->get_modules_not_to_test ]};
 die '$DONT_TEST_DISTS not set' . $@ unless $DONT_TEST_DISTS;
+
 our $PREREQUISITE_DISTS || die '$PREREQUISITE_DISTS not set';
+
 use App::cpanminus::script;
 use FindBin qw/$Bin/;
 use File::Temp qw/tempdir/;
@@ -24504,14 +24075,20 @@ use File::Path qw/mkpath/;
 use File::Spec;
 use File::Copy;
 use Cwd qw/realpath/;
+
 my $mist_home = $ENV{MIST_APP_ROOT} ? $ENV{MIST_APP_ROOT} : $Bin;
+
 my $perl5_baselib = File::Spec->catdir( $mist_home, $PERL5_BASE_LIB );
 mkpath( $perl5_baselib );
+
 my $mpan           = File::Spec->catdir( $Bin, $MPAN_DIST_DIR );
 my $local_lib      = File::Spec->catdir( $mist_home, $LOCAL_LIB_DIR );
 my $libexec_dir    = File::Spec->catdir( $perl5_baselib, 'libexec' );
 my $generic_libdir = File::Spec->catdir( $mist_home, $PERL5_BASE_LIB, $arch_path );
+
+
 mkpath( $libexec_dir );
+
 my $cmd_wrapper = File::Spec->catfile( $libexec_dir, 'cmd-wrapper.bash' );
 {
   my $cmd_wrapper_src = CMD_WRAPPER::Bash->get_content;
@@ -24519,21 +24096,29 @@ my $cmd_wrapper = File::Spec->catfile( $libexec_dir, 'cmd-wrapper.bash' );
     or die "Creating $cmd_wrapper failed: $!";
   print $fh $cmd_wrapper_src;
 }
+
 my $perm = ( stat $cmd_wrapper )[2] & 07777;
 chmod( $perm | 0755, $cmd_wrapper );
+
 Mist::Script::perl->init
   if eval{ Mist::Script::perl->can( 'init' ) };
+
+# let cpanm parse the remaining options and figure out what
+# modules are requested for installation (if any)
 my $cpanm = App::cpanminus::script->new;
 {
   # silence warnings, cpanm will issue them later on
   local $SIG{__WARN__} = sub{};
+
   $cpanm->parse_options( @CMD_OPTS );
 }
+
 my @CUSTOM_MODULES = @{ $cpanm->{argv} };
 my @CPAN_ARGS;
 for my $arg ( @CMD_OPTS ) {
   push @CPAN_ARGS, $arg unless grep{ $arg eq $_ } @CUSTOM_MODULES;
 }
+
 sub run_cpanm {
   my $app = App::cpanminus::script->new;
   my @options = (
@@ -24543,192 +24128,271 @@ sub run_cpanm {
     '--mirror-only',
     @CPAN_ARGS,
   );
+
   $app->parse_options( @options, @_ );
   my $result = $app->_doit;
   exit 1 unless $result and $result == 1;
   return $result;
 }
-unless (caller) {
-  die "mpan-install can not run as root\n" if $> == 0;
-  my $workspace = tempdir();
-  die <<"MSG" if -l $local_lib;
+
+
+die "mpan-install can not run as root\n" if $> == 0;
+
+my $workspace = tempdir();
+
+die <<"MSG" if -l $local_lib;
 Directory
-  $local_lib
+$local_lib
 is a symlink to a branch, please remove it manually and
 restart ./mpan-install or specify a branch to install to.
 MSG
-  mkpath( $local_lib );
-  if ( not -r $mpan or not -w $local_lib ) {
-    warn "$0: can't read from ${mpan}: permission denied\n"
-      unless -r $mpan;
-    warn "$0: can't write to ${local_lib}: permission denied\n"
-      unless -w $local_lib;
-    exit 1;
-  }
-  my $p5_dir = realpath( File::Spec->catdir( $local_lib, File::Spec->updir ));
-  my $rc_dir = File::Spec->catdir( $p5_dir, 'etc' );
-  mkpath( $rc_dir );
-  my $mist_rc = File::Spec->catfile( $rc_dir, 'mist.mistrc' );
-  open my $env, '>', $mist_rc;  # to catch write errors early on
-  my $bin_dir = File::Spec->catdir( $p5_dir, 'bin' );
-  mkpath( $bin_dir );
-  my $mist_run_fn = File::Spec->catfile( $bin_dir, 'mist-run');
-  open my $mist_run, '>', $mist_run_fn; # to catch write errors early on
-  {
-    my $perm = ( stat $mist_run_fn )[2] & 07777;
-    chmod( $perm | 0755, $mist_run_fn );
-  }
-  print $mist_run <<'BASH';
+
+mkpath( $local_lib );
+
+if ( not -r $mpan or not -w $local_lib ) {
+  warn "$0: can't read from ${mpan}: permission denied\n"
+    unless -r $mpan;
+
+  warn "$0: can't write to ${local_lib}: permission denied\n"
+    unless -w $local_lib;
+
+  exit 1;
+}
+
+my $p5_dir = realpath( File::Spec->catdir( $local_lib, File::Spec->updir ));
+my $rc_dir = File::Spec->catdir( $p5_dir, 'etc' );
+mkpath( $rc_dir );
+my $mist_rc = File::Spec->catfile( $rc_dir, 'mist.mistrc' );
+open my $env, '>', $mist_rc;    # to catch write errors early on
+
+my $bin_dir = File::Spec->catdir( $p5_dir, 'bin' );
+mkpath( $bin_dir );
+my $mist_run_fn = File::Spec->catfile( $bin_dir, 'mist-run');
+
+open my $mist_run, '>', $mist_run_fn; # to catch write errors early on
+{
+  my $perm = ( stat $mist_run_fn )[2] & 07777;
+  chmod( $perm | 0755, $mist_run_fn );
+}
+
+print $mist_run <<'BASH';
 #!/bin/bash
+
 echo "FATAL: Mist environment not fully installed";
 exit 1;
 BASH
-  local $ENV{HOME} = $workspace;
-  if ( eval { DISTRIBUTION->distinfo->can( 'get_assertions' ) }) {
-    $_->() for DISTRIBUTION->distinfo->get_assertions;
-  }
-  my @prepend = ( @$PREPEND_DISTS );
-  my @notest  = ( @$DONT_TEST_DISTS );
-  my @prereqs = ( @$PREREQUISITE_DISTS );
-  if ( @CUSTOM_MODULES ) {
-    run_cpanm( $_ ) for @CUSTOM_MODULES;
-  } else {
-    run_cpanm( $_ ) for @prepend;
-    for my $module ( @notest ) {
-      # in some wired cases, two modules depending on each other fail
-      # so we have to build them one by one to ensure correct order
-      run_cpanm( '--installdeps', $module );
-      run_cpanm( '--notest',      $module );
-    }
-    run_cpanm( $_ ) for @prereqs;
-  }
-  printf $env <<'MIST_ENV', $mist_home;
+
+local $ENV{HOME} = $workspace;
+
+my $dist = DISTRIBUTION->distinfo;
+if ( eval { $dist->can( 'get_assertions' ) }) {
+  $_->() for $dist->get_assertions;
+}
+
+my @callstack;
+if ( @CUSTOM_MODULES ) {
+  @callstack = $dist->build_cpanm_call_stack(
+    { %dist_options, 'skip-prepended' => 1, 'skip-notest' => 1 },
+    @CUSTOM_MODULES
+  );
+} else {
+  @callstack = $dist->build_cpanm_call_stack(
+    \%dist_options, $PREREQUISITE_DISTS
+  );
+}
+
+run_cpanm( @$_ ) for @callstack;
+
+printf $env <<'MIST_ENV', $mist_home;
 # This file is automatically generated by ./mpan-install
 # DO NOT EDIT
+
 export MIST_APP_ROOT="%s"
 export PATH="$MIST_APP_ROOT/bin:$MIST_APP_ROOT/sbin:$MIST_APP_ROOT/script:$PATH"
+
 MIST_ENV
-  if ( eval{ Mist::Script::perl->can( 'write_env' )} ) {
-    Mist::Script::perl->write_env( $env );
-  }
-  require local::lib;
-  {
-    local $SIG{__WARN__} = sub{};
-    print $env local::lib->environment_vars_string_for( "${local_lib}" );
-  }
-  close $env;
-  close $mist_run;
-  open $mist_run, '>', $mist_run_fn; # reopen mist-run and flesh it out
-  my $arch_path = File::Spec->abs2rel( $LOCAL_LIB_DIR, $PERL5_BASE_LIB );
-  printf $mist_run <<'WRAPPER', $mist_home, $mist_rc, $arch_path;
+
+if ( eval{ Mist::Script::perl->can( 'write_env' )} ) {
+  Mist::Script::perl->write_env( $env );
+}
+
+require local::lib;
+{
+  local $SIG{__WARN__} = sub{};
+  print $env local::lib->environment_vars_string_for( "${local_lib}" );
+}
+
+close $env;
+close $mist_run;
+
+open $mist_run, '>', $mist_run_fn; # reopen mist-run and flesh it out
+
+# my $arch_path = File::Spec->abs2rel( $LOCAL_LIB_DIR, $PERL5_BASE_LIB );
+printf $mist_run <<'WRAPPER', $mist_home, $mist_rc, $arch_path;
 #!/bin/bash
+
 MIST_ROOT="%s"
 MIST_ENV="%s"
+
 if [ ! -r $MIST_ENV ] ; then
-    echo "FATAL: Could not load env from $MIST_ENV"
-    exit 1
+  echo "FATAL: Could not load env from $MIST_ENV"
+  exit 1
 fi
+
 # may be overwritten by mist env script
 function mist_exec {
-   exec "${@}"
+  exec "${@}"
 }
+
 function mist_run {
-   eval "${@}"
+  eval "${@}"
 }
+
 source $MIST_ENV
+
 VERSION_ARCH_PATH="%s"
 LOCAL_LIB="$MIST_ROOT/$VERSION_ARCH_PATH"
+
 export PATH="$LOCAL_LIB/bin:$LOCAL_LIB/sbin:$PATH"
 export PATH="$MIST_ROOT/bin:$MIST_ROOT/sbin:$MIST_ROOT/script:$PATH"
 export PERL5LIB="$MIST_ROOT/lib:$PERL5LIB"
+
 mist_exec "${@}"
 WRAPPER
-  my $global_mist_run = File::Spec->catfile( $mist_home, 'mist-run' );
-  unlink $global_mist_run;
-  symlink( $mist_run_fn, $global_mist_run )
-    or warn "Permission denied while creating ./mpan-run\n";
-  for my $script_dir (qw/ bin sbin script /) {
-    my $loc_script_dir = File::Spec->catdir( $perl5_baselib, $script_dir );
-    my @binaries;
-    my $dir;
-    use strict;
-    $dir = File::Spec->catdir( $local_lib, $script_dir );
-    if ( -d $dir and opendir( my $dh, $dir ) ) {
-      push @binaries, map{(
-        File::Spec->catfile( $loc_script_dir, $_ )
-      )} grep {
-        -f File::Spec->catfile( $dir, $_ ) and
-          -x File::Spec->catfile( $dir, $_ )
+
+my $global_mist_run = File::Spec->catfile( $mist_home, 'mist-run' );
+unlink $global_mist_run;
+symlink( $mist_run_fn, $global_mist_run )
+  or warn "Permission denied while creating ./mpan-run\n";
+
+for my $script_dir (qw/ bin sbin script /) {
+
+  my $loc_script_dir = File::Spec->catdir( $perl5_baselib, $script_dir );
+
+  my @binaries;
+  my $dir;
+
+  use strict;
+
+  $dir = File::Spec->catdir( $local_lib, $script_dir );
+  if ( -d $dir and opendir( my $dh, $dir ) ) {
+    push @binaries, map{(
+      File::Spec->catfile( $loc_script_dir, $_ )
+    )} grep {
+      -f File::Spec->catfile( $dir, $_ ) and
+        -x File::Spec->catfile( $dir, $_ )
       } readdir( $dh );
-    }
-    $dir = File::Spec->catdir( $Bin, $script_dir );
-    if ( -d $dir and opendir( my $dh, $dir ) ) {
-      push @binaries, map{(
-        File::Spec->catfile( $loc_script_dir, $_ )
-      )} grep {
-        -f File::Spec->catfile( $script_dir, $_ ) and
-          -x File::Spec->catfile( $script_dir, $_ )
+  }
+
+  $dir = File::Spec->catdir( $Bin, $script_dir );
+  if ( -d $dir and opendir( my $dh, $dir ) ) {
+    push @binaries, map{(
+      File::Spec->catfile( $loc_script_dir, $_ )
+    )} grep {
+      -f File::Spec->catfile( $script_dir, $_ ) and
+        -x File::Spec->catfile( $script_dir, $_ )
       } readdir( $dh );
-    }
-    if ( @binaries ) {
-      mkpath( $loc_script_dir );
-      print "Creating local binaries in ${loc_script_dir}\n";
-      for my $bin ( @binaries ) {
-        unlink $bin;
-        symlink $cmd_wrapper, $bin
-          or die "Failed to create symlink for $bin";
-      }
+  }
+
+  if ( @binaries ) {
+    mkpath( $loc_script_dir );
+    print "Creating local binaries in ${loc_script_dir}\n";
+
+    for my $bin ( @binaries ) {
+      unlink $bin;
+      symlink $cmd_wrapper, $bin
+        or die "Failed to create symlink for $bin";
     }
   }
-  # try to relink branch-less local lib to branch
-  if ( $branch ) {
-    if ( -l $generic_libdir or not -e $generic_libdir ) {
-      print "Re-linking $generic_libdir to current branch\n";
-      unlink $generic_libdir;
-      symlink $LOCAL_LIB_DIR, $generic_libdir
-        or die "Failed to create symlink for $generic_libdir";
-    } else {
-      warn "$generic_libdir exists but isn't a symlink, leaving it alone.\n";
-    }
+}
+
+# try to relink branch-less local lib to branch
+if ( $branch ) {
+  if ( -l $generic_libdir or not -e $generic_libdir ) {
+    print "Re-linking $generic_libdir to current branch\n";
+    unlink $generic_libdir;
+    symlink $LOCAL_LIB_DIR, $generic_libdir
+      or die "Failed to create symlink for $generic_libdir";
+  } else {
+    warn "$generic_libdir exists but isn't a symlink, leaving it alone.\n";
   }
-  print <<"SUCCESS";
+}
+
+print <<"SUCCESS";
+
 Successfully created a mist environment for this distribution.
 To enable it put the following line in your scripts:
-  source $mist_rc
+source $mist_rc
+
 To run binaries from this distribution (\$HOME/bin and \$HOME/sbin are in
 automatically prepended to \$PATH) you can also use this wrapper script:
-  $mist_run_fn my_script.pl [OPTIONS ..]
+$mist_run_fn my_script.pl [OPTIONS ..]
+
 SUCCESS
-}
 ; BEGIN {$MPAN_DIST_DIR = 'mpan-dist';
 ;
 $PREREQUISITE_DISTS = [
-                        'App::Cmd',
-                        'App::cpanminus~1.7',
-                        'CPAN::Meta~2.132830',
-                        'CPAN::PackageDetails',
-                        'CPAN::ParseDistribution',
-                        'Capture::Tiny',
-                        'Devel::CheckBin',
-                        'Devel::CheckCompiler',
-                        'Devel::CheckLib',
-                        'Digest::MD5',
-                        'File::Find::Upwards',
-                        'File::HomeDir',
-                        'File::Share',
-                        'Getopt::Long~2.42',
-                        'List::MoreUtils',
-                        'Minilla~v0.11.0',
-                        'Module::CPANfile~1.0002',
-                        'Module::Path',
-                        'Moo',
-                        'MooX::HandlesVia',
-                        'MooX::late',
-                        'Path::Class',
-                        'Probe::Perl',
-                        'Software::License',
-                        'Sort::Key',
-                        'local::lib~2.00'
-                      ];
+  'App::Cmd',
+  'App::cpanminus~1.7',
+  'CPAN::Meta~2.132830',
+  'CPAN::PackageDetails',
+  'CPAN::ParseDistribution',
+  'Capture::Tiny',
+  'Devel::CheckBin',
+  'Devel::CheckCompiler',
+  'Devel::CheckLib',
+  'Digest::MD5',
+  'File::Find::Upwards',
+  'File::HomeDir',
+  'File::Share',
+  'Getopt::Long~2.42',
+  'List::MoreUtils',
+  'Minilla~v0.11.0',
+  'Module::CPANfile~1.0002',
+  'Module::Path',
+  'Moo',
+  'MooX::HandlesVia',
+  'MooX::late',
+  'Path::Class',
+  'Probe::Perl',
+  'Software::License',
+  'Sort::Key',
+  'local::lib~2.00'
+];
 ;
 };  BEGIN{ __mist::no_thanks( 'Mist::Script::install' ) } };
+;{
+package Mist::Script::usage;
+1;
+
+=head1 NAME
+
+ mpan-install
+
+=head1 SYNOPSIS
+
+ ./mpan-install [OPTIONS] [cpanm options] [MODULES ...]
+
+ Options:
+   --help            display this help message
+
+   --force-tests       ignore notest from mistfile, but still install dists
+   --skip-prepended    don't prepend those modules requested in mistfile
+   --skip-notest       don't prepend modules marked as 'notest' in mistfile
+   --perlbrew VERSION  use this perlbrew-managed perl version
+
+   --branch [BRANCH]
+       work on a named local::lib branch (defaults to git branch)
+   --parent BRANCH
+       use another named branch as basis for branch to work on
+
+   --all-available-versions
+       run this mpan-install against all installed perl versions
+
+ All other options will be passsed on to cpanm.
+
+ If MODULES are given install just those modules instead of the dependencies
+ given in cpanfile
+
+=cut
+ };

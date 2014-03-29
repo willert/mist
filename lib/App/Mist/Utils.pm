@@ -14,6 +14,8 @@ use Module::Path qw/ module_path /;
 use Scalar::Util qw/ blessed looks_like_number /;
 use Digest::MD5  qw/ md5_hex /;
 
+use App::Mist::Util::StripPod;
+
 sub append_text_file {
   my ( $textfile, $fh, %p ) = @_;
   my $pkg = $p{as} || $p{package}
@@ -54,15 +56,15 @@ my %header_appended;
 sub append_module_source {
   my ( $module, $fh, %p ) = @_;
 
-  print $fh <<'PERL' unless $header_appended{ $fh };
-sub __mist::no_thanks {
-  my $file = __FILE__;
-  for my $mod ( @_ ) {
-    ( my $basename = $mod ) =~ s!(::|')!/!g;
-    $INC{ "${basename}.pm" } = $file;
+  print $fh <<'NO_THANKS' unless $header_appended{ $fh };
+  sub __mist::no_thanks {
+    my $file = __FILE__;
+    for my $mod ( @_ ) {
+      ( my $basename = $mod ) =~ s!(::|')!/!g;
+      $INC{ "${basename}.pm" } = $file;
+    }
   }
-}
-PERL
+NO_THANKS
 
   $header_appended{ $fh } = 1;
 
@@ -74,16 +76,25 @@ PERL
 
   printf $fh "\n;%s{\n", $p{begin_lift} ? 'BEGIN' : '';
 
+  my $module_code;
   while ( <$module_source> ) {
-    next if $_ eq "\n";
-    last if /^__END__$/;
+    last if /^__END__$/ and not $p{verbatim};
 
-    print $fh $_;
+    $module_code .= $_;
 
     if ( exists $p{until} ) {
       last if ref $p{until} eq 'Regexp' and $_ =~ $p{until};
     }
   }
+
+  unless ( $p{verbatim} ) {
+    my $p = App::Mist::Util::StripPod->new;
+    $p->output_string( \ my $podless_code );
+    $p->parse_string_document( $module_code );
+    $module_code = $podless_code;
+  }
+
+  print $fh $module_code;
 
   if ( exists $p{VARS} and my $vars = $p{VARS} ) {
     $vars = [ %$vars ] if ref $vars eq 'HASH';
@@ -103,7 +114,11 @@ PERL
 
     print $fh "}; ";
   }
-  print $fh " BEGIN{ __mist::no_thanks( '${module}' ) }";
+
+  unless ( $p{verbatim} ) {
+    print $fh " BEGIN{ __mist::no_thanks( '${module}' ) }";
+  }
+
   print $fh " };";
 }
 

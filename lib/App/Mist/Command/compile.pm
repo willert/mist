@@ -72,6 +72,8 @@ sub execute {
       PREREQUISITE_DISTS => \@prereqs,
     ]);
 
+    append_module_source( 'Mist::Script::usage' => $out, verbatim => 1 );
+
     close $out;
 
     unlink "mpan-install";

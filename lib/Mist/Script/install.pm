@@ -4,8 +4,18 @@ use warnings;
 
 use Config;
 use Getopt::Long 2.42;
+use Pod::Usage;
 
 our @CMD_OPTS;
+
+BEGIN {
+  my $help = 0;
+  my $p = Getopt::Long::Parser->new;
+  $p->configure(qw/ default pass_through /);
+  $p->getoptions( 'help|?' => \$help );
+  pod2usage( -verbose => 99, -sections => [qw/ NAME SYNOPSIS /]) if $help;
+}
+
 
 my $all_versions;
 BEGIN {
