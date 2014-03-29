@@ -14,7 +14,7 @@ sub new {
   bless { file => $file }, $class;
 }
 
-sub bind {
+sub _bind {
   my $class = shift;
   my $pkg = caller;
 
@@ -61,7 +61,7 @@ sub as_code {
   use Devel::CheckCompiler;
   use Probe::Perl;
 
-  BEGIN { \$_result = Mist::Environment->bind }
+  BEGIN { \$_result = Mist::Environment->_bind }
 
   $line_pos; $code;
 
