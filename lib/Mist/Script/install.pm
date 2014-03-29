@@ -25,7 +25,7 @@ BEGIN {
   $p->getoptions( 'all-available-versions' => \$all_versions );
 }
 
-my ( $branch, $parent );
+my ( $branch, $parent, $prove );
 my %dist_options;
 BEGIN {
   @CMD_OPTS = @ARGV;
@@ -38,6 +38,7 @@ BEGIN {
     # those two are not included in %dist_options
     'branch:s' => \$branch,
     'parent=s' => \$parent,
+    'prove'    => \$prove,
 
     # the following are accessible via %dist_options
     'force-tests',
@@ -289,6 +290,8 @@ export PERL5LIB="$MIST_ROOT/lib:$PERL5LIB"
 mist_exec "${@}"
 WRAPPER
 
+close $mist_run;
+
 my $global_mist_run = File::Spec->catfile( $mist_home, 'mist-run' );
 unlink $global_mist_run;
 symlink( $mist_run_fn, $global_mist_run )
@@ -346,6 +349,8 @@ if ( $branch ) {
     warn "$generic_libdir exists but isn't a symlink, leaving it alone.\n";
   }
 }
+
+system $mist_run_fn => prove => ( '-l', 't' ) if $prove;
 
 print <<"SUCCESS";
 
