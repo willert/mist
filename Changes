@@ -2,6 +2,15 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+0.30 2014-03-29T04:51:33Z
+
+  - Full merging of prepend, notest and cpanfile requirements
+    This finally gives use notest for prepend, keeps all version information
+    even if it comes from different sources (e.g. prepend now uses version
+    requirements from cpanfile if no other is given).
+ 
+  - Display usage text and version info with ./mpan-install --help
+
 0.29 2014-03-29T01:32:19Z
 
   - Removed all instances of PERLBREW_HOME, it is not needed for mist
