@@ -11,39 +11,44 @@ our @INITIAL_ARGS;
 BEGIN { @INITIAL_ARGS = @ARGV; }
 
 our $PERLBREW_ROOT;
-our $PERLBREW_DEFAULT_VERSION || die '$PERL5_DEFAULT_VERSION not set';
+our $PERLBREW_DEFAULT_VERSION;
 
-use FindBin ();
 use File::Spec ();
 use Getopt::Long 2.42;
 use Config;
 
 my $run_quiet = 0;
-
-my $tmp_base_dir = File::Spec->catdir( $FindBin::Bin, 'tmp' );
-$tmp_base_dir = File::Spec->catdir(
-  File::Spec->tmpdir,
-  ( File::Spec->splitdir( $FindBin::Bin ))[ -1 ],
-) unless -d $tmp_base_dir and -w $tmp_base_dir;
-
-my $pb_root    = $ENV{PERLBREW_ROOT} || $PERLBREW_ROOT;
-my $pb_home    = File::Spec->catdir( $tmp_base_dir, 'perlbrew' );
+my $pb_root   = $ENV{PERLBREW_ROOT} || $PERLBREW_ROOT;
 
 my $pb_version;
-my @CMD_ARGS = @INITIAL_ARGS;
 
 {
   my $p = Getopt::Long::Parser->new;
-  $p->configure(qw/ default require_order pass_through /);
-  $p->getoptionsfromarray( \@CMD_ARGS, "perl=s" => \$pb_version );
+  my %arg_spec = ( "perlbrew=s" => \$pb_version );
+  $p->configure(qw/ default pass_through /);
+
+  # also remove opts from global argument list
+  $p->getoptionsfromarray( \@Mist::Script::install::CMD_OPTS, %arg_spec );
+
+  # but let INITIAL_ARGS take precedence (just to be sure, should be the same)
+  $p->getoptionsfromarray( \@INITIAL_ARGS, %arg_spec );
 }
 
 $pb_version ||= $ENV{MIST_PERLBREW_VERSION};
 $pb_version ||= $PERLBREW_DEFAULT_VERSION;
+undef $pb_version if $pb_version and $pb_version eq 'system';
 
+sub init {
+  find_perl_version_manager_executable();
+  assert_availability_of_requested_perl_version();
+  ensure_runtime_is_correct_perl_version();
+  check_runtime_environment();
+}
+
+# --- Internals ------------------------------------------------------------
 my $pb_exec;
-
-if ( $pb_version ) {
+sub find_perl_version_manager_executable {
+  return unless $pb_version;
 
   $pb_exec = qx{ which perlbrew 2> /dev/null };
   if ( not $pb_exec ) {
@@ -62,7 +67,14 @@ or just for this account simply via:
   curl -kL http://install.perlbrew.pl | bash
 MSG
 
-  my @pb_installed_versions = qx# bash -c '
+  # try running quietly
+  if ( system( $pb_exec, 'exec', '--quiet', 'true' ) == 0 ) {
+    $run_quiet = 1;
+  }
+}
+
+sub list_available_perl_versions {
+  my @versions = qx# bash -c '
     export PERLBREW_ROOT=${pb_root}
 
     if ( ! . \${PERLBREW_ROOT}/etc/bashrc ) ; then
@@ -75,6 +87,14 @@ MSG
 
     $pb_exec list
   '#;
+  for ( @versions ) { chomp; s/^\s+//; s/\s+$// }
+  return @versions;
+}
+
+sub assert_availability_of_requested_perl_version {
+  return unless $pb_version;
+
+  my @pb_installed_versions = list_available_perl_versions();
 
   my ( $pb_installed ) = grep{ / \b $pb_version \b /x } @pb_installed_versions;
   die "FATAL: $pb_version not found and can't write to $pb_root\n" .
@@ -87,14 +107,13 @@ MSG
   # ensure version is in perlbrew lingo
   $pb_version = "perl-${pb_version}"
     if $pb_version and $pb_version =~ m/^[\d.]+$/;
+}
+
+sub ensure_runtime_is_correct_perl_version {
+  return unless $pb_version;
 
   my @pb_options = ( '--with', $pb_version );
-
-  # try running quietly
-  if ( system( $pb_exec, 'exec', '--quiet', @pb_options, 'true' ) == 0 ) {
-    push @pb_options, '--quiet';
-    $run_quiet = 1;
-  }
+  push @pb_options, '--quiet' if $run_quiet;
 
   if ( not $ENV{MIST_PERLBREW_VERSION} ) {
     if ( !$ENV{PERLBREW_PERL} or $ENV{PERLBREW_PERL} ne $pb_version ) {
@@ -103,12 +122,16 @@ MSG
 
       $ENV{MIST_PERLBREW_VERSION} = $pb_version;
 
-      ( my $cmd_name = "$0 @CMD_ARGS") =~ s/[\n\r\s]+$//;
+      ( my $cmd_name = "$0 @INITIAL_ARGS") =~ s/[\n\r\s]+$//;
       $cmd_name =~ s/\s{2,}/ /;
       printf "Restarting $cmd_name under %s [%s]\n", $pb_version, $pb_archname;
-      exec $pb_exec, 'exec', @pb_options, $0, @CMD_ARGS;
+      exec $pb_exec, 'exec', @pb_options, $0, @INITIAL_ARGS;
     }
   }
+};
+
+sub check_runtime_environment {
+  return unless $pb_version;
 
   # ensure cpanm is installed
   print "Ensuring cpanm is installed in this environment\n";
@@ -117,11 +140,10 @@ MSG
     unless $cpanm_exit == 0;
 }
 
-# printf "Using perl version %s [%s]\n", $pb_version, get_archname();
-# print "Using perlbrew root $pb_root\n";
-# print "Using temporary perlbrew home $pb_home\n";
 
 sub get_archname {
+  return unless $pb_version;
+
   my $pb_cmd = qq{ $pb_exec exec } . ( $run_quiet ? '--quiet ' : '' ) . qq{--with '$pb_version' };
   my $pb_archname =  qx{ $pb_cmd perl -MConfig -E "say \\\$Config{archname}" };
   chomp $pb_archname;
@@ -129,6 +151,8 @@ sub get_archname {
 }
 
 sub write_env {
+  return unless $pb_version;
+
   my $class = shift;
   my $env = shift;
 
