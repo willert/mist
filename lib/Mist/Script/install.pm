@@ -13,7 +13,8 @@ BEGIN {
   my $p = Getopt::Long::Parser->new;
   $p->configure(qw/ default pass_through /);
   $p->getoptions( 'help|?' => \$help );
-  pod2usage( -verbose => 99, -sections => [qw/ NAME SYNOPSIS /]) if $help;
+  pod2usage( -verbose => 99, -sections => [qw/ NAME SYNOPSIS VERSION /])
+    if $help;
 }
 
 
