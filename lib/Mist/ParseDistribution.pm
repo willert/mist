@@ -6,6 +6,12 @@ use base 'CPAN::ParseDistribution';
 use Path::Class ();
 use Carp;
 
+# Those are dynamically loaded normally. Force pre-loading them
+# because we will use mist's local::lib in the process of
+# installing distributions
+use CPAN::ParseDistribution::Unix;
+use Devel::AssertOS::Unix;
+
 sub new {
   my ( $class, $file, %extra_params ) = @_;
 
@@ -41,6 +47,13 @@ sub module_path {
   Path::Class::file( $self->pathname )->relative(
     $self->repository->subdir(qw/ authors id /)
   );
+}
+
+sub as_module_name {
+  my $self = shift;
+  my $name = $self->{dist};
+  $name =~ s/-/::/g;
+  return $name;
 }
 
 1;

@@ -11,6 +11,7 @@ use File::Basename qw/ basename /;
 use File::Copy qw/ copy /;
 use File::Path ();
 
+use Mist::ParseDistribution;
 use Mist::PackageManager::MPAN;
 
 use Minilla::Project;
@@ -18,6 +19,7 @@ use Minilla::Util qw/ check_git /;
 
 use Cwd;
 use Try::Tiny;
+
 
 sub execute {
   my ( $self, $opt, $args ) = @_;
@@ -70,10 +72,52 @@ sub execute {
   ) if -d -r $path->subdir( 'mpan-dist' )->stringify;
 
   $package_manager->begin_work;
-
   $package_manager->install( @$args, $dist );
-
   $package_manager->commit;
+
+  my $dist_info = Mist::ParseDistribution->new(
+    $dist, repository => $ctx->mpan_dist
+  );
+
+  my $other_mistfile = $path->file( 'mistfile' );
+
+  if ( -f -r "$other_mistfile" ) {
+    print "Merging mistfile $other_mistfile\n";
+
+    Mist::Environment->new( "$other_mistfile" )->parse
+        or die "Error parsing $other_mistfile";
+
+    my $our_mistfile = $ctx->project_root->file( 'mistfile' );
+    $our_mistfile->touch; # ensure local mistfile exists
+
+    if ( not -f -r -w "$our_mistfile" ) {
+      print STDERR "Can't write to $our_mistfile, skipping merge\n";
+      goto MISTFILE_DONE;
+    }
+
+    my $mistfile = $our_mistfile->slurp( iomode => '<:utf8' );
+    my $spec = $other_mistfile->slurp( iomode => '<:utf8' );;
+
+    my $distname = $dist_info->as_module_name;
+    $spec =~ s/\n(?!\n|$)/\n  /g; # indent merged file
+
+    my $merged = sprintf <<'MERGE_SPEC', ( $distname ) x 2, $spec, $distname;
+### <<<[%s] - keep this line intact
+merge '%s' => sub {
+  # generated code block - do not edit
+
+  %s
+};
+### [%s]>>> - keep this line intact
+MERGE_SPEC
+
+    $mistfile =~ s{### <<<\[(${distname})\].*?### \[\1\]>>>.*?(?:\n|$)}
+                  {$merged}s or $mistfile .= "\n\n${merged}";
+
+    $our_mistfile->spew({ iomode => '<:utf8' }, $mistfile );
+  }
+  MISTFILE_DONE:
+
 }
 
 1;

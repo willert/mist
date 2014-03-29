@@ -19,8 +19,6 @@ use CPAN::PackageDetails::Header;
 use CPAN::PackageDetails::Entries;
 use CPAN::PackageDetails::Entry;
 
-use CPAN::ParseDistribution::Unix;
-use Devel::AssertOS::Unix;
 
 use File::Temp ();
 

@@ -3,8 +3,8 @@ perl '5.14.2';
 
 prepend 'An::Module';
 
+### <<<[Other::Dist] - keep this line intact
 merge 'Other::Dist' => sub {
-  # generated code block - do not edit
 
   perl '5.10';
 
@@ -13,4 +13,5 @@ merge 'Other::Dist' => sub {
   };
 
   prepend 'Another::Module';
-}; # end of merge - keep this line intact
+};
+### [Other::Dist]>>> - keep this line intact
