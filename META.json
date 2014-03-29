@@ -68,6 +68,7 @@
             "Path::Class" : "0",
             "Probe::Perl" : "0",
             "Software::License" : "0",
+            "Sort::Key" : "0",
             "local::lib" : "2.00",
             "perl" : "5.010"
          }
@@ -82,7 +83,7 @@
          "web" : "https://github.com/willert/mist"
       }
    },
-   "version" : "0.28",
+   "version" : "0.29",
    "x_contributors" : [
       "Susanne Schmidt <sushee@outlook.com>",
       "Sebastian Willert <willert@cpan.org>",

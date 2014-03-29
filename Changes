@@ -2,6 +2,22 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+0.29 2014-03-29T01:32:19Z
+
+  - Removed all instances of PERLBREW_HOME, it is not needed for mist
+  - Once again install one module at a time so requirements will be sorted
+    out correctly
+  - mist itself now respects active branch
+  - include local::lib so that mist is now fully self-contained
+	
+  Changes to mpan-install:
+  - Consistent handling of @ARGV
+  - Added --all-available-versions
+  - changed --perl to --perlbrew so it does not clash with cpanm's option
+  - Now supports installing of single modules
+  - perlbrew script once again supports --perlbrew=system to
+    disable use of perlbrew altogether
+
 0.28 2014-03-20T03:13:36Z
 
   - Default value for --branch can now be determined by git
