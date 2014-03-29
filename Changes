@@ -2,6 +2,12 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+0.31 2014-03-29T17:16:27Z
+
+  - Added --prove option to mpan-install tht runs tests after install
+    Especially useful as: (best run this overnight, it might take ages)
+		  ./mpan-install --prove --all-available-versions
+
 0.30 2014-03-29T04:51:33Z
 
   - Full merging of prepend, notest and cpanfile requirements
