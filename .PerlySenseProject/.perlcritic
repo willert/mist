@@ -1,0 +1,32 @@
+#Default Perl Critic config file
+#
+#To enable Perl::Critic highlighting in your source code,
+#edit .PerlysenseProject/project.yml and set flymake/critic: 1
+#
+#Make sure you read the documentation for Perl::Critic, and especially
+#the config docs.
+#http://search.cpan.org/dist/Perl-Critic/lib/Perl/Critic.pm#CONFIGURATION
+#http://search.cpan.org/dist/Perl-Critic/lib/Perl/Critic/Config.pm
+#
+#You can obviously replace this file with your own Perl::Critic config
+#file, or a symlink to it.
+#
+
+severity  = 5
+
+theme = bugs + maintenance + security + complexity
+
+
+
+#This one must be disabled, since flymake will create temp files which
+#by definition never match the specified package name
+[-Modules::RequireFilenameMatchesPackage]
+
+
+
+[-Subroutines::ProhibitSubroutinePrototypes]
+[-Subroutines::ProhibitExplicitReturnUndef]
+
+
+
+#END

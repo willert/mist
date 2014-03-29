@@ -1,0 +1,133 @@
+#PerlySense Project Config
+
+#What's this all about? See: http://search.cpan.org/dist/Devel-PerlySense/
+
+project:
+
+  #The human readable name of the Project
+  moniker: 'The Project Without a Name'
+
+  #Extra @INC directories, relative to the project root
+  #These come before the default inc directories "." and "lib"
+  inc_dir: []
+
+
+#Bookmarks are regexes that may match against a single line.
+#
+#The "rex" is either a qr regex declaration, or an array ref of
+#regexes (any of them could match to make a bookmark for the line).
+#
+#The line, or $1 if captured, is displayed.
+bookmark:
+  -
+    moniker: Todo
+    rex:
+      - "qr/\# \s* TODO \s* : \s* (.+?) \s*$/x"
+
+
+external:
+  editor:
+
+    #Emacs specific configuration
+    emacs:
+
+      #To enable flymake in Emacs, configure this in your .emacs file
+      #(setq perly-sense-load-flymake t)
+      #
+      #For more details, settings and colors, see:
+      #http://search.cpan.org/dist/Devel-PerlySense/lib/Devel/PerlySense.pm#Emacs_installation
+      #
+      flymake:
+
+        #During a flymake compilation, perly_sense can run:
+
+        #Check Syntax (perl -c)
+        #
+        #!!!NOTE!!!
+        #   Running perl -c on random Perl code will execute
+        #   the BEGIN blocks! Any funny business in them and you're toast!
+        #!!!NOTE!!!
+        syntax: 0
+
+        #Perl Critic
+        #PerlySense will point Critic to a .perlcritic file in this (the .PerlySense)
+        #directory. A default config file with fairly lenient rules is
+        #provided.
+        critic: 0
+
+
+#Run File Configuration.
+#"C-o C-r" to run "command" and "C-u C-o C-r" to run alternate_command
+#
+#These are evaluated in order to find a way to run a file. First
+#match is used.
+run_file:
+  -
+    command: "./mist-run prove --nocolor -v ${INC} \"${SOURCE_FILE}\""
+    alternate_command: ""
+    moniker: Test
+    rex: \.t$
+    run_from: source_root_directory
+  -
+    command: "./mist-run wecare-test-runner \"${SOURCE_FILE}\""
+    moniker: Test-Class
+    rex: t/tests?/.*\.pm$
+    run_from: source_root_directory
+  -
+    command: "./mist-run perl -c ${INC} \"${SOURCE_FILE}\" 2>&1| perl -ne \"/Subroutine \w+ redefined at/ or print\""
+    alternate_command: ""
+    moniker: Module
+    rex: \.pm$
+    run_from: source_root_directory
+  -
+    command: "./mist-run perl ${INC} \"${SOURCE_FILE}\""
+    alternate_command: ""
+    moniker: Script
+    rex: \.pl$
+    run_from: source_root_directory
+
+  #This is a catch-all for all other types of files
+  -
+    command: "./mist-run perl ${INC} \"${SOURCE_FILE}\""
+    alternate_command: ""
+    moniker: 'Script (no .pl)'
+    rex: .
+    run_from: source_root_directory
+
+
+
+#Run File in Debugger Configuration.
+#"C-o r d" to debug "command" and "C-u C-o r d" to debug alternate_command
+#
+#These are evaluated in order to find a way to debug a file. First
+#match is used.
+debug_file:
+  -
+    command: "./mist-run perl -d ${INC} \"${SOURCE_FILE}\""
+    alternate_command: ""
+    moniker: Test
+    rex: \.t$
+    debug_from: source_root_directory
+  -
+    command: "./mist-run perl -d ${INC} \"${SOURCE_FILE}\""
+    alternate_command: ""
+    moniker: Script
+    rex: \.pl$
+    debug_from: source_root_directory
+
+  -
+    command: "./mist-run perl -d ${INC} \"${SOURCE_FILE}\""
+    alternate_command: ""
+    moniker: Module
+    rex: \.pm$
+    debug_from: source_root_directory
+
+  #This is a catch-all for all other types of files
+  -
+    command: "./mist-run perl -d ${INC} \"${SOURCE_FILE}\""
+    alternate_command: ""
+    moniker: 'Script (no .pl)'
+    rex: .
+    debug_from: source_root_directory
+
+#EOF
