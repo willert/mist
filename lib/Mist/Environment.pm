@@ -5,7 +5,7 @@ use warnings;
 use Carp ();
 
 our @bindings;
-BEGIN { @bindings = qw( perl assert prepend notest ) };
+BEGIN { @bindings = qw( perl assert prepend notest merge ) };
 
 my $file_id = 1;
 

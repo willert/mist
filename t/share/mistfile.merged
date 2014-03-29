@@ -1,0 +1,14 @@
+# ask perlbrew or perlenv to default to a specific version of perl
+perl '5.14.2';
+
+prepend 'An::Module';
+
+merge { # Other::Dist
+  perl '5.10';
+
+  assert {
+    die "No tested!";
+  };
+
+  prepend 'Another::Module';
+} dist => 'Other::Dist';
