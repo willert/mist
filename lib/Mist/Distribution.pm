@@ -104,7 +104,7 @@ sub build_cpanm_call_stack {
     my ( $module, $version ) = split( q{~}, $_, 2 );
     $_ = $module;
 
-    warn "Conflicting versions for $module in mistfile and painful\n"
+    warn "Conflicting versions for $module in mistfile and cpanfile\n"
       if $version and $version{$module} and $version ne $version{$module};
 
     # prepended version requirement superseded cpanfile requirement
