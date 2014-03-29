@@ -15,12 +15,12 @@ sub new {
   }, shift;
 }
 
-our $for_distribution;
+our $merging_dist;
 
 sub store_dist_info {
   my ( $stack, $info ) = @_;
   die "Needs an arrayref" unless ref $stack eq 'ARRAY';
-  if ( $for_distribution ) {
+  if ( $merging_dist ) {
     # prepend info for merged distributions
     unshift @$stack, $info;
   } else {
@@ -28,15 +28,10 @@ sub store_dist_info {
   }
 }
 
-sub merge(&$$) {
-  my ( $self, $code, $guard, $dist ) = @_;
-
-  die "Invalid merge block" unless $guard eq 'dist';
-
-  {
-    local $for_distribution = $dist;
-    $code->();
-  }
+sub merge($&) {
+  my ( $self, $dist, $code ) = @_;
+  local $merging_dist = $dist;
+  $code->();
 }
 
 sub assert(&@) {
@@ -50,7 +45,7 @@ sub perl ($) {
   my ( $self, $version ) = @_;
 
   # ignore merged default perl version
-  return if $for_distribution;
+  return if $merging_dist;
 
   croak "Perl version has been set before" if $self->{perl};
   $self->{perl} = $version;

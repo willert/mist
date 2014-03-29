@@ -3,7 +3,9 @@ perl '5.14.2';
 
 prepend 'An::Module';
 
-merge { # Other::Dist
+merge 'Other::Dist' => sub {
+  # generated code block - do not edit
+
   perl '5.10';
 
   assert {
@@ -11,4 +13,4 @@ merge { # Other::Dist
   };
 
   prepend 'Another::Module';
-} dist => 'Other::Dist';
+}; # end of merge - keep this line intact
