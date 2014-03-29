@@ -1,0 +1,19 @@
+=head1 NAME
+
+Mist::Cookbook - Examples of Mist Usage
+
+=head1 DESCRIPTION
+
+The following recipes should help developers and/or
+installers put together the pieces from the other parts of the
+documentation.
+
+=head2 Skip install and merge on unsupported perl versions
+
+In mistfile:
+
+  assert {
+    require 5.14.0;
+  }
+
+=cut

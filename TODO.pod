@@ -23,6 +23,17 @@ of their mistfile. E.g. as (in local mistfile):
 
 =back
 
+=head1 BUGS
+
+=over 4
+
+=item
+
+Figure out why Devel::CheckCompiler and friends don't work
+on our servers (File::Temp seems to return files in read-only
+directories or even read-only files and is the likely issue
+here)
+
 =head1 PERL5 LIB HANDLING
 
 =over 4
