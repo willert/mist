@@ -1,4 +1,6 @@
 package App::Mist::Command::merge;
+# ABSTRACT: merge mist-managed dist from given path
+
 use 5.010;
 
 use App::Mist -command;

@@ -1,4 +1,6 @@
 package App::Mist::Command::upgrade;
+# ABSTRACT: upgrade all outdated distributions in mpan-dist
+
 use 5.010;
 
 use App::Mist -command;

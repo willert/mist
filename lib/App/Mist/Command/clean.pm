@@ -1,4 +1,6 @@
 package App::Mist::Command::clean;
+# ABSTRACT: Remove superseded dists from mpan-dist
+
 use 5.010;
 
 use App::Mist -command;

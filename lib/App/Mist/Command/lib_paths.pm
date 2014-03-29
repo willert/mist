@@ -1,4 +1,6 @@
 package App::Mist::Command::lib_paths;
+# ABSTRACT: Print library paths of current project
+
 use 5.010;
 
 use App::Mist -command;

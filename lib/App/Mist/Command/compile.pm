@@ -1,4 +1,6 @@
 package App::Mist::Command::compile;
+# ABSTRACT: Recompile mpan-install for this project
+
 use 5.010;
 
 use App::Mist -command;

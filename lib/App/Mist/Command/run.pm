@@ -1,4 +1,6 @@
 package App::Mist::Command::run;
+# ABSTRACT: run a command in this projects environment
+
 use 5.010;
 
 use App::Mist -command;

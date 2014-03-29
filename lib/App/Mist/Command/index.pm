@@ -1,4 +1,6 @@
 package App::Mist::Command::index;
+# ABSTRACT: Re-index local mpan-dist
+
 use 5.010;
 
 use App::Mist -command;

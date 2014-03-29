@@ -1,4 +1,6 @@
 package App::Mist::Command::local;
+# ABSTRACT: Install module into local lib, bypassing mpan-dist
+
 use 5.010;
 
 use App::Mist -command;

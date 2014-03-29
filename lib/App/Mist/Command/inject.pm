@@ -1,4 +1,6 @@
 package App::Mist::Command::inject;
+# ABSTRACT: inject the given dists into mpan-dist
+
 use 5.010;
 
 use App::Mist -command;

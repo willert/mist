@@ -1,4 +1,6 @@
 package App::Mist::Command::init;
+# ABSTRACT: Inject dependencies and run mpan-install
+
 use 5.010;
 
 use App::Mist -command;
