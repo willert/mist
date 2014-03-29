@@ -24284,30 +24284,35 @@ use warnings;
 our @INITIAL_ARGS;
 BEGIN { @INITIAL_ARGS = @ARGV; }
 our $PERLBREW_ROOT;
-our $PERLBREW_DEFAULT_VERSION || die '$PERL5_DEFAULT_VERSION not set';
-use FindBin ();
+our $PERLBREW_DEFAULT_VERSION;
 use File::Spec ();
 use Getopt::Long 2.42;
 use Config;
 my $run_quiet = 0;
-my $tmp_base_dir = File::Spec->catdir( $FindBin::Bin, 'tmp' );
-$tmp_base_dir = File::Spec->catdir(
-  File::Spec->tmpdir,
-  ( File::Spec->splitdir( $FindBin::Bin ))[ -1 ],
-) unless -d $tmp_base_dir and -w $tmp_base_dir;
-my $pb_root    = $ENV{PERLBREW_ROOT} || $PERLBREW_ROOT;
-my $pb_home    = File::Spec->catdir( $tmp_base_dir, 'perlbrew' );
+my $pb_root   = $ENV{PERLBREW_ROOT} || $PERLBREW_ROOT;
 my $pb_version;
-my @CMD_ARGS = @INITIAL_ARGS;
 {
   my $p = Getopt::Long::Parser->new;
-  $p->configure(qw/ default require_order pass_through /);
-  $p->getoptionsfromarray( \@CMD_ARGS, "perl=s" => \$pb_version );
+  my %arg_spec = ( "perlbrew=s" => \$pb_version );
+  $p->configure(qw/ default pass_through /);
+  # also remove opts from global argument list
+  $p->getoptionsfromarray( \@Mist::Script::install::CMD_OPTS, %arg_spec );
+  # but let INITIAL_ARGS take precedence (just to be sure, should be the same)
+  $p->getoptionsfromarray( \@INITIAL_ARGS, %arg_spec );
 }
 $pb_version ||= $ENV{MIST_PERLBREW_VERSION};
 $pb_version ||= $PERLBREW_DEFAULT_VERSION;
+undef $pb_version if $pb_version and $pb_version eq 'system';
+sub init {
+  find_perl_version_manager_executable();
+  assert_availability_of_requested_perl_version();
+  ensure_runtime_is_correct_perl_version();
+  check_runtime_environment();
+}
+# --- Internals ------------------------------------------------------------
 my $pb_exec;
-if ( $pb_version ) {
+sub find_perl_version_manager_executable {
+  return unless $pb_version;
   $pb_exec = qx{ which perlbrew 2> /dev/null };
   if ( not $pb_exec ) {
     ( $pb_root ) = grep { -e File::Spec->catfile( $_, qw/ bin perlbrew /) }
@@ -24323,7 +24328,13 @@ as root via:
 or just for this account simply via:
   curl -kL http://install.perlbrew.pl | bash
 MSG
-  my @pb_installed_versions = qx# bash -c '
+  # try running quietly
+  if ( system( $pb_exec, 'exec', '--quiet', 'true' ) == 0 ) {
+    $run_quiet = 1;
+  }
+}
+sub list_available_perl_versions {
+  my @versions = qx# bash -c '
     export PERLBREW_ROOT=${pb_root}
     if ( ! . \${PERLBREW_ROOT}/etc/bashrc ) ; then
       perlbrew init 2>/dev/null
@@ -24334,6 +24345,12 @@ MSG
     fi
     $pb_exec list
   '#;
+  for ( @versions ) { chomp; s/^\s+//; s/\s+$// }
+  return @versions;
+}
+sub assert_availability_of_requested_perl_version {
+  return unless $pb_version;
+  my @pb_installed_versions = list_available_perl_versions();
   my ( $pb_installed ) = grep{ / \b $pb_version \b /x } @pb_installed_versions;
   die "FATAL: $pb_version not found and can't write to $pb_root\n" .
     "Try\n  sudo -E perlbrew install $pb_version\nto install it as root\n"
@@ -24343,39 +24360,40 @@ MSG
   # ensure version is in perlbrew lingo
   $pb_version = "perl-${pb_version}"
     if $pb_version and $pb_version =~ m/^[\d.]+$/;
+}
+sub ensure_runtime_is_correct_perl_version {
+  return unless $pb_version;
   my @pb_options = ( '--with', $pb_version );
-  # try running quietly
-  if ( system( $pb_exec, 'exec', '--quiet', @pb_options, 'true' ) == 0 ) {
-    push @pb_options, '--quiet';
-    $run_quiet = 1;
-  }
+  push @pb_options, '--quiet' if $run_quiet;
   if ( not $ENV{MIST_PERLBREW_VERSION} ) {
     if ( !$ENV{PERLBREW_PERL} or $ENV{PERLBREW_PERL} ne $pb_version ) {
       $ENV{PERLBREW_ROOT} = $pb_root;
       my $pb_archname = get_archname();
       $ENV{MIST_PERLBREW_VERSION} = $pb_version;
-      ( my $cmd_name = "$0 @CMD_ARGS") =~ s/[\n\r\s]+$//;
+      ( my $cmd_name = "$0 @INITIAL_ARGS") =~ s/[\n\r\s]+$//;
       $cmd_name =~ s/\s{2,}/ /;
       printf "Restarting $cmd_name under %s [%s]\n", $pb_version, $pb_archname;
-      exec $pb_exec, 'exec', @pb_options, $0, @CMD_ARGS;
+      exec $pb_exec, 'exec', @pb_options, $0, @INITIAL_ARGS;
     }
   }
+};
+sub check_runtime_environment {
+  return unless $pb_version;
   # ensure cpanm is installed
   print "Ensuring cpanm is installed in this environment\n";
   my $cpanm_exit = system( "$pb_exec install-cpanm </dev/null >/dev/null" );
   die "Installing cpanm failed (try running `perlbrew install-cpanm` as root)\n"
     unless $cpanm_exit == 0;
 }
-# printf "Using perl version %s [%s]\n", $pb_version, get_archname();
-# print "Using perlbrew root $pb_root\n";
-# print "Using temporary perlbrew home $pb_home\n";
 sub get_archname {
+  return unless $pb_version;
   my $pb_cmd = qq{ $pb_exec exec } . ( $run_quiet ? '--quiet ' : '' ) . qq{--with '$pb_version' };
   my $pb_archname =  qx{ $pb_cmd perl -MConfig -E "say \\\$Config{archname}" };
   chomp $pb_archname;
   return $pb_archname;
 }
 sub write_env {
+  return unless $pb_version;
   my $class = shift;
   my $env = shift;
   return unless $ENV{MIST_PERLBREW_VERSION} || $pb_version;
@@ -24422,17 +24440,39 @@ package Mist::Script::install;
 use strict;
 use warnings;
 use Config;
-our @CMD_OPTS;
-BEGIN { @CMD_OPTS = @ARGV; @ARGV = () }
 use Getopt::Long 2.42;
+our @CMD_OPTS;
+my $all_versions;
+BEGIN {
+  my $p = Getopt::Long::Parser->new;
+  $p->configure(qw/ default pass_through /);
+  $p->getoptions( 'all-available-versions' => \$all_versions );
+}
+my ( $branch, $parent );
+BEGIN {
+  @CMD_OPTS = @ARGV;
+  my $p = Getopt::Long::Parser->new;
+  $p->configure(qw/ default pass_through /);
+  $p->getoptionsfromarray(
+    \@CMD_OPTS,
+    'branch:s' => \$branch,
+    'parent=s' => \$parent,
+  );
+}
+if ( $all_versions ) {
+  my $vm = "Mist::Script::perl";
+  die "No version manager installed" unless UNIVERSAL::can( $vm, 'init' );
+  $vm->find_perl_version_manager_executable;
+  my @versions = $vm->list_available_perl_versions;
+  for my $version ( 'system', @versions ) {
+    system $0 => @ARGV, "--perlbrew=${version}";
+  }
+  # finally re-run default so all symlinks will be set up correctly
+  system $0 => @ARGV;
+  exit;
+}
 our $MPAN_DIST_DIR || die '$MPAN_DIST_DIR not set';
 our $PERL5_BASE_LIB = 'perl5';
-my ( $branch, $parent );
-{
-  my $p = Getopt::Long::Parser->new;
-  $p->configure(qw/ default require_order pass_through /);
-  $p->getoptionsfromarray( \@CMD_OPTS, 'branch:s' => \$branch, 'parent=s' => \$parent );
-}
 # let git determine branch name if no explicit name is given
 ( $branch ) =  `git status --porcelain --branch` =~ m{## ([\w-]+)}
   if defined $branch and not $branch;
@@ -24483,6 +24523,17 @@ my $perm = ( stat $cmd_wrapper )[2] & 07777;
 chmod( $perm | 0755, $cmd_wrapper );
 Mist::Script::perl->init
   if eval{ Mist::Script::perl->can( 'init' ) };
+my $cpanm = App::cpanminus::script->new;
+{
+  # silence warnings, cpanm will issue them later on
+  local $SIG{__WARN__} = sub{};
+  $cpanm->parse_options( @CMD_OPTS );
+}
+my @CUSTOM_MODULES = @{ $cpanm->{argv} };
+my @CPAN_ARGS;
+for my $arg ( @CMD_OPTS ) {
+  push @CPAN_ARGS, $arg unless grep{ $arg eq $_ } @CUSTOM_MODULES;
+}
 sub run_cpanm {
   my $app = App::cpanminus::script->new;
   my @options = (
@@ -24490,7 +24541,7 @@ sub run_cpanm {
     "--local-lib-contained=${local_lib}",
     "--mirror=file://${mpan}",
     '--mirror-only',
-    @CMD_OPTS,
+    @CPAN_ARGS,
   );
   $app->parse_options( @options, @_ );
   my $result = $app->_doit;
@@ -24529,8 +24580,8 @@ MSG
   }
   print $mist_run <<'BASH';
 #!/bin/bash
-echo "Mist environment not correctly installed"
-exit 1'
+echo "FATAL: Mist environment not fully installed";
+exit 1;
 BASH
   local $ENV{HOME} = $workspace;
   if ( eval { DISTRIBUTION->distinfo->can( 'get_assertions' ) }) {
@@ -24539,14 +24590,18 @@ BASH
   my @prepend = ( @$PREPEND_DISTS );
   my @notest  = ( @$DONT_TEST_DISTS );
   my @prereqs = ( @$PREREQUISITE_DISTS );
-  run_cpanm( $_ ) for @prepend;
-  for my $module ( @notest ) {
-    # in some wired cases, two modules depending on each other fail
-    # so we have to build them one by one to ensure correct order
-    run_cpanm( '--installdeps', $module );
-    run_cpanm( '--notest',      $module );
+  if ( @CUSTOM_MODULES ) {
+    run_cpanm( $_ ) for @CUSTOM_MODULES;
+  } else {
+    run_cpanm( $_ ) for @prepend;
+    for my $module ( @notest ) {
+      # in some wired cases, two modules depending on each other fail
+      # so we have to build them one by one to ensure correct order
+      run_cpanm( '--installdeps', $module );
+      run_cpanm( '--notest',      $module );
+    }
+    run_cpanm( $_ ) for @prereqs;
   }
-  run_cpanm( $_ ) for @prereqs;
   printf $env <<'MIST_ENV', $mist_home;
 # This file is automatically generated by ./mpan-install
 # DO NOT EDIT
@@ -24648,32 +24703,32 @@ SUCCESS
 ; BEGIN {$MPAN_DIST_DIR = 'mpan-dist';
 ;
 $PREREQUISITE_DISTS = [
-  'App::Cmd',
-  'App::cpanminus~1.7',
-  'CPAN::Meta~2.132830',
-  'CPAN::PackageDetails',
-  'CPAN::ParseDistribution',
-  'Capture::Tiny',
-  'Devel::CheckBin',
-  'Devel::CheckCompiler',
-  'Devel::CheckLib',
-  'Digest::MD5',
-  'File::Find::Upwards',
-  'File::HomeDir',
-  'File::Share',
-  'Getopt::Long~2.42',
-  'List::MoreUtils',
-  'Minilla~v0.11.0',
-  'Module::CPANfile~1.0002',
-  'Module::Path',
-  'Moo',
-  'MooX::HandlesVia',
-  'MooX::late',
-  'Path::Class',
-  'Probe::Perl',
-  'Software::License',
-  'Sort::Key',
-  'local::lib~2.00'
-];
+                        'App::Cmd',
+                        'App::cpanminus~1.7',
+                        'CPAN::Meta~2.132830',
+                        'CPAN::PackageDetails',
+                        'CPAN::ParseDistribution',
+                        'Capture::Tiny',
+                        'Devel::CheckBin',
+                        'Devel::CheckCompiler',
+                        'Devel::CheckLib',
+                        'Digest::MD5',
+                        'File::Find::Upwards',
+                        'File::HomeDir',
+                        'File::Share',
+                        'Getopt::Long~2.42',
+                        'List::MoreUtils',
+                        'Minilla~v0.11.0',
+                        'Module::CPANfile~1.0002',
+                        'Module::Path',
+                        'Moo',
+                        'MooX::HandlesVia',
+                        'MooX::late',
+                        'Path::Class',
+                        'Probe::Perl',
+                        'Software::License',
+                        'Sort::Key',
+                        'local::lib~2.00'
+                      ];
 ;
 };  BEGIN{ __mist::no_thanks( 'Mist::Script::install' ) } };
