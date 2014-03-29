@@ -113,6 +113,8 @@ chmod( $perm | 0755, $cmd_wrapper );
 Mist::Script::perl->init
   if eval{ Mist::Script::perl->can( 'init' ) };
 
+# let cpanm parse the remaining options and figure out what
+# modules are requested for installation (if any)
 my $cpanm = App::cpanminus::script->new;
 {
   # silence warnings, cpanm will issue them later on
