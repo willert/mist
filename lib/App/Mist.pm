@@ -7,7 +7,7 @@ use Config;
 use Cwd qw/realpath/;
 
 BEGIN {
-  my $basedir = File::Spec->catdir( $RealBin => '..' );
+  my $basedir = realpath( File::Spec->catdir( $RealBin => '..' ));
   if ( not eval "require local::lib" ) {
     my $extlib = File::Spec->catdir( $basedir => qw/ extlib / );
     if ( -d $extlib ) {
