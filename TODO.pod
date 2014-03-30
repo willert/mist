@@ -1,28 +1,3 @@
-=head1 App::Mist
-
-=over 4
-
-=item
-
-Let mist itself use mistfile and cpanfile (e.g. testing and version info)
-
-=back
-
-=head1 MERGING
-
-=over 4
-
-=item
-
-When merging another mist-managed dist, also merge the content
-of their mistfile. E.g. as (in local mistfile):
-
-  for 'Other::Dist' => {
-    notest 'Term::ReadKey';
-  }
-
-=back
-
 =head1 BUGS
 
 =over 4
