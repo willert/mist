@@ -2,6 +2,12 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+0.32 2014-03-30T00:30:16Z
+
+  - Merge command of mist is now full-featured
+    This includes using its mistfile to install the foreign distribution
+		and merge this file into the local one
+
 0.31 2014-03-29T17:16:27Z
 
   - Added --prove option to mpan-install tht runs tests after install
