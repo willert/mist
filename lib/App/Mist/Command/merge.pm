@@ -67,25 +67,42 @@ sub execute {
     workspace    => $ctx->workspace_lib,
   });
 
+  my $other_mistfile = $path->file( 'mistfile' );
+  my $other_env = do{
+    if ( -f -r "$other_mistfile" ) {
+      Mist::Environment->new( "$other_mistfile" )->parse
+          or die "Error parsing $other_mistfile";
+    }
+  };
+
   $package_manager->add_mirror(
     sprintf( 'file://%s/', $path->subdir( 'mpan-dist' ))
   ) if -d -r $path->subdir( 'mpan-dist' )->stringify;
 
   $package_manager->begin_work;
-  $package_manager->install( @$args, $dist );
+
+  eval {
+    # run foreign mist callstack before trying to install dist itself
+    if ( $other_env ) {
+      $package_manager->install( @$args, @$_ )
+        for $other_env->build_cpanm_call_stack;
+    }
+
+    $package_manager->install( @$args, $dist );
+  };
+
+  my $install_error = $@;
   $package_manager->commit;
+
+  die $install_error if $install_error;
 
   my $dist_info = Mist::ParseDistribution->new(
     $dist, repository => $ctx->mpan_dist
   );
 
-  my $other_mistfile = $path->file( 'mistfile' );
 
   if ( -f -r "$other_mistfile" ) {
     print "Merging mistfile $other_mistfile\n";
-
-    Mist::Environment->new( "$other_mistfile" )->parse
-        or die "Error parsing $other_mistfile";
 
     my $our_mistfile = $ctx->project_root->file( 'mistfile' );
     $our_mistfile->touch; # ensure local mistfile exists
