@@ -29,7 +29,10 @@ sub run_cpanm {
   Carp::croak( "cpanm @cmd_opts failed [$exit] : $?" )
     if $exit != 0 and $DEBUG;
 
-  exit $exit if $exit != 0;
+  if ( $exit != 0 ) {
+    $? = $exit;
+    die "FATAL: Error while running cpanm\n";
+  }
 }
 
 
