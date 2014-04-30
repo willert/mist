@@ -5,6 +5,7 @@ use warnings;
 use Config;
 use Getopt::Long 2.42;
 use Pod::Usage;
+use File::Temp ();
 
 our @CMD_OPTS;
 
@@ -100,11 +101,11 @@ our $PREREQUISITE_DISTS || die '$PREREQUISITE_DISTS not set';
 
 use App::cpanminus::script;
 use FindBin qw/$Bin/;
-use File::Temp qw/tempdir/;
-use File::Path qw/mkpath/;
+use File::Temp qw/ tempdir /;
+use File::Path qw/ mkpath /;
 use File::Spec;
 use File::Copy;
-use Cwd qw/realpath/;
+use Cwd qw/ realpath getcwd /;
 
 my $mist_home = $ENV{MIST_APP_ROOT} ? $ENV{MIST_APP_ROOT} : $Bin;
 
@@ -216,7 +217,19 @@ local $ENV{HOME} = $workspace;
 
 my $dist = DISTRIBUTION->distinfo;
 if ( eval { $dist->can( 'get_assertions' ) }) {
-  $_->() for $dist->get_assertions;
+  my $cwd = getcwd();
+  my $tmp_dir = tempdir( "mist-assert-XXXXXX", TMPDIR => 1, CLEANUP => 1 );
+  my $assertion_failed;
+  for my $check_assertion ( $dist->get_assertions ) {
+    chdir( $tmp_dir );
+    eval { $check_assertion->() };
+    if ( my $err = $@ ) {
+      warn "${err}\n";
+      $assertion_failed ||= 1;
+    }
+  }
+  chdir( $cwd );
+  exit 1 if $assertion_failed;
 }
 
 my @callstack;

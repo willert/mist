@@ -37,7 +37,7 @@ ERROR_MSG
 
 use App::Cmd::Setup -app;
 
-our $VERSION = '0.32';
+our $VERSION = '0.33';
 
 # preload all commands
 # use Module::Pluggable search_path => [ 'App::Mist::Command' ];

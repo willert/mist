@@ -133,7 +133,10 @@ MERGE_SPEC
 
     $our_mistfile->spew({ iomode => '<:utf8' }, $mistfile );
   }
-  MISTFILE_DONE:
+
+  print "\nPlease run\n  $0 compile\nas mistfile might have changed\n";
+
+ MISTFILE_DONE:
 
 }
 
