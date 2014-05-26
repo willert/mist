@@ -2,6 +2,8 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+  - Switch from linking to bash exec wrapper in perl5/{bin,sbin,script}
+
 0.33 2014-04-30T16:04:04Z
 
   - Fixed install-time environment for assertions

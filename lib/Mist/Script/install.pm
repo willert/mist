@@ -317,36 +317,62 @@ for my $script_dir (qw/ bin sbin script /) {
   my @binaries;
   my $dir;
 
-  use strict;
+  my $collect_files;
+  $collect_files = sub {
+    my $this_dir = shift;
+    opendir( my $dh, $this_dir );
 
-  $dir = File::Spec->catdir( $local_lib, $script_dir );
-  if ( -d $dir and opendir( my $dh, $dir ) ) {
-    push @binaries, map{(
-      File::Spec->catfile( $loc_script_dir, $_ )
-    )} grep {
-      -f File::Spec->catfile( $dir, $_ ) and
-        -x File::Spec->catfile( $dir, $_ )
+    $collect_files->( File::Spec->catdir( $this_dir, $_ )) for grep {
+      $_ ne File::Spec->curdir and $_ ne File::Spec->updir and
+        -d File::Spec->catfile( $this_dir, $_ )
       } readdir( $dh );
+
+    closedir $dh; opendir( $dh, $this_dir );
+
+    push @binaries, map{
+      File::Spec->abs2rel(
+        File::Spec->catfile( $this_dir, $_ ), $dir
+      ) => File::Spec->catfile( $this_dir, $_ );
+    } grep {
+      -f File::Spec->catfile( $this_dir, $_ ) and
+        -x File::Spec->catfile( $this_dir, $_ );
+    } readdir( $dh );
+
+  };
+
+  if ( -d ( my $subdir = File::Spec->catdir( $local_lib, $script_dir ))) {
+    $dir = $local_lib;
+    $collect_files->( $subdir );
   }
 
-  $dir = File::Spec->catdir( $Bin, $script_dir );
-  if ( -d $dir and opendir( my $dh, $dir ) ) {
-    push @binaries, map{(
-      File::Spec->catfile( $loc_script_dir, $_ )
-    )} grep {
-      -f File::Spec->catfile( $script_dir, $_ ) and
-        -x File::Spec->catfile( $script_dir, $_ )
-      } readdir( $dh );
+  if ( -d ( my $subdir = File::Spec->catdir( $Bin, $script_dir ))) {
+    $dir = $Bin;
+    $collect_files->( $subdir );
   }
 
-  if ( @binaries ) {
-    mkpath( $loc_script_dir );
-    print "Creating local binaries in ${loc_script_dir}\n";
+  my %binaries = @binaries;
+  if ( %binaries ) {
+    my %path_created;
+    for my $bin ( sort keys %binaries ) {
+      my ( undef, $dir ) = File::Spec->splitpath( $bin );
+      $dir = File::Spec->catdir( $perl5_baselib, $dir );
+      if ( not $path_created{ $dir }) {
+        print "Creating local binaries in $dir\n";
+        mkpath( $dir );
+        $path_created{ $dir } = 1;
+      }
+      my $bin_path = File::Spec->catfile( $perl5_baselib, $bin );
+      unlink $bin_path;
+      open my $bin_wrapper, '>', $bin_path
+        or die "Failed to create shell wrapper for $bin_path";
+      print $bin_wrapper <<"BIN_WRAPPER";
+#!/bin/bash
+exec "$mist_run_fn" "$binaries{$bin}" "\${\@}"
+BIN_WRAPPER
 
-    for my $bin ( @binaries ) {
-      unlink $bin;
-      symlink $cmd_wrapper, $bin
-        or die "Failed to create symlink for $bin";
+      my $perm = ( stat $bin_wrapper )[2] & 07777;
+      chmod( $perm | 0755, $bin_wrapper );
+      close $bin_wrapper;
     }
   }
 }
