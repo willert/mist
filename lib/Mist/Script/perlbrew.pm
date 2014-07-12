@@ -67,10 +67,12 @@ or just for this account simply via:
   curl -kL http://install.perlbrew.pl | bash
 MSG
 
-  # try running quietly
-  if ( system( $pb_exec, 'exec', '--quiet', 'true' ) == 0 ) {
-    $run_quiet = 1;
-  }
+  # try running quietly disabled: perlbrew versions that don't support quiet
+  # also won't return a correct error code
+  #
+  # if ( system( $pb_exec, 'exec', '--quiet', 'true' ) = 0 ) {
+  #   $run_quiet = 1;
+  # }
 }
 
 sub list_available_perl_versions {
