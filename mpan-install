@@ -23977,7 +23977,7 @@ PERLBREW_RC
 }
 
 1;
-; BEGIN {$PERLBREW_ROOT = '/opt/perlbrew';
+; BEGIN {$PERLBREW_ROOT = '/opt/perl5';
 ;
 $PERLBREW_DEFAULT_VERSION = 'perl-5.14.2';
 ;
