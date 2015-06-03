@@ -1,5 +1,7 @@
 #!/usr/bin/env perl
 
+BEGIN{ $ENV{MOO_XS_DISABLE} = 1 }
+
 use FindBin qw/$Bin/;
 use lib "$Bin/../lib";
 
