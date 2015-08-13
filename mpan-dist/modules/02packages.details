@@ -29,7 +29,7 @@ App::Prove                          3.30  L/LE/LEONT/Test-Harness-3.30.tar.gz
 App::Prove::State                   3.30  L/LE/LEONT/Test-Harness-3.30.tar.gz
 App::Prove::State::Result           3.30  L/LE/LEONT/Test-Harness-3.30.tar.gz
 App::Prove::State::Result::Test     3.30  L/LE/LEONT/Test-Harness-3.30.tar.gz
-App::cpanminus                     1.7001  M/MI/MIYAGAWA/App-cpanminus-1.7001.tar.gz
+App::cpanminus                     1.7039  M/MI/MIYAGAWA/App-cpanminus-1.7039.tar.gz
 Archive::Tar                        1.96  B/BI/BINGOS/Archive-Tar-1.96.tar.gz
 Archive::Tar::Constant              1.96  B/BI/BINGOS/Archive-Tar-1.96.tar.gz
 Archive::Tar::File                  1.96  B/BI/BINGOS/Archive-Tar-1.96.tar.gz
