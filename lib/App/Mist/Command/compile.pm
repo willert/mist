@@ -14,6 +14,8 @@ use File::Share qw/ dist_file /;
 use Path::Class qw/ dir /;
 use Cwd;
 
+use ExtUtils::Manifest;
+
 sub execute {
   my ( $self, $opt, $args ) = @_;
 
@@ -22,6 +24,33 @@ sub execute {
   my $mpan = $ctx->mpan_dist;
 
   chdir $home->stringify;
+
+
+  print "Checking sanity of project files\n";
+  if ( -r -f $home->file('MANIFEST.SKIP')->stringify ) {
+    my $skipchk = ExtUtils::Manifest::maniskip();
+    my @invalid_shebang;
+    $home->traverse(sub {
+      my ($child, $cont) = @_;
+      my $local = $child->relative( $home );
+      return if $skipchk->( $local );
+      if ( $child->is_dir ) {
+        return $cont->();
+      } else {
+        my $fh = eval{ $child->openr }
+          or return;
+        push @invalid_shebang, $local if <$fh> =~ m{^#.*bin/perl} ;
+      }
+    });
+
+    print STDERR "WARNING: invalid shebang found (use '#!/usr/bin/env perl' instead):",
+      join( qq{\n  }, '', @invalid_shebang ), "\n" if @invalid_shebang;
+
+    exit if @invalid_shebang;
+  } else {
+    print STDERR "WARNING: no MANIFEST.SKIP file found in project root\n";
+    print STDERR "         skipping sanity scan of project files\n";
+  }
 
   try {
 
