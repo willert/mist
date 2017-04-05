@@ -18,7 +18,10 @@ sub new {
   my $repo = delete $extra_params{repository}
     or croak "missing 'repository' parameter pointing to a Mist repository";
 
-  my $self = $class->SUPER::new( $file, %extra_params );
+  my $self = eval{ $class->SUPER::new( $file, %extra_params )};
+
+  croak( $@ ) if $@;
+
   $self->{pathname}   = Path::Class::file( $file )->absolute->resolve;
   $self->{repository} = Path::Class::dir(  $repo )->absolute->resolve;
 
