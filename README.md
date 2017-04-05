@@ -1,3 +1,3 @@
 # AUTHORS
 
-Sebastian Willert <s.willert@wecare.de>
+Sebastian Willert &lt;s.willert@wecare.de>

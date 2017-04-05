@@ -1,5 +1,6 @@
 # ask perlbrew or perlenv to default to a specific version of perl
-perl '5.14.2';
+# perl '5.14.2';
+perl '5.20.3';
 
 assert {
   # check some system wide prereqs on install time here
@@ -11,5 +12,4 @@ prepend 'Params::Validate';
 
 prepend 'Test::Tester' => '0.107';
 
-# skip testing for those distributions
-notest 'Term::ReadKey';
+notest 'IPC::Run3';
