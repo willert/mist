@@ -206,6 +206,32 @@ sub BUILD {
   chdir $self->project_root->stringify;
 }
 
+sub get_merge_path_for {
+  my $self = shift;
+  my $distname = shift
+    or croak 'Needs the name of a merged dist';
+
+  my $dist_path = $self->dist->get_relative_merge_path( $distname );
+
+  printf STDERR "Relative merge path: %s\n", $dist_path ;
+  goto DEFAULT unless $dist_path;
+
+  if ( -d -r $self->project_root->subdir( $dist_path )->stringify ) {
+    return $self->project_root->subdir( $dist_path )->resolve->absolute;
+  }
+
+  my $dev_home = dir( $ENV{HOME} )->resolve->absolute;
+  if ( -d -r $dev_home->subdir( $dist_path )->stringify ) {
+    return $dev_home->subdir( $dist_path )->resolve->absolute;
+  }
+
+ DEFAULT:
+  $dist_path = $self->dist->get_default_merge_path( $distname );
+
+  return undef unless -d -r $dist_path->stringify;
+
+  return $dist_path->resolve->absolute;
+}
 
 sub ensure_correct_perlbrew_context {
   my $self = shift;

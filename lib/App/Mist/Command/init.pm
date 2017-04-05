@@ -11,8 +11,25 @@ use File::Find::Upwards;
 use Path::Class qw/file dir/;
 use Cwd;
 
+sub opt_spec {
+  return (
+    [ "rebuild|R",  "rebuild the complete mpan distribution" ],
+  );
+}
+
 sub execute {
   my ( $self, $opt, $args ) = @_;
+
+  my $rebuild_dist = !! $opt->{rebuild};
+
+  my $ctx  = $self->app->ctx;
+
+  if ( $rebuild_dist ) {
+    print "Rebuilding Mist distribution environment\n", ;
+    for my $mist_dir ( $ctx->mpan_dist, $ctx->perl5_base_lib ) {
+      $mist_dir->rmtree; $mist_dir->mkpath;
+    }
+  }
 
   my $app = $self->app;
   my $do  = sub{ $app->execute_command( $app->prepare_command( @_ )) };
@@ -22,7 +39,6 @@ sub execute {
   $do->( 'compile' ) unless $ENV{__MIST_COMPILATION_DONE};
   $ENV{__MIST_COMPILATION_DONE} = 1;
 
-  my $ctx  = $self->app->ctx;
   $ctx->ensure_correct_perlbrew_context;
 
   my @prepend = $ctx->dist->get_prepended_modules;
@@ -44,6 +60,22 @@ sub execute {
   };
 
   $run_script->( $_ ) for $ctx->dist->get_scripts( 'prepare' );
+
+  if ( $rebuild_dist ) {
+
+    my @merge = $ctx->dist->get_merged_dists;
+
+  MERGED_DIST:
+    for my $dist ( @merge ) {
+      my $dist_path = $ctx->get_merge_path_for( $dist );
+      if ( not $dist_path or not -r -d "$dist_path" ) {
+        warn "Merged dist ${dist} not found. Skipping ..\n";
+        next MERGED_DIST;
+      }
+      printf "Merging %s using ${dist_path}\n", $dist;
+      $do->( 'merge', @$args, $dist_path );
+    }
+  }
 
   $do->( 'inject',             @$args, @prepend ) if @prepend;
   $do->( 'inject', '--notest', @$args, @notest  ) if @notest;
