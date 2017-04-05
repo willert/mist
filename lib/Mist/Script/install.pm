@@ -294,9 +294,9 @@ function mist_run {
 source $MIST_ENV
 
 VERSION_ARCH_PATH="%s"
-LOCAL_LIB="$MIST_ROOT/$VERSION_ARCH_PATH"
+LOCAL_LIB="$MIST_ROOT/perl5/$VERSION_ARCH_PATH"
 
-export PATH="$LOCAL_LIB/bin:$LOCAL_LIB/sbin:$PATH"
+eval `mist_run perl -Mlocal::lib=$LOCAL_LIB`;
 export PATH="$MIST_ROOT/bin:$MIST_ROOT/sbin:$MIST_ROOT/script:$PATH"
 export PERL5LIB="$MIST_ROOT/lib:$PERL5LIB"
 export LD_LIBRARY_PATH=$MIST_ROOT/perl5/lib:$LD_LIBRARY_PATH
