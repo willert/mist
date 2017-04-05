@@ -5,22 +5,37 @@ use strict;
 use warnings;
 
 use Carp;
+use Path::Class ();
 
 sub new {
+  my $this = shift;
   bless {
-    assert  => [],
-    prepend => [],
-    notest  => [],
-    perl    => undef,
-  }, shift;
+    assert   => [],
+    prepend  => [],
+    notest   => [],
+    perl     => undef,
+    dist_path => undef,
+    merge    => {},
+    script   => {
+      prepare  => [],
+      finalize => [],
+    }
+  }, ref( $this ) || $this;
 }
 
 our $merging_dist;
 
 sub store_dist_info {
-  my ( $stack, $info ) = @_;
+  my ( $self, $stack, $info ) = @_;
   die "Needs an arrayref" unless ref $stack eq 'ARRAY';
-  if ( $merging_dist ) {
+  if ( my $dist = $merging_dist ) {
+
+    # store info in merged dist info
+    my $md_info = $self->{merge}{ $dist };
+    die "Internal: no info about merged dist ${dist} found"
+      unless $md_info and $md_info->isa( __PACKAGE__ );
+    $md_info->store_dist_info( $info );
+
     # prepend info for merged distributions
     unshift @$stack, $info;
   } else {
@@ -30,6 +45,7 @@ sub store_dist_info {
 
 sub merge($&) {
   my ( $self, $dist, $code ) = @_;
+  $self->{merge}{ $dist } = $self->new;
   local $merging_dist = $dist;
   $code->();
 }
@@ -38,7 +54,7 @@ sub assert(&@) {
   my ( $self, $code ) = @_;
   croak "assert needs a block, not " . ref $code
     unless ref $code eq 'CODE';
-  store_dist_info( $self->{ assert }, $code );
+  $self->store_dist_info( $self->{ assert }, $code );
 }
 
 sub perl ($) {
@@ -51,23 +67,76 @@ sub perl ($) {
   $self->{perl} = $version;
 }
 
+sub dist_path ($) {
+  my ( $self, $path ) = @_;
+
+  # ignore merged default perl version
+  return unless $merging_dist;
+
+  my $md_info = $self->get_merged_distribution( $merging_dist )
+    or die "Unknown merged dist ${merging_dist}";
+
+  croak "Dist path has been set before" if $md_info->{dist_path};
+
+  $md_info->{dist_path} = Path::Class::Dir->new( $path );
+}
+
 sub prepend ($;$) {
   my ( $self, $module, $version ) = @_;
   $version = sprintf( q{"%s"}, $version ) if $version and $version =~ /[^\d.]/;
   $module  = sprintf( q{%s~%s}, $module, $version ) if $version;
-  store_dist_info( $self->{prepend}, $module );
+  $self->store_dist_info( $self->{prepend}, $module );
 }
 
 sub notest ($) {
   my ( $self, $module ) = @_;
-  store_dist_info( $self->{notest}, $module );
+  $self->store_dist_info( $self->{notest}, $module );
 }
 
+sub script ($$) {
+  my ( $self, $phase, $path, @args ) = @_;
+  die "Unknown phase $phase" unless exists $self->{script}{$phase};
+  $self->store_dist_info( $self->{script}{$phase}, [ $path, @args ]);
+}
 
-sub get_assertions           { my $self = shift; return @{ $self->{assert}}  }
-sub get_default_perl_version { my $self = shift; return    $self->{perl}     }
-sub get_prepended_modules    { my $self = shift; return @{ $self->{prepend}} }
-sub get_modules_not_to_test  { my $self = shift; return @{ $self->{notest}}  }
+sub get_assertions           { my $self = shift; return @{ $self->{assert}}   }
+sub get_default_perl_version { my $self = shift; return    $self->{perl}      }
+sub get_dist_path            { my $self = shift; return    $self->{dist_path} }
+sub get_prepended_modules    { my $self = shift; return @{ $self->{prepend}}  }
+sub get_modules_not_to_test  { my $self = shift; return @{ $self->{notest}}   }
+
+sub get_merged_dists { my $self = shift; return keys %{ $self->{merge}} }
+
+sub get_scripts              {
+  my $self = shift;  my $phase = shift;
+  return @{ $self->{script}{$phase}};
+}
+
+sub get_merged_distribution {
+  my ( $self, $dist ) = @_;
+  croak "No dist name given" unless $dist;
+  return undef unless exists $self->{merge}{ $dist };
+  return $self->{merge}{ $dist };
+};
+
+sub get_relative_merge_path {
+  my ( $self, $dist ) = @_;
+  croak "No dist name given" unless $dist;
+  return undef unless exists $self->{merge}{ $dist };
+
+  my $md_info = $self->{merge}{ $dist };
+  return $md_info->get_dist_path ? Path::Class::Dir->new( $md_info->get_dist_path ) : undef;
+}
+
+sub get_default_merge_path {
+  my ( $self, $dist ) = @_;
+  croak "No dist name given" unless $dist;
+  return undef unless exists $self->{merge}{ $dist };
+
+  $dist =~ s{::}{-}g;
+  my $cwd = Path::Class::Dir->new();
+  return $cwd->parent->subdir( lc $dist );
+};
 
 sub build_cpanm_call_stack {
   my ( $self, @prereqs ) = @_;

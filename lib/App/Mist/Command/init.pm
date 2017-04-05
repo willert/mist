@@ -36,9 +36,20 @@ sub execute {
     } ( @prepend, @notest );
   } $ctx->fetch_prereqs;
 
+  my $run_script = sub {
+    my @cmd = @_ == 1 && ref $_[0] eq 'ARRAY' ? @{$_[0]} : @_;
+    local $ENV{MIST_APP_ROOT} = $ctx->project_root;
+    local $ENV{MIST_PERL5_LIBDIR} = $ctx->local_lib;
+    system( @cmd );
+  };
+
+  $run_script->( $_ ) for $ctx->dist->get_scripts( 'prepare' );
+
   $do->( 'inject',             @$args, @prepend ) if @prepend;
   $do->( 'inject', '--notest', @$args, @notest  ) if @notest;
   $do->( 'inject',             @$args, @prereqs ) if @prereqs;
+
+  $run_script->( $_ ) for $ctx->dist->get_scripts( 'finalize' );
 
   print "Packaging and compilation successful!\n\n";
 

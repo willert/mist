@@ -118,10 +118,20 @@ sub execute {
     my $distname = $dist_info->as_module_name;
     $spec =~ s/\n(?!\n|$)/\n  /g; # indent merged file
 
-    my $merged = sprintf <<'MERGE_SPEC', ( $distname ) x 2, $spec, $distname;
+    # construct the most convenient path to store
+    my $distpath = dir( $path )->resolve->absolute;
+    my $dev_home = dir( $ENV{HOME} )->resolve->absolute;
+    if ( $dev_home->subsumes( $distpath ) ) {
+      $distpath = $distpath->relative( $dev_home );
+    } else {
+      $distpath->relative( $ctx->project_root );
+    }
+
+    my $merged = sprintf <<'MERGE_SPEC', ( $distname ) x 2, $distpath, $spec, $distname;
 ### <<<[%s] - keep this line intact
 merge '%s' => sub {
   # generated code block - do not edit
+  dist_path '%s';
 
   %s
 };
