@@ -24,6 +24,7 @@ sub run_cpanm {
   # printf STDERR "[Dumper] at Mist::Role::cpanminus line 26: %s\n",
   #   Dumper([ local::lib->active_paths ]);
 
+  local $ENV{TAR_OPTIONS} = '--warning=no-unknown-keyword';
 
   my $exit = system( $cpanm, @cmd_opts );
   Carp::croak( "cpanm @cmd_opts failed [$exit] : $?" )
