@@ -4,7 +4,7 @@ package App::Mist::Command::lib_paths;
 use 5.010;
 
 use App::Mist -command;
-use local::lib 2.00;
+use local::lib 2.00 ();
 
 sub execute {
   my ( $self, $opt, $args ) = @_;
