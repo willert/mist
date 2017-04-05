@@ -13,7 +13,12 @@ sub execute {
 
   die "No initialized Mist environment found" unless -x "$runner";
 
-  exec $runner, @$args;
+  $ctx->ensure_correct_perlbrew_context;
+
+  $ENV{ $_ } = undef for grep{ /PERL|MIST/ } keys %ENV;
+
+  my @cmd = ( bash => '-l', $runner, @$args );
+  exec @cmd;
 }
 
 1;
