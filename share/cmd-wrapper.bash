@@ -41,4 +41,6 @@ if [ ! $LOCAL_LIB ] ; then
   exit 1
 fi
 
+export LD_LIBRARY_PATH=$BASE_DIR/perl5/lib:$LD_LIBRARY_PATH
+
 exec "$BASE_DIR/perl5/bin/mist-run" `basename $0` "$@"
