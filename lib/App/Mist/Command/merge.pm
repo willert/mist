@@ -14,12 +14,11 @@ use File::Path ();
 use Mist::ParseDistribution;
 use Mist::PackageManager::MPAN;
 
-use Minilla::Project;
+use Mist::Minilla::Project;
 use Minilla::Util qw/ check_git /;
 
 use Cwd;
 use Try::Tiny;
-
 
 sub execute {
   my ( $self, $opt, $args ) = @_;
@@ -43,7 +42,7 @@ sub execute {
   try {
     chdir( "$path" );
     check_git;
-    $project = Minilla::Project->new({ cleanup => 0 });
+    $project = Mist::Minilla::Project->new;
     $work_dir = $project->work_dir;
     $dist = $work_dir->dist();
   } catch {
@@ -91,15 +90,16 @@ sub execute {
     $package_manager->install( @$args, $dist );
   };
 
+
   my $install_error = $@;
   $package_manager->commit;
 
   die $install_error if $install_error;
 
+
   my $dist_info = Mist::ParseDistribution->new(
     $dist, repository => $ctx->mpan_dist
   );
-
 
   if ( -f -r "$other_mistfile" ) {
     print "Merging mistfile $other_mistfile\n";
@@ -138,6 +138,7 @@ MERGE_SPEC
 
  MISTFILE_DONE:
 
+  $project->cleanup if $project;
 }
 
 1;
