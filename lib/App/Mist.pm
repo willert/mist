@@ -23,7 +23,7 @@ BEGIN {
   my $version_dir = join( q{-}, 'perl', $Config{version}, $Config{archname} );
   my $mist_lib    = File::Spec->catdir( $basedir => 'perl5', $version_dir );
 
-  if ( not -d $mist_lib ) {
+  if ( not -d $mist_lib and not $ENV{MIST_REBUILD_IN_PROGRESS} ) {
     die <<"ERROR_MSG";
 Mist is not yet installed for perl $Config{version}-$Config{archname}.
 Please run:
