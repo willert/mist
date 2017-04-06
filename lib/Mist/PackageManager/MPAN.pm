@@ -20,6 +20,33 @@ use Try::Tiny;
 my $VERBOSE = 0;
 my $DEBUG = 0;
 
+has mirror_list => (
+  is         => 'bare',
+  isa        => 'ArrayRef',
+  traits     => [qw/ Array /],
+  lazy_build => 1,
+  handles    => {
+    mirror_list  => 'elements',
+    add_mirror   => 'push',
+  },
+);
+
+sub _build_mirror_list {
+  my @mirrors;
+  if ( my $mist_root = $ENV{MIST_APP_ROOT}) {
+    printf STDERR "Mist root: %s\n", $mist_root;
+
+    my $mpan = dir( $mist_root )->subdir( 'mpan-dist' );
+    printf STDERR "MPAN: %s\n", $mpan;
+
+    push @mirrors, "$mpan" if -d "$mpan";
+  }
+
+  # push @mirrors, 'http://www.cpan.org/';
+
+  return \@mirrors;
+}
+
 has distribution_index => (
   is         => 'bare',
   isa        => 'HashRef',

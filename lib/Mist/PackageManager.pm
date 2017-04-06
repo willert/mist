@@ -40,20 +40,6 @@ sub _build_workspace {
   return $self->local_lib;
 }
 
-
-has mirror_list => (
-  is         => 'bare',
-  isa        => 'ArrayRef',
-  traits     => [qw/ Array /],
-  lazy_build => 1,
-  handles    => {
-    mirror_list  => 'elements',
-    add_mirror   => 'push',
-  },
-);
-
-sub _build_mirror_list {[ 'http://www.cpan.org/']}
-
 sub begin_work {}
 sub install {}
 sub commit {}
