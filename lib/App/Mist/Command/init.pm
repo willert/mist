@@ -75,7 +75,7 @@ sub execute {
         warn "Merged dist ${dist} not found. Skipping ..\n";
         next MERGED_DIST;
       }
-      printf "Merging %s using ${dist_path}\n", $dist;
+      print "\n";
       $do->( 'merge', @$args, "$dist_path" );
     }
   }

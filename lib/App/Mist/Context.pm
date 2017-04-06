@@ -212,8 +212,6 @@ sub get_merge_path_for {
     or croak 'Needs the name of a merged dist';
 
   my $dist_path = $self->dist->get_relative_merge_path( $distname );
-
-  printf STDERR "Relative merge path: %s\n", $dist_path ;
   goto DEFAULT unless $dist_path;
 
   if ( -d -r $self->project_root->subdir( $dist_path )->stringify ) {

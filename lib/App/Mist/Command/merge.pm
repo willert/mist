@@ -19,6 +19,7 @@ use Minilla::Util qw/ check_git /;
 
 use Cwd;
 use Try::Tiny;
+use Capture::Tiny ':all';
 
 sub execute {
   my ( $self, $opt, $args ) = @_;
@@ -34,15 +35,17 @@ sub execute {
   die "$0: ${path} is not Minilla distribution\n"
     unless -d q{}. $path and -f -r q{}. $path->file('cpanfile');
 
-  printf "Merging Minilla distribution from %s\n\n", $path;
+  printf "Merging distribution located in %s\n", $path;
 
   my $current_pwd = dir( getcwd());
   try {
     chdir( "$path" );
     check_git;
-    $project = Mist::Minilla::Project->new;
-    $work_dir = $project->work_dir;
-    $dist = $work_dir->dist();
+    capture_stdout {
+      $project = Mist::Minilla::Project->new;
+      $work_dir = $project->work_dir;
+      $dist = $work_dir->dist();
+    };
   } catch {
     /Minilla::Error::CommandExit/ and return;
     printf STDERR "%s\n", $_;
