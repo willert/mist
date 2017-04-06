@@ -34,8 +34,6 @@ sub execute {
   die "$0: ${path} is not Minilla distribution\n"
     unless -d q{}. $path and -f -r q{}. $path->file('cpanfile');
 
-  goto SWITCH_CONTEXT if $dist = $ENV{MIST_MERGE_DIST_FILE};
-
   printf "Merging Minilla distribution from %s\n\n", $path;
 
   my $current_pwd = dir( getcwd());
@@ -56,8 +54,6 @@ sub execute {
 
   printf "Injecting distribution %s\n", $dist;
 
- SWITCH_CONTEXT:
-  $ENV{MIST_MERGE_DIST_FILE} = $dist;
   $ctx->ensure_correct_perlbrew_context;
 
   my $package_manager = Mist::PackageManager::MPAN->new({

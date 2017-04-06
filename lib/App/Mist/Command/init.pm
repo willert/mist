@@ -32,7 +32,10 @@ sub execute {
   }
 
   my $app = $self->app;
-  my $do  = sub{ $app->execute_command( $app->prepare_command( @_ )) };
+  my $do  = sub{
+    my @cmd = $app->prepare_command( @_ );
+    $app->execute_command( @cmd );
+  };
 
   # compile needs to run before switching context because it
   # will dynamically load some modules from mist's local::lib
@@ -73,7 +76,7 @@ sub execute {
         next MERGED_DIST;
       }
       printf "Merging %s using ${dist_path}\n", $dist;
-      $do->( 'merge', @$args, $dist_path );
+      $do->( 'merge', @$args, "$dist_path" );
     }
   }
 

@@ -228,9 +228,9 @@ sub get_merge_path_for {
  DEFAULT:
   $dist_path = $self->dist->get_default_merge_path( $distname );
 
-  return undef unless -d -r $dist_path->stringify;
+  return undef unless -d -r "$dist_path";
 
-  return $dist_path->resolve->absolute;
+  return dir( $dist_path )->resolve->absolute;
 }
 
 sub ensure_correct_perlbrew_context {

@@ -5,36 +5,42 @@ use strict;
 use warnings;
 
 use Carp;
-use Path::Class ();
+use File::Spec;
+use Cwd ();
 
 sub new {
   my $this = shift;
+  my $class = ref( $this ) || $this;
+  my $dist_name = shift;
+
   bless {
-    assert   => [],
-    prepend  => [],
-    notest   => [],
-    perl     => undef,
-    dist_path => undef,
-    merge    => {},
-    script   => {
+    assert      => [],
+    prepend     => [],
+    notest      => [],
+    perl        => undef,
+    dist_path   => undef,
+    dist_name   => $dist_name,
+    merge_dists => [],
+    merge_info  => {},
+    script      => {
       prepare  => [],
       finalize => [],
     }
-  }, ref( $this ) || $this;
+  }, $class;
 }
 
 our $merging_dist;
 
 sub store_dist_info {
   my ( $self, $stack, $info ) = @_;
-  die "Needs an arrayref" unless ref $stack eq 'ARRAY';
+  confess "Needs an arrayref" unless ref $stack eq 'ARRAY';
   if ( my $dist = $merging_dist ) {
 
     # store info in merged dist info
-    my $md_info = $self->{merge}{ $dist };
-    die "Internal: no info about merged dist ${dist} found"
+    my $md_info = $self->get_merged_dist_info( $dist );
+    confess "Internal: no info about merged dist ${dist} found"
       unless $md_info and $md_info->isa( __PACKAGE__ );
-    $md_info->store_dist_info( $info );
+    $md_info->store_dist_info( $self->{merge_dists}, $info );
 
     # prepend info for merged distributions
     unshift @$stack, $info;
@@ -45,7 +51,11 @@ sub store_dist_info {
 
 sub merge($&) {
   my ( $self, $dist, $code ) = @_;
-  $self->{merge}{ $dist } = $self->new;
+
+  return if $merging_dist;
+
+  $self->store_dist_info( $self->{ merge_dists }, $dist );
+  $self->{ merge_info }{ $dist } = $self->new( $dist );
   local $merging_dist = $dist;
   $code->();
 }
@@ -73,12 +83,12 @@ sub dist_path ($) {
   # ignore merged default perl version
   return unless $merging_dist;
 
-  my $md_info = $self->get_merged_distribution( $merging_dist )
+  my $md_info = $self->get_merged_dist_info( $merging_dist )
     or die "Unknown merged dist ${merging_dist}";
 
   croak "Dist path has been set before" if $md_info->{dist_path};
 
-  $md_info->{dist_path} = Path::Class::Dir->new( $path );
+  $md_info->{dist_path} = "$path";
 }
 
 sub prepend ($;$) {
@@ -105,37 +115,40 @@ sub get_dist_path            { my $self = shift; return    $self->{dist_path} }
 sub get_prepended_modules    { my $self = shift; return @{ $self->{prepend}}  }
 sub get_modules_not_to_test  { my $self = shift; return @{ $self->{notest}}   }
 
-sub get_merged_dists { my $self = shift; return keys %{ $self->{merge}} }
+sub get_merged_dists { my $self = shift; return @{ $self->{merge_dists }} }
 
 sub get_scripts              {
   my $self = shift;  my $phase = shift;
   return @{ $self->{script}{$phase}};
 }
 
-sub get_merged_distribution {
+sub get_merged_dist_info {
   my ( $self, $dist ) = @_;
   croak "No dist name given" unless $dist;
-  return undef unless exists $self->{merge}{ $dist };
-  return $self->{merge}{ $dist };
+  return undef unless exists $self->{ merge_info }{ $dist };
+  return $self->{ merge_info }{ $dist };
 };
 
 sub get_relative_merge_path {
   my ( $self, $dist ) = @_;
   croak "No dist name given" unless $dist;
-  return undef unless exists $self->{merge}{ $dist };
 
-  my $md_info = $self->{merge}{ $dist };
-  return $md_info->get_dist_path ? Path::Class::Dir->new( $md_info->get_dist_path ) : undef;
+  my $md_info = $self->get_merged_dist_info( $dist )
+    or return undef;
+
+  return $md_info->get_dist_path;
 }
 
 sub get_default_merge_path {
   my ( $self, $dist ) = @_;
   croak "No dist name given" unless $dist;
-  return undef unless exists $self->{merge}{ $dist };
+
+  my $md_info = $self->get_merged_dist_info( $dist )
+    or return undef;
 
   $dist =~ s{::}{-}g;
-  my $cwd = Path::Class::Dir->new();
-  return $cwd->parent->subdir( lc $dist );
+  my $cwd = Cwd::cwd();
+  return File::Spec->catdir( $cwd, File::Spec->updir, lc $dist );
 };
 
 sub build_cpanm_call_stack {
