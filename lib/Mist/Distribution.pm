@@ -7,6 +7,7 @@ use warnings;
 use Carp;
 use File::Spec;
 use Cwd ();
+use List::Util 1.45 qw/ uniq /;
 
 sub new {
   my $this = shift;
@@ -32,29 +33,53 @@ sub new {
 our $merging_dist;
 
 sub store_dist_info {
-  my ( $self, $stack, $info ) = @_;
-  confess "Needs an arrayref" unless ref $stack eq 'ARRAY';
+  my ( $self, $key, @info ) = @_;
+
+  $key = [ $key ] unless ref $key eq 'ARRAY';
+
+  my $stash = $self; my @proto_key = @$key;
+  while ( my $k = shift @proto_key ) {
+    confess "Unknown key ${k}" unless exists $stash->{ $k };
+    $stash = $stash->{ $k };
+  }
+
+  confess "`@$key` needs to be an arrayref"
+    unless ref $stash eq 'ARRAY';
+
   if ( my $dist = $merging_dist ) {
 
     # store info in merged dist info
     my $md_info = $self->get_merged_dist_info( $dist );
     confess "Internal: no info about merged dist ${dist} found"
       unless $md_info and $md_info->isa( __PACKAGE__ );
-    $md_info->store_dist_info( $self->{merge_dists}, $info );
+
+    {
+      local $merging_dist;      # undef
+      $md_info->store_dist_info( $key, @info );
+    }
 
     # prepend info for merged distributions
-    unshift @$stack, $info;
+    unshift @$stash, @info;
   } else {
-    push @$stack, $info;
+    push @$stash, @info;
   }
+  @$stash = uniq @$stash;
+
 }
 
 sub merge($&) {
   my ( $self, $dist, $code ) = @_;
 
-  return if $merging_dist;
+  if ( $merging_dist ) {
+    my @stack = @{ $self->{ merge_dists }};
+    $self->{ merge_dists } = [];
+    while ( @stack and $stack[0] ne $merging_dist ) {
+      push @{ $self->{ merge_dists }}, shift @stack;
+    }
+    push @{ $self->{ merge_dists }}, $merging_dist, @stack;
+  }
 
-  $self->store_dist_info( $self->{ merge_dists }, $dist );
+  $self->store_dist_info( merge_dists => $dist );
   $self->{ merge_info }{ $dist } = $self->new( $dist );
   local $merging_dist = $dist;
   $code->();
@@ -64,7 +89,7 @@ sub assert(&@) {
   my ( $self, $code ) = @_;
   croak "assert needs a block, not " . ref $code
     unless ref $code eq 'CODE';
-  $self->store_dist_info( $self->{ assert }, $code );
+  $self->store_dist_info( assert => $code );
 }
 
 sub perl ($) {
@@ -95,18 +120,18 @@ sub prepend ($;$) {
   my ( $self, $module, $version ) = @_;
   $version = sprintf( q{"%s"}, $version ) if $version and $version =~ /[^\d.]/;
   $module  = sprintf( q{%s~%s}, $module, $version ) if $version;
-  $self->store_dist_info( $self->{prepend}, $module );
+  $self->store_dist_info( prepend => $module );
 }
 
 sub notest ($) {
   my ( $self, $module ) = @_;
-  $self->store_dist_info( $self->{notest}, $module );
+  $self->store_dist_info( notest => $module );
 }
 
 sub script ($$) {
   my ( $self, $phase, $path, @args ) = @_;
   die "Unknown phase $phase" unless exists $self->{script}{$phase};
-  $self->store_dist_info( $self->{script}{$phase}, [ $path, @args ]);
+  $self->store_dist_info( [ script => $phase ], $path, @args );
 }
 
 sub get_assertions           { my $self = shift; return @{ $self->{assert}}   }
@@ -115,19 +140,25 @@ sub get_dist_path            { my $self = shift; return    $self->{dist_path} }
 sub get_prepended_modules    { my $self = shift; return @{ $self->{prepend}}  }
 sub get_modules_not_to_test  { my $self = shift; return @{ $self->{notest}}   }
 
-sub get_merged_dists { my $self = shift; return @{ $self->{merge_dists }} }
 
-sub get_scripts              {
+sub get_scripts {
   my $self = shift;  my $phase = shift;
   return @{ $self->{script}{$phase}};
+}
+
+sub get_merged_dists {
+  my $self = shift;
+  return @{ $self->{merge_dists}};
 }
 
 sub get_merged_dist_info {
   my ( $self, $dist ) = @_;
   croak "No dist name given" unless $dist;
   return undef unless exists $self->{ merge_info }{ $dist };
-  return $self->{ merge_info }{ $dist };
+  return $self->{merge_info}{ $dist };
 };
+
+# ---
 
 sub get_relative_merge_path {
   my ( $self, $dist ) = @_;
