@@ -112,6 +112,8 @@ sub add_distribution_to_index {
 
   if ( not $modules->{ $main_module } ) {
     # parsing dist failed, try to at least index main module
+    $main_module = 'Term::ReadKey' if $main_module eq 'TermReadKey';
+    printf ".. getting modules failed, defaulting to %s\n", $main_module;
     $modules->{ $main_module } = $dist_name->version // 0;
   }
 
