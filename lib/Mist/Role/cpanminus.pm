@@ -9,7 +9,7 @@ use File::Share ();
 my $VERBOSE = 1;
 my $DEBUG   = 0;
 
-sub run_cpanm {
+sub run_bundled_cpanm_script {
   my ( $this, @cmd_opts ) = @_;
 
   my %opts;

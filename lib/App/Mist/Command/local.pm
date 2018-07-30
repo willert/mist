@@ -28,7 +28,9 @@ sub execute {
   my @modules  = grep{ !/^-/ } @$args;
   my @cmd_args = grep{ /^-/ } @$args;
 
-  Mist::Role::cpanminus->run_cpanm( @cpanm_options, @cmd_args, @modules );
+  Mist::Role::cpanminus->run_bundled_cpanm_script(
+    @cpanm_options, @cmd_args, @modules
+  );
 }
 
 1;

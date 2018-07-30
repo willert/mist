@@ -114,7 +114,7 @@ sub install {
     '--cascade-search'
   );
 
-  $self->run_cpanm( @install_options, @cmd_args );
+  $self->run_bundled_cpanm_script( @install_options, @cmd_args );
 }
 
 sub commit {

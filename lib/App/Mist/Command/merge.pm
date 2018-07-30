@@ -80,10 +80,10 @@ sub execute {
   $package_manager->begin_work;
 
   eval {
-    # run foreign mist callstack before trying to install dist itself
-    if ( $other_env ) {
-      $package_manager->install( @$args, @$_ )
-        for $other_env->build_cpanm_call_stack;
+
+    for my $cmd ( $other_env ? $other_env->build_cpanm_call_stack : () ) {
+      # run foreign mist callstack before trying to install dist itself
+      $package_manager->install( @$args, @$cmd );
     }
 
     $package_manager->install( @$args, $dist );
