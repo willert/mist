@@ -35,6 +35,8 @@ sub execute {
       my $local = $child->relative( $home );
       return if $skipchk->( $local );
       if ( $child->is_dir ) {
+        return if $child->basename eq 'perl5'; # don't descent into mist env
+        return if $child->basename eq 'node_modules'; # don't descent into npm lib
         return $cont->();
       } else {
         my $fh = eval{ $child->openr }
@@ -45,8 +47,6 @@ sub execute {
 
     print STDERR "WARNING: invalid shebang found (use '#!/usr/bin/env perl' instead):",
       join( qq{\n  }, '', @invalid_shebang ), "\n" if @invalid_shebang;
-
-    exit if @invalid_shebang;
   } else {
     print STDERR "WARNING: no MANIFEST.SKIP file found in project root\n";
     print STDERR "         skipping sanity scan of project files\n";
