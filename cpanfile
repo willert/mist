@@ -28,8 +28,9 @@ requires 'Devel::CheckLib';
 requires 'Devel::CheckCompiler';
 requires 'Probe::Perl';
 
-requires 'Minilla' => '0.11.0';
+requires 'Minilla' => '3.1.2';
 requires 'Software::License';
+requires 'Software::License::None';
 requires 'Version::Next';
 requires 'thanks';
 
