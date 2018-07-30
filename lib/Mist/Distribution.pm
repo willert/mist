@@ -7,7 +7,8 @@ use warnings;
 use Carp;
 use File::Spec;
 use Cwd ();
-use List::Util 1.45 qw/ uniq /;
+
+sub _uniq { my %i = (); grep { not $i{$_}++ } @_; }
 
 sub new {
   my $this = shift;
@@ -63,7 +64,7 @@ sub store_dist_info {
   } else {
     push @$stash, @info;
   }
-  @$stash = uniq @$stash;
+  @$stash = _uniq( @$stash );
 
 }
 

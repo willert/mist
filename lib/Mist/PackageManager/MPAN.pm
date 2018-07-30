@@ -12,7 +12,6 @@ with (
   'Mist::Role::CPAN::PackageIndex',
 );
 
-use List::MoreUtils qw/ uniq /;
 use Digest::MD5 qw/ md5_hex /;
 
 use Try::Tiny;
