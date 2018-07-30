@@ -26403,7 +26403,7 @@ package Devel::CheckLib;
 use 5.00405; #postfix foreach
 use strict;
 use vars qw($VERSION @ISA @EXPORT);
-$VERSION = '1.09';
+$VERSION = '1.10';
 use Config qw(%Config);
 use Text::ParseWords 'quotewords';
 
@@ -26712,7 +26712,7 @@ sub _findcc {
         push @Config_ldflags, $config_val if ( $config_val =~ /\S/ );
     }
     my @ccflags = grep { length } quotewords('\s+', 1, $Config_ccflags||'', $user_ccflags||'');
-    my @ldflags = grep { length } quotewords('\s+', 1, @Config_ldflags, $user_ldflags||'');
+    my @ldflags = grep { length && $_ !~ m/^-Wl/ } quotewords('\s+', 1, @Config_ldflags, $user_ldflags||'');
     my @paths = split(/$Config{path_sep}/, $ENV{PATH});
     my @cc = split(/\s+/, $Config{cc});
     if (check_compiler ($cc[0], $debug)) {
@@ -27075,35 +27075,83 @@ use strict;
 use warnings;
 
 use Carp;
+use File::Spec;
+use Cwd ();
+
+sub _uniq { my %i = (); grep { not $i{$_}++ } @_; }
 
 sub new {
+  my $this = shift;
+  my $class = ref( $this ) || $this;
+  my $dist_name = shift;
+
   bless {
-    assert  => [],
-    prepend => [],
-    notest  => [],
-    perl    => undef,
-    script  => {
+    assert      => [],
+    prepend     => [],
+    notest      => [],
+    perl        => undef,
+    dist_path   => undef,
+    dist_name   => $dist_name,
+    merge_dists => [],
+    merge_info  => {},
+    script      => {
       prepare  => [],
       finalize => [],
     }
-  }, shift;
+  }, $class;
 }
 
 our $merging_dist;
 
 sub store_dist_info {
-  my ( $stack, $info ) = @_;
-  die "Needs an arrayref" unless ref $stack eq 'ARRAY';
-  if ( $merging_dist ) {
-    # prepend info for merged distributions
-    unshift @$stack, $info;
-  } else {
-    push @$stack, $info;
+  my ( $self, $key, @info ) = @_;
+
+  $key = [ $key ] unless ref $key eq 'ARRAY';
+
+  my $stash = $self; my @proto_key = @$key;
+  while ( my $k = shift @proto_key ) {
+    confess "Unknown key ${k}" unless exists $stash->{ $k };
+    $stash = $stash->{ $k };
   }
+
+  confess "`@$key` needs to be an arrayref"
+    unless ref $stash eq 'ARRAY';
+
+  if ( my $dist = $merging_dist ) {
+
+    # store info in merged dist info
+    my $md_info = $self->get_merged_dist_info( $dist );
+    confess "Internal: no info about merged dist ${dist} found"
+      unless $md_info and $md_info->isa( __PACKAGE__ );
+
+    {
+      local $merging_dist;      # undef
+      $md_info->store_dist_info( $key, @info );
+    }
+
+    # prepend info for merged distributions
+    unshift @$stash, @info;
+  } else {
+    push @$stash, @info;
+  }
+  @$stash = _uniq( @$stash );
+
 }
 
 sub merge($&) {
   my ( $self, $dist, $code ) = @_;
+
+  if ( $merging_dist ) {
+    my @stack = @{ $self->{ merge_dists }};
+    $self->{ merge_dists } = [];
+    while ( @stack and $stack[0] ne $merging_dist ) {
+      push @{ $self->{ merge_dists }}, shift @stack;
+    }
+    push @{ $self->{ merge_dists }}, $merging_dist, @stack;
+  }
+
+  $self->store_dist_info( merge_dists => $dist );
+  $self->{ merge_info }{ $dist } = $self->new( $dist );
   local $merging_dist = $dist;
   $code->();
 }
@@ -27112,7 +27160,7 @@ sub assert(&@) {
   my ( $self, $code ) = @_;
   croak "assert needs a block, not " . ref $code
     unless ref $code eq 'CODE';
-  store_dist_info( $self->{ assert }, $code );
+  $self->store_dist_info( assert => $code );
 }
 
 sub perl ($) {
@@ -27125,32 +27173,85 @@ sub perl ($) {
   $self->{perl} = $version;
 }
 
+sub dist_path ($) {
+  my ( $self, $path ) = @_;
+
+  # ignore merged default perl version
+  return unless $merging_dist;
+
+  my $md_info = $self->get_merged_dist_info( $merging_dist )
+    or die "Unknown merged dist ${merging_dist}";
+
+  croak "Dist path has been set before" if $md_info->{dist_path};
+
+  $md_info->{dist_path} = "$path";
+}
+
 sub prepend ($;$) {
   my ( $self, $module, $version ) = @_;
   $version = sprintf( q{"%s"}, $version ) if $version and $version =~ /[^\d.]/;
   $module  = sprintf( q{%s~%s}, $module, $version ) if $version;
-  store_dist_info( $self->{prepend}, $module );
+  $self->store_dist_info( prepend => $module );
 }
 
 sub notest ($) {
   my ( $self, $module ) = @_;
-  store_dist_info( $self->{notest}, $module );
+  $self->store_dist_info( notest => $module );
 }
 
 sub script ($$) {
   my ( $self, $phase, $path, @args ) = @_;
   die "Unknown phase $phase" unless exists $self->{script}{$phase};
-  store_dist_info( $self->{script}{$phase}, [ $path, @args ]);
+  $self->store_dist_info( [ script => $phase ], $path, @args );
 }
 
-sub get_assertions           { my $self = shift; return @{ $self->{assert}}  }
-sub get_default_perl_version { my $self = shift; return    $self->{perl}     }
-sub get_prepended_modules    { my $self = shift; return @{ $self->{prepend}} }
-sub get_modules_not_to_test  { my $self = shift; return @{ $self->{notest}}  }
-sub get_scripts              {
+sub get_assertions           { my $self = shift; return @{ $self->{assert}}   }
+sub get_default_perl_version { my $self = shift; return    $self->{perl}      }
+sub get_dist_path            { my $self = shift; return    $self->{dist_path} }
+sub get_prepended_modules    { my $self = shift; return @{ $self->{prepend}}  }
+sub get_modules_not_to_test  { my $self = shift; return @{ $self->{notest}}   }
+
+
+sub get_scripts {
   my $self = shift;  my $phase = shift;
   return @{ $self->{script}{$phase}};
 }
+
+sub get_merged_dists {
+  my $self = shift;
+  return @{ $self->{merge_dists}};
+}
+
+sub get_merged_dist_info {
+  my ( $self, $dist ) = @_;
+  croak "No dist name given" unless $dist;
+  return undef unless exists $self->{ merge_info }{ $dist };
+  return $self->{merge_info}{ $dist };
+};
+
+# ---
+
+sub get_relative_merge_path {
+  my ( $self, $dist ) = @_;
+  croak "No dist name given" unless $dist;
+
+  my $md_info = $self->get_merged_dist_info( $dist )
+    or return undef;
+
+  return $md_info->get_dist_path;
+}
+
+sub get_default_merge_path {
+  my ( $self, $dist ) = @_;
+  croak "No dist name given" unless $dist;
+
+  my $md_info = $self->get_merged_dist_info( $dist )
+    or return undef;
+
+  $dist =~ s{::}{-}g;
+  my $cwd = Cwd::cwd();
+  return File::Spec->catdir( $cwd, File::Spec->updir, lc $dist );
+};
 
 sub build_cpanm_call_stack {
   my ( $self, @prereqs ) = @_;
@@ -27234,7 +27335,7 @@ use warnings;
 use Carp ();
 
 our @bindings;
-BEGIN { @bindings = qw( perl assert prepend notest merge script ) };
+BEGIN { @bindings = qw( perl assert prepend notest merge script dist_path ) };
 
 my $file_id = 1;
 
@@ -27347,19 +27448,6 @@ prepend 'Params::Validate';
 prepend 'Test::Tester' => '0.107';
 
 notest 'IPC::Run3';
-
-
-### <<<[Test::WWW::Mechanize::Catalyst::WithContext] - keep this line intact
-merge 'Test::WWW::Mechanize::Catalyst::WithContext' => sub {
-  # generated code block - do not edit
-
-  perl '5.14.2';
-
-  notest 'ok';
-  notest 'Test::Exception';
-
-};
-### [Test::WWW::Mechanize::Catalyst::WithContext]>>> - keep this line intact
 ;
 
   sub distinfo { $_result }
@@ -28068,7 +28156,6 @@ $PREREQUISITE_DISTS = [
                         'File::HomeDir',
                         'File::Share',
                         'Getopt::Long~2.42',
-                        'List::MoreUtils',
                         'Minilla~v0.11.0',
                         'Module::CPANfile~1.0002',
                         'Module::Path',
@@ -28079,7 +28166,9 @@ $PREREQUISITE_DISTS = [
                         'Probe::Perl',
                         'Software::License',
                         'Sort::Key',
-                        'local::lib~2.00'
+                        'Version::Next',
+                        'local::lib~2.00',
+                        'thanks'
                       ];
 ;
 };  BEGIN{ __mist::no_thanks( 'Mist::Script::install' ) } };

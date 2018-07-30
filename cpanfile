@@ -5,7 +5,6 @@ requires "App::Cmd";
 requires "App::cpanminus" => "1.7";
 
 requires "Capture::Tiny";
-requires "List::MoreUtils";
 requires "Digest::MD5";
 requires "Module::Path";
 requires "Sort::Key";
@@ -31,6 +30,8 @@ requires 'Probe::Perl';
 
 requires 'Minilla' => '0.11.0';
 requires 'Software::License';
+requires 'Version::Next';
+requires 'thanks';
 
 on 'configure' => sub {
   requires "ExtUtils::MakeMaker" => "6.30";
