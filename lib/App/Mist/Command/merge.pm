@@ -93,7 +93,7 @@ sub execute {
   my $install_error = $@;
   $package_manager->commit;
 
-  die $install_error if $install_error;
+  die "Merging ${dist} failed:\n" . $install_error if $install_error;
 
 
   my $dist_info = Mist::ParseDistribution->new(

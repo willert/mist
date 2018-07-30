@@ -28,7 +28,7 @@ sub run_bundled_cpanm_script {
 
   my $exit = system( $cpanm, @cmd_opts );
   Carp::croak( "cpanm @cmd_opts failed [$exit] : $?" )
-    if $exit != 0 and $DEBUG;
+    if $exit != 0;
 
   if ( $exit != 0 ) {
     $? = $exit;
