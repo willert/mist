@@ -12,7 +12,10 @@ sub execute {
   my $ctx = $self->app->ctx;
 
   $ctx->ensure_correct_perlbrew_context;
-  Minilla::CLI->new()->run( release => @$args );
+
+  my $minil = Minilla::CLI->new();
+  $minil->run( release => @$args );
+  $minil->run( dist => '--no-test', @$args );
 }
 
 1;

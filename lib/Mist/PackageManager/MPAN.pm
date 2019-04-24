@@ -13,6 +13,7 @@ with (
 );
 
 use Digest::MD5 qw/ md5_hex /;
+use Path::Class qw/ file dir /;
 
 use Try::Tiny;
 
@@ -38,10 +39,10 @@ sub _build_mirror_list {
     my $mpan = dir( $mist_root )->subdir( 'mpan-dist' );
     printf STDERR "MPAN: %s\n", $mpan;
 
-    push @mirrors, "$mpan" if -d "$mpan";
+    push @mirrors, "file://${mpan}" if -d "$mpan";
   }
 
-  # push @mirrors, 'http://www.cpan.org/';
+  push @mirrors, 'http://www.cpan.org/';
 
   return \@mirrors;
 }
@@ -109,8 +110,8 @@ sub install {
 
     $self->cpanm_mirror_options,
 
-    '--mirror-only',
-    '--cascade-search'
+    # '--mirror-only',
+    # '--cascade-search'
   );
 
   $self->run_bundled_cpanm_script( @install_options, @cmd_args );

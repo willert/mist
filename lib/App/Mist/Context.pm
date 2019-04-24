@@ -14,6 +14,11 @@ use File::Which;
 use File::Find::Upwards;
 use File::Share qw/ dist_file /;
 
+BEGIN {
+  local $SIG{__WARN__} = sub { };
+  require CPAN::PackageDetails;
+}
+
 use Module::CPANfile;
 use CPAN::Meta::Prereqs 2.132830;
 
@@ -303,11 +308,19 @@ MSG
         "sudo -E perlbrew exec --with ${pb_version} cpanm local::lib",
       "to install it as root"
     );
-    local::lib->import('--deactivate-all');
-    local::lib->import( $self->local_lib );
+    # local::lib->import('--deactivate-all');
+    # local::lib->import( $self->local_lib );
   }
 }
 
+sub with_project_libs {
+  my $self = shift;
+  my $fnct = pop;
+  my %args = @_;
+  local::lib->import('--deactivate-all');
+  local::lib->import( $self->local_lib );
+  $fnct->();
+}
 
 sub slurp_file {
   my ( $self, $file ) = @_;

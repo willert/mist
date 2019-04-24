@@ -35,6 +35,15 @@ ERROR_MSG
   local::lib->import( $mist_lib );
 }
 
+# BEGIN {
+#   if ( my $root = $ENV{MIST_APP_ROOT} and not local::lib->active_paths ) {
+#     my $arch_path = join( q{-}, 'perl', $Config{version}, $Config{archname} );
+#     my $lib_path = File::Spec->catdir( $root, 'perl5', $arch_path );
+#     printf STDERR "Re-initializing local lib path %s\n", $lib_path;
+#     local::lib->import( $lib_path );
+#   }
+# }
+
 use App::Cmd::Setup -app;
 
 our $VERSION = '0.34';
