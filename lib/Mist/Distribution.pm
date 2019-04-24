@@ -132,7 +132,7 @@ sub notest ($) {
 sub script ($$) {
   my ( $self, $phase, $path, @args ) = @_;
   die "Unknown phase $phase" unless exists $self->{script}{$phase};
-  $self->store_dist_info( [ script => $phase ], $path, @args );
+  $self->store_dist_info( [ script => $phase ], [ $path, @args ]);
 }
 
 sub get_assertions           { my $self = shift; return @{ $self->{assert}}   }
