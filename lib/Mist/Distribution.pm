@@ -119,8 +119,8 @@ sub dist_path ($) {
 
 sub prepend ($;$) {
   my ( $self, $module, $version ) = @_;
-  $version = sprintf( q{"%s"}, $version ) if $version and $version =~ /[^\d.]/;
-  $module  = sprintf( q{%s~%s}, $module, $version ) if $version;
+  $version = sprintf( q{~%s}, $version ) if $version and $version !~ /^[=@><~]+/;
+  $module  = sprintf( q{%s%s}, $module, $version ) if $version;
   $self->store_dist_info( prepend => $module );
 }
 
