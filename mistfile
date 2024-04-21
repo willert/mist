@@ -13,3 +13,4 @@ prepend 'Params::Validate';
 prepend 'Test::Tester' => '0.107';
 
 notest 'IPC::Run3';
+notest 'File::HomeDir'; # tests fail when run by user without own home
