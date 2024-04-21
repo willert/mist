@@ -74,6 +74,7 @@ sub execute {
       until => qr/# END OF FATPACK CODE\s*$/,
     );
 
+    append_module_source( 'Getopt::Long::Parser' => $out, begin_lift => 1 );
     append_module_source( 'Devel::CheckBin'      => $out, begin_lift => 1 );
     append_module_source( 'Devel::CheckLib'      => $out, begin_lift => 1 );
     append_module_source( 'Devel::CheckCompiler' => $out, begin_lift => 1 );

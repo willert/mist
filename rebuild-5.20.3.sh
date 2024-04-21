@@ -14,7 +14,9 @@ cpanm --save-dists mpan-dist -L perl5/ $CPANM_OPTS \
 			List::Util IPC::Run3 \
 			Test::Fatal Test::Exception \
 			Digest::MD5 Getopt::Long \
-			Test::Tester \
+			Software::License \
+			Test::Tester MooX::late
+
 			
 # rebuild mist indizes
 MIST_REBUILD_IN_PROGRESS=1 perl -Mlocal::lib=perl5 ./script/mist index

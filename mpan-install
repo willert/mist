@@ -14,28 +14,24 @@
 # Getopt::Long.pm -- Universal options parsing
 # Author          : Johan Vromans
 # Created On      : Tue Sep 11 15:00:12 1990
-# Last Modified By: Johan Vromans
-# Last Modified On: Thu Jun  9 14:50:37 2016
-# Update Count    : 1699
+# Last Modified On: Sat Nov 11 17:48:41 2023
+# Update Count    : 1808
 # Status          : Released
 
 ################ Module Preamble ################
 
-package Getopt::Long;
-
-use 5.004;
+# Getopt::Long is reported to run under 5.6.1. Thanks Tux!
+use 5.006001;
 
 use strict;
+use warnings;
 
-use vars qw($VERSION);
-$VERSION        =  2.49;
-# For testing versions only.
-use vars qw($VERSION_STRING);
-$VERSION_STRING = "2.49";
+package Getopt::Long;
+
+our $VERSION = 2.57;
 
 use Exporter;
-use vars qw(@ISA @EXPORT @EXPORT_OK);
-@ISA = qw(Exporter);
+use base qw(Exporter);
 
 # Exported subroutines.
 sub GetOptions(@);		# always
@@ -45,21 +41,24 @@ sub Configure(@);		# on demand
 sub HelpMessage(@);		# on demand
 sub VersionMessage(@);		# in demand
 
+our @EXPORT;
+our @EXPORT_OK;
+# Values for $order. See GNU getopt.c for details.
+our ($REQUIRE_ORDER, $PERMUTE, $RETURN_IN_ORDER);
 BEGIN {
-    # Init immediately so their contents can be used in the 'use vars' below.
+    ($REQUIRE_ORDER, $PERMUTE, $RETURN_IN_ORDER) = (0..2);
     @EXPORT    = qw(&GetOptions $REQUIRE_ORDER $PERMUTE $RETURN_IN_ORDER);
     @EXPORT_OK = qw(&HelpMessage &VersionMessage &Configure
 		    &GetOptionsFromArray &GetOptionsFromString);
 }
 
 # User visible variables.
-use vars @EXPORT, @EXPORT_OK;
-use vars qw($error $debug $major_version $minor_version);
+our ($error, $debug, $major_version, $minor_version);
 # Deprecated visible variables.
-use vars qw($autoabbrev $getopt_compat $ignorecase $bundling $order
-	    $passthrough);
+our ($autoabbrev, $getopt_compat, $ignorecase, $bundling, $order,
+     $passthrough);
 # Official invisible variables.
-use vars qw($genprefix $caller $gnu_compat $auto_help $auto_version $longprefix);
+our ($genprefix, $caller, $gnu_compat, $auto_help, $auto_version, $longprefix);
 
 # Really invisible variables.
 my $bundling_values;
@@ -133,16 +132,10 @@ sub import {
 
 ################ Initialization ################
 
-# Values for $order. See GNU getopt.c for details.
-($REQUIRE_ORDER, $PERMUTE, $RETURN_IN_ORDER) = (0..2);
 # Version major/minor numbers.
 ($major_version, $minor_version) = $VERSION =~ /^(\d+)\.(\d+)/;
 
 ConfigDefaults();
-
-################ OO Interface ################
-
-package Getopt::Long::Parser;
 
 # Store a copy of the default configuration. Since ConfigDefaults has
 # just been called, what we get from Configure is the default.
@@ -150,80 +143,18 @@ my $default_config = do {
     Getopt::Long::Configure ()
 };
 
-sub new {
-    my $that = shift;
-    my $class = ref($that) || $that;
-    my %atts = @_;
-
-    # Register the callers package.
-    my $self = { caller_pkg => (caller)[0] };
-
-    bless ($self, $class);
-
-    # Process config attributes.
-    if ( defined $atts{config} ) {
-	my $save = Getopt::Long::Configure ($default_config, @{$atts{config}});
-	$self->{settings} = Getopt::Long::Configure ($save);
-	delete ($atts{config});
-    }
-    # Else use default config.
-    else {
-	$self->{settings} = $default_config;
-    }
-
-    if ( %atts ) {		# Oops
-	die(__PACKAGE__.": unhandled attributes: ".
-	    join(" ", sort(keys(%atts)))."\n");
-    }
-
-    $self;
-}
-
-sub configure {
-    my ($self) = shift;
-
-    # Restore settings, merge new settings in.
-    my $save = Getopt::Long::Configure ($self->{settings}, @_);
-
-    # Restore orig config and save the new config.
-    $self->{settings} = Getopt::Long::Configure ($save);
-}
-
-sub getoptions {
-    my ($self) = shift;
-
-    return $self->getoptionsfromarray(\@ARGV, @_);
-}
-
-sub getoptionsfromarray {
-    my ($self) = shift;
-
-    # Restore config settings.
-    my $save = Getopt::Long::Configure ($self->{settings});
-
-    # Call main routine.
-    my $ret = 0;
-    $Getopt::Long::caller = $self->{caller_pkg};
-
-    eval {
-	# Locally set exception handler to default, otherwise it will
-	# be called implicitly here, and again explicitly when we try
-	# to deliver the messages.
-	local ($SIG{__DIE__}) = 'DEFAULT';
-	$ret = Getopt::Long::GetOptionsFromArray (@_);
-    };
-
-    # Restore saved settings.
-    Getopt::Long::Configure ($save);
-
-    # Handle errors and return value.
-    die ($@) if $@;
-    return $ret;
-}
-
-package Getopt::Long;
+# For the parser only.
+sub _default_config { $default_config }
 
 ################ Back to Normal ################
+
+# The ooparser was traditionally part of the main package.
+no warnings 'redefine';
+sub Getopt::Long::Parser::new {
+    require Getopt::Long::Parser;
+    goto &Getopt::Long::Parser::new;
+}
+use warnings 'redefine';
 
 # Indices in option control info.
 # Note that ParseOptions uses the fields directly. Search for 'hard-wired'.
@@ -268,9 +199,9 @@ use constant PAT_XINT  =>
   ")";
 use constant PAT_FLOAT =>
   "[-+]?".			# optional sign
-  "(?=[0-9.])".			# must start with digit or dec.point
+  "(?=\\.?[0-9])".		# must start with digit or dec.point
   "[0-9_]*".			# digits before the dec.point
-  "(\.[0-9_]+)?".		# optional fraction
+  "(\\.[0-9_]*)?".		# optional fraction
   "([eE][-+]?[0-9_]+)?";	# optional exponent
 
 sub GetOptions(@) {
@@ -313,7 +244,7 @@ sub GetOptionsFromArray(@) {
 	# Avoid some warnings if debugging.
 	local ($^W) = 0;
 	print STDERR
-	  ("Getopt::Long $Getopt::Long::VERSION ",
+	  ("Getopt::Long $VERSION ",
 	   "called from package \"$pkg\".",
 	   "\n  ",
 	   "argv: ",
@@ -535,8 +466,9 @@ sub GetOptionsFromArray(@) {
 	my $key;		# key (if hash type)
 	my $arg;		# option argument
 	my $ctl;		# the opctl entry
+	my $starter;		# the actual starter character(s)
 
-	($found, $opt, $ctl, $arg, $key) =
+	($found, $opt, $ctl, $starter, $arg, $key) =
 	  FindOption ($argv, $prefix, $argend, $opt, \%opctl);
 
 	if ( $found ) {
@@ -548,6 +480,7 @@ sub GetOptionsFromArray(@) {
 	    while ( defined $arg ) {
 
 		# Get the canonical name.
+		my $given = $opt;
 		print STDERR ("=> cname for \"$opt\" is ") if $debug;
 		$opt = $ctl->[CTL_CNAME];
 		print STDERR ("\"$ctl->[CTL_CNAME]\"\n") if $debug;
@@ -615,11 +548,13 @@ sub GetOptionsFromArray(@) {
 			    eval {
 				&{$linkage{$opt}}
 				  (Getopt::Long::CallBack->new
-				   (name    => $opt,
-				    ctl     => $ctl,
-				    opctl   => \%opctl,
-				    linkage => \%linkage,
-				    prefix  => $prefix,
+				   (name     => $opt,
+				    given    => $given,
+				    ctl      => $ctl,
+				    opctl    => \%opctl,
+				    linkage  => \%linkage,
+				    prefix   => $prefix,
+				    starter  => $starter,
 				   ),
 				   $ctl->[CTL_DEST] == CTL_DEST_HASH ? ($key) : (),
 				   $arg);
@@ -779,7 +714,7 @@ sub GetOptionsFromArray(@) {
     }
 
     # Finish.
-    if ( @ret && $order == $PERMUTE ) {
+    if ( @ret && ( $order == $PERMUTE || $passthrough ) ) {
 	#  Push back accumulated arguments
 	print STDERR ("=> restoring \"", join('" "', @ret), "\"\n")
 	    if $debug;
@@ -810,15 +745,17 @@ sub OptCtl ($) {
 sub ParseOptionSpec ($$) {
     my ($opt, $opctl) = @_;
 
+    # Allow period in option name unless passing through,
+    my $op = $passthrough
+      ? qr/(?: \w+[-\w]* )/x : qr/(?: \w+[-.\w]* )/x;
+
     # Match option spec.
     if ( $opt !~ m;^
 		   (
 		     # Option name
-		     (?: \w+[-\w]* )
-		     # Alias names, or "?"
-		     (?: \| (?: \? | \w[-\w]* ) )*
+		     $op
 		     # Aliases
-		     (?: \| (?: [^-|!+=:][^|!+=:]* )? )*
+		     (?: \| (?: . [^|!+=:]* )? )*
 		   )?
 		   (
 		     # Either modifiers ...
@@ -828,7 +765,7 @@ sub ParseOptionSpec ($$) {
 		     [=:] [ionfs] [@%]? (?: \{\d*,?\d*\} )?
 		     |
 		     # ... or an optional-with-default spec
-		     : (?: -?\d+ | \+ ) [@%]?
+		     : (?: 0[0-7]+ | 0[xX][0-9a-fA-F]+ | 0[bB][01]+ | -?\d+ | \+ ) [@%]?
 		   )?
 		   $;x ) {
 	return (undef, "Error in option spec: \"$opt\"\n");
@@ -861,10 +798,23 @@ sub ParseOptionSpec ($$) {
 	# Fields are hard-wired here.
 	$entry = [$spec,$orig,undef,CTL_DEST_SCALAR,0,0];
     }
-    elsif ( $spec =~ /^:(-?\d+|\+)([@%])?$/ ) {
+    elsif ( $spec =~ /^:(0[0-7]+|0x[0-9a-f]+|0b[01]+|-?\d+|\+)([@%])?$/i ) {
 	my $def = $1;
 	my $dest = $2;
-	my $type = $def eq '+' ? 'I' : 'i';
+	my $type = 'i';		# assume integer
+	if ( $def eq '+' ) {
+	    # Increment.
+	    $type = 'I';
+	}
+	elsif ( $def =~ /^(0[0-7]+|0[xX][0-9a-fA-F]+|0[bB][01]+)$/ ) {
+	    # Octal, binary or hex.
+	    $type = 'o';
+	    $def = oct($def);
+	}
+	elsif ( $def =~ /^-?\d+$/ ) {
+	    # Integer.
+	    $def = 0 + $def;
+	}
 	$dest ||= '$';
 	$dest = $dest eq '@' ? CTL_DEST_ARRAY
 	  : $dest eq '%' ? CTL_DEST_HASH : CTL_DEST_SCALAR;
@@ -922,7 +872,8 @@ sub ParseOptionSpec ($$) {
 	}
     }
 
-    if ( $dups && $^W ) {
+    if ( $dups ) {
+	# Warn now. Will become fatal in a future release.
 	foreach ( split(/\n+/, $dups) ) {
 	    warn($_."\n");
 	}
@@ -933,7 +884,7 @@ sub ParseOptionSpec ($$) {
 # Option lookup.
 sub FindOption ($$$$$) {
 
-    # returns (1, $opt, $ctl, $arg, $key) if okay,
+    # returns (1, $opt, $ctl, $starter, $arg, $key) if okay,
     # returns (1, undef) if option in error,
     # returns (0) otherwise.
 
@@ -1056,7 +1007,8 @@ sub FindOption ($$$$$) {
 	# Complete the option name, if appropriate.
 	if ( @hits == 1 && $hits[0] ne $opt ) {
 	    $tryopt = $hits[0];
-	    $tryopt = lc ($tryopt) if $ignorecase;
+	    $tryopt = lc ($tryopt)
+	      if $ignorecase > (($bundling && length($tryopt) == 1) ? 1 : 0);
 	    print STDERR ("=> option \"$opt\" -> \"$tryopt\"\n")
 		if $debug;
 	}
@@ -1113,7 +1065,7 @@ sub FindOption ($$$$$) {
 	    $arg = 0;		# supply explicit value
 	}
 	unshift (@$argv, $starter.$rest) if defined $rest;
-	return (1, $opt, $ctl, $arg);
+	return (1, $opt, $ctl, $starter, $arg);
     }
 
     # Get mandatory status and type info.
@@ -1121,11 +1073,30 @@ sub FindOption ($$$$$) {
 
     # Check if there is an option argument available.
     if ( $gnu_compat ) {
-	my $optargtype = 0; # 0 = none, 1 = empty, 2 = nonempty
-	$optargtype = ( !defined($optarg) ? 0 : ( (length($optarg) == 0) ? 1 : 2 ) );
-    return (1, $opt, $ctl, defined($ctl->[CTL_DEFAULT]) ? $ctl->[CTL_DEFAULT] : undef)
-	  if (($optargtype == 0) && !$mand);
-	return (1, $opt, $ctl, $type eq 's' ? '' : 0)
+	my $optargtype = 0; # none, 1 = empty, 2 = nonempty, 3 = aux
+	if ( defined($optarg) ) {
+	    $optargtype = (length($optarg) == 0) ? 1 : 2;
+	}
+	elsif ( defined $rest || @$argv > 0 ) {
+	    # GNU getopt_long() does not accept the (optional)
+	    # argument to be passed to the option without = sign.
+	    # We do, since not doing so breaks existing scripts.
+	    $optargtype = 3;
+	}
+	if(($optargtype == 0) && !$mand) {
+	    if ( $type eq 'I' ) {
+		# Fake incremental type.
+		my @c = @$ctl;
+		$c[CTL_TYPE] = '+';
+		return (1, $opt, \@c, $starter, 1);
+	    }
+	    my $val
+	      = defined($ctl->[CTL_DEFAULT]) ? $ctl->[CTL_DEFAULT]
+	      : $type eq 's'                 ? ''
+	      :                                0;
+	    return (1, $opt, $ctl, $starter, $val);
+	}
+	return (1, $opt, $ctl, $starter, $type eq 's' ? '' : 0)
 	  if $optargtype == 1;  # --foo=  -> return nothing
     }
 
@@ -1135,7 +1106,7 @@ sub FindOption ($$$$$) {
 	 : !(defined $rest || @$argv > 0) ) {
 	# Complain if this option needs an argument.
 #	if ( $mand && !($type eq 's' ? defined($optarg) : 0) ) {
-	if ( $mand ) {
+	if ( $mand || $ctl->[CTL_DEST] == CTL_DEST_HASH ) {
 	    return (0) if $passthrough;
 	    warn ("Option ", $opt, " requires an argument\n");
 	    $error++;
@@ -1145,9 +1116,9 @@ sub FindOption ($$$$$) {
 	    # Fake incremental type.
 	    my @c = @$ctl;
 	    $c[CTL_TYPE] = '+';
-	    return (1, $opt, \@c, 1);
+	    return (1, $opt, \@c, $starter, 1);
 	}
-	return (1, $opt, $ctl,
+	return (1, $opt, $ctl, $starter,
 		defined($ctl->[CTL_DEFAULT]) ? $ctl->[CTL_DEFAULT] :
 		$type eq 's' ? '' : 0);
     }
@@ -1177,16 +1148,16 @@ sub FindOption ($$$$$) {
 
     if ( $type eq 's' ) {	# string
 	# A mandatory string takes anything.
-	return (1, $opt, $ctl, $arg, $key) if $mand;
+	return (1, $opt, $ctl, $starter, $arg, $key) if $mand;
 
 	# Same for optional string as a hash value
-	return (1, $opt, $ctl, $arg, $key)
+	return (1, $opt, $ctl, $starter, $arg, $key)
 	  if $ctl->[CTL_DEST] == CTL_DEST_HASH;
 
 	# An optional string takes almost anything.
-	return (1, $opt, $ctl, $arg, $key)
+	return (1, $opt, $ctl, $starter, $arg, $key)
 	  if defined $optarg || defined $rest;
-	return (1, $opt, $ctl, $arg, $key) if $arg eq "-"; # ??
+	return (1, $opt, $ctl, $starter, $arg, $key) if $arg eq "-"; # ??
 
 	# Check for option or option list terminator.
 	if ($arg eq $argend ||
@@ -1238,7 +1209,7 @@ sub FindOption ($$$$$) {
 		    # Fake incremental type.
 		    my @c = @$ctl;
 		    $c[CTL_TYPE] = '+';
-		    return (1, $opt, \@c, 1);
+		    return (1, $opt, \@c, $starter, 1);
 		}
 		# Supply default value.
 		$arg = defined($ctl->[CTL_DEFAULT]) ? $ctl->[CTL_DEFAULT] : 0;
@@ -1283,7 +1254,7 @@ sub FindOption ($$$$$) {
     else {
 	die("Getopt::Long internal error (Can't happen)\n");
     }
-    return (1, $opt, $ctl, $arg, $key);
+    return (1, $opt, $ctl, $starter, $arg, $key);
 }
 
 sub ValidValue ($$$$$) {
@@ -1468,9 +1439,7 @@ sub VersionMessage(@) {
 	       $0, defined $v ? " version $v" : (),
 	       "\n",
 	       "(", __PACKAGE__, "::", "GetOptions",
-	       " version ",
-	       defined($Getopt::Long::VERSION_STRING)
-	         ? $Getopt::Long::VERSION_STRING : $VERSION, ";",
+	       " version $VERSION,",
 	       " Perl version ",
 	       $] >= 5.006 ? sprintf("%vd", $^V) : $],
 	       ")\n");
@@ -1488,7 +1457,7 @@ sub VersionMessage(@) {
 sub HelpMessage(@) {
     eval {
 	require Pod::Usage;
-	import Pod::Usage;
+	Pod::Usage->import;
 	1;
     } || die("Cannot provide help: cannot load Pod::Usage\n");
 
@@ -1519,8 +1488,9 @@ sub setup_pa_args($@) {
 
     if ( UNIVERSAL::isa($pa, 'HASH') ) {
 	# Get rid of -msg vs. -message ambiguity.
-	$pa->{-message} = $pa->{-msg};
-	delete($pa->{-msg});
+	if (!defined $pa->{-message}) {
+	    $pa->{-message} = delete($pa->{-msg});
+	}
     }
     elsif ( $pa =~ /^-?\d+$/ ) {
 	$pa = { -exitval => $pa };
@@ -1537,7 +1507,7 @@ sub setup_pa_args($@) {
 
 # Sneak way to know what version the user requested.
 sub VERSION {
-    $requested_version = $_[1];
+    $requested_version = $_[1] if @_ > 1;
     shift->SUPER::VERSION(@_);
 }
 
@@ -1551,6 +1521,11 @@ sub new {
 sub name {
     my $self = shift;
     ''.$self->{name};
+}
+
+sub given {
+    my $self = shift;
+    $self->{given};
 }
 
 use overload
@@ -1589,7 +1564,7 @@ my %fatpacked;
 
 $fatpacked{"App/cpanminus.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'APP_CPANMINUS';
   package App::cpanminus;
-  our $VERSION = "1.7043";
+  our $VERSION = "1.7047";
   
   =encoding utf8
   
@@ -1665,8 +1640,7 @@ $fatpacked{"App/cpanminus.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'A
   to be updated.
   
   You're recommended to update the software or system if you can. If
-  that is impossible or difficult, use the C<-k> option with curl or an
-  alternative URL, C<https://git.io/cpanm>
+  that is impossible or difficult, use the C<-k> option with curl.
   
   =head1 DEPENDENCIES
   
@@ -1819,7 +1793,16 @@ $fatpacked{"App/cpanminus.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'A
   
   =item L<CPAN::Meta::YAML> Copyright 2010 Adam Kennedy
   
+  =item L<CPAN::Meta::Check> Copyright (c) 2012 by Leon Timmermans
+  
   =item L<File::pushd> Copyright 2012 David Golden
+  
+  =item L<parent> Copyright (c) 2007-10 Max Maischein
+  
+  =item L<Parse::PMFile> Copyright 1995 - 2013 by Andreas Koenig, Copyright 2013 by Kenichi Ishigaki
+  
+  =item L<String::ShellQuote> by Roderick Schertler
+  
   
   =back
   
@@ -2450,60 +2433,30 @@ $fatpacked{"App/cpanminus/script.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\
       require JSON::PP;
   
       my $json = JSON::PP::encode_json($data);
-      $json =~ s/([^a-zA-Z0-9_\-.])/uc sprintf("%%%02x",ord($1))/eg;
-      $json;
+      $self->uri_escape($json);
   }
   
-  # TODO extract this as a module?
-  sub version_to_query {
-      my($self, $module, $version) = @_;
+  sub decode_json {
+      my($self, $json) = @_;
+      require JSON::PP;
   
-      require CPAN::Meta::Requirements;
+      JSON::PP::decode_json($json);
+  }
   
-      my $requirements = CPAN::Meta::Requirements->new;
-      $requirements->add_string_requirement($module, $version || '0');
+  sub uri_escape {
+      my($self, $fragment) = @_;
+      $fragment =~ s/([^A-Za-z0-9\-\._~])/uc sprintf("%%%02X", ord($1))/eg;
+      $fragment;
+  }
   
-      my $req = $requirements->requirements_for_module($module);
-  
-      if ($req =~ s/^==\s*//) {
-          return {
-              term => { 'module.version' => $req },
-          };
-      } elsif ($req !~ /\s/) {
-          return {
-              range => { 'module.version_numified' => { 'gte' => $self->numify_ver_metacpan($req) } },
-          };
-      } else {
-          my %ops = qw(< lt <= lte > gt >= gte);
-          my(%range, @exclusion);
-          my @requirements = split /,\s*/, $req;
-          for my $r (@requirements) {
-              if ($r =~ s/^([<>]=?)\s*//) {
-                  $range{$ops{$1}} = $self->numify_ver_metacpan($r);
-              } elsif ($r =~ s/\!=\s*//) {
-                  push @exclusion, $self->numify_ver_metacpan($r);
-              }
-          }
-  
-          my @filters= (
-              { range => { 'module.version_numified' => \%range } },
-          );
-  
-          if (@exclusion) {
-              push @filters, {
-                  not => { or => [ map { +{ term => { 'module.version_numified' => $self->numify_ver_metacpan($_) } } } @exclusion ] },
-              };
-          }
-  
-          return @filters;
+  sub uri_params {
+      my($self, @params) = @_;
+      my @param_strings;
+      while (my $key = shift @params) {
+          my $value = shift @params;
+          push @param_strings, join '=', map $self->uri_escape($_), $key, $value;
       }
-  }
-  
-  # Apparently MetaCPAN numifies devel releases by stripping _ first
-  sub numify_ver_metacpan {
-      my($self, $ver) = @_;
-      $ver =~ s/_//g;
-      version->new($ver)->numify;
+      return join '&', @param_strings;
   }
   
   # version->new("1.00_00")->numify => "1.00_00" :/
@@ -2512,126 +2465,31 @@ $fatpacked{"App/cpanminus/script.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\
       eval version->new($ver)->numify;
   }
   
-  sub maturity_filter {
-      my($self, $module, $version) = @_;
-  
-      if ($version =~ /==/) {
-          # specific version: allow dev release
-          return;
-      } elsif ($self->{dev_release}) {
-          # backpan'ed dev releases are considered cancelled
-          return +{ not => { term => { status => 'backpan' } } };
-      } else {
-          return (
-              { not => { term => { status => 'backpan' } } },
-              { term => { maturity => 'released' } },
-          );
-      }
-  }
-  
-  sub by_version {
-      my %s = qw( latest 3  cpan 2  backpan 1 );
-      $b->{_score} <=> $a->{_score} ||                             # version: higher version that satisfies the query
-      $s{ $b->{fields}{status} } <=> $s{ $a->{fields}{status} };   # prefer non-BackPAN dist
-  }
-  
-  sub by_first_come {
-      $a->{fields}{date} cmp $b->{fields}{date};                   # first one wins, if all are in BackPAN/CPAN
-  }
-  
-  sub by_date {
-      $b->{fields}{date} cmp $a->{fields}{date};                   # prefer new uploads, when searching for dev
-  }
-  
-  sub find_best_match {
-      my($self, $match, $version) = @_;
-      return unless $match && @{$match->{hits}{hits} || []};
-      my @hits = $self->{dev_release}
-          ? sort { by_version || by_date } @{$match->{hits}{hits}}
-          : sort { by_version || by_first_come } @{$match->{hits}{hits}};
-      $hits[0]->{fields};
-  }
-  
   sub search_metacpan {
-      my($self, $module, $version) = @_;
+      my($self, $module, $version, $dev_release) = @_;
   
-      require JSON::PP;
+      my $metacpan_uri = 'http://fastapi.metacpan.org/v1/download_url/';
   
-      $self->chat("Searching $module ($version) on metacpan ...\n");
+      my $url = $metacpan_uri . $module;
   
-      my $metacpan_uri = 'http://api.metacpan.org/v0';
+      my $query = $self->uri_params(
+          ($version ? (version => $version) : ()),
+          ($dev_release ? (dev => 1) : ()),
+      );
+      $url .= '?' . $query
+          if length $query;
   
-      my @filter = $self->maturity_filter($module, $version);
+      my $dist_json = $self->get($url);
+      my $dist_meta = eval { $self->decode_json($dist_json) };
   
-      my $query = { filtered => {
-          (@filter ? (filter => { and => \@filter }) : ()),
-          query => { nested => {
-              score_mode => 'max',
-              path => 'module',
-              query => { custom_score => {
-                  metacpan_script => "score_version_numified",
-                  query => { constant_score => {
-                      filter => { and => [
-                          { term => { 'module.authorized' => JSON::PP::true() } },
-                          { term => { 'module.indexed' => JSON::PP::true() } },
-                          { term => { 'module.name' => $module } },
-                          $self->version_to_query($module, $version),
-                      ] }
-                  } },
-              } },
-          } },
-      } };
-  
-      my $module_uri = "$metacpan_uri/file/_search?source=";
-      $module_uri .= $self->encode_json({
-          query => $query,
-          fields => [ 'date', 'release', 'author', 'module', 'status' ],
-      });
-  
-      my($release, $author, $module_version);
-  
-      my $module_json = $self->get($module_uri);
-      my $module_meta = eval { JSON::PP::decode_json($module_json) };
-      my $match = $self->find_best_match($module_meta);
-      if ($match) {
-          $release = $match->{release};
-          $author = $match->{author};
-          my $module_matched = (grep { $_->{name} eq $module } @{$match->{module}})[0];
-          $module_version = $module_matched->{version};
-      }
-  
-      unless ($release) {
-          $self->chat("! Could not find a release matching $module ($version) on MetaCPAN.\n");
-          return;
-      }
-  
-      my $dist_uri = "$metacpan_uri/release/_search?source=";
-      $dist_uri .= $self->encode_json({
-          filter => { and => [
-              { term => { 'release.name' => $release } },
-              { term => { 'release.author' => $author } },
-          ]},
-          fields => [ 'download_url', 'stat', 'status' ],
-      });
-  
-      my $dist_json = $self->get($dist_uri);
-      my $dist_meta = eval { JSON::PP::decode_json($dist_json) };
-  
-      if ($dist_meta) {
-          $dist_meta = $dist_meta->{hits}{hits}[0]{fields};
-      }
       if ($dist_meta && $dist_meta->{download_url}) {
           (my $distfile = $dist_meta->{download_url}) =~ s!.+/authors/id/!!;
           local $self->{mirrors} = $self->{mirrors};
-          if ($dist_meta->{status} eq 'backpan') {
-              $self->{mirrors} = [ 'http://backpan.perl.org' ];
-          } elsif ($dist_meta->{stat}{mtime} > time()-24*60*60) {
-              $self->{mirrors} = [ 'http://cpan.metacpan.org' ];
-          }
-          return $self->cpan_module($module, $distfile, $module_version);
+          $self->{mirrors} = [ 'http://cpan.metacpan.org' ];
+          return $self->cpan_module($module, $distfile, $dist_meta->{version});
       }
   
-      $self->diag_fail("Finding $module on metacpan failed.");
+      $self->chat("! Could not find a release matching $module".($version?" ($version)":'')." on MetaCPAN.\n");
       return;
   }
   
@@ -2641,8 +2499,8 @@ $fatpacked{"App/cpanminus/script.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\
       my $found;
   
       if ($self->{dev_release} or $self->{metacpan}) {
-          $found = $self->search_metacpan($module, $version)   and return $found;
-          $found = $self->search_cpanmetadb($module, $version) and return $found;
+          $found = $self->search_metacpan($module, $version, $self->{dev_release})   and return $found;
+          $found = $self->search_cpanmetadb($module, $version, $self->{dev_release}) and return $found;
       } else {
           $found = $self->search_cpanmetadb($module, $version) and return $found;
           $found = $self->search_metacpan($module, $version)   and return $found;
@@ -2650,20 +2508,20 @@ $fatpacked{"App/cpanminus/script.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\
   }
   
   sub search_cpanmetadb {
-      my($self, $module, $version) = @_;
+      my($self, $module, $version, $dev_release) = @_;
   
   
       $self->chat("Searching $module ($version) on cpanmetadb ...\n");
   
       if ($self->with_version_range($version)) {
-          return $self->search_cpanmetadb_history($module, $version);
+          return $self->search_cpanmetadb_history($module, $version, $dev_release);
       } else {
-          return $self->search_cpanmetadb_package($module, $version);
+          return $self->search_cpanmetadb_package($module, $version, $dev_release);
       }
   }
   
   sub search_cpanmetadb_package {
-      my($self, $module, $version) = @_;
+      my($self, $module, $version, $dev_release) = @_;
   
       require CPAN::Meta::YAML;
   
@@ -3671,28 +3529,6 @@ $fatpacked{"App/cpanminus/script.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\
       return $dir;
   }
   
-  sub verify_checksums_signature {
-      my($self, $chk_file) = @_;
-  
-      require Module::Signature; # no fatpack
-  
-      $self->chat("Verifying the signature of CHECKSUMS\n");
-  
-      my $rv = eval {
-          local $SIG{__WARN__} = sub {}; # suppress warnings
-          my $v = Module::Signature::_verify($chk_file);
-          $v == Module::Signature::SIGNATURE_OK();
-      };
-      if ($rv) {
-          $self->chat("Verified OK!\n");
-      } else {
-          $self->diag_fail("Verifying CHECKSUMS signature failed: $rv\n");
-          return;
-      }
-  
-      return 1;
-  }
-  
   sub verify_archive {
       my($self, $file, $uri, $dist) = @_;
   
@@ -3714,7 +3550,6 @@ $fatpacked{"App/cpanminus/script.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\
       }
   
       $self->diag_ok;
-      $self->verify_checksums_signature($chk_file) or return;
       $self->verify_checksum($file, $chk_file);
   }
   
@@ -3775,7 +3610,7 @@ $fatpacked{"App/cpanminus/script.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\
           $self->diag_ok("Verified OK");
           return 1;
       } else {
-          $self->diag_fail("SIGNATURE verificaion for $dist->{filename} failed\n");
+          $self->diag_fail("SIGNATURE verification for $dist->{filename} failed\n");
           return;
       }
   }
@@ -3829,9 +3664,9 @@ $fatpacked{"App/cpanminus/script.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\
   }
   
   sub cpan_module {
-      my($self, $module, $dist, $version) = @_;
+      my($self, $module, $dist_file, $version) = @_;
   
-      my $dist = $self->cpan_dist($dist);
+      my $dist = $self->cpan_dist($dist_file);
       $dist->{module} = $module;
       $dist->{module_version} = $version if $version && $version ne 'undef';
   
@@ -5084,9 +4919,13 @@ $fatpacked{"App/cpanminus/script.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\
               my $opt = $self->{verbose} ? '' : '-q';
               my(undef, $root, @others) = `$unzip -t $zipfile`
                   or return undef;
-  
-              chomp $root;
-              $root =~ s{^\s+testing:\s+([^/]+)/.*?\s+OK$}{$1};
+              FILE: {
+                  chomp $root;
+                  if ($root !~ s{^\s+testing:\s+([^/]+)/.*?\s+OK$}{$1}) {
+                      $root = shift(@others);
+                      redo FILE if $root;
+                  }
+              }
   
               system "$unzip $opt $zipfile";
               return $root if -d $root;
@@ -6519,7 +6358,8 @@ CPAN_META
 
 $fatpacked{"CPAN/Meta/Check.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CPAN_META_CHECK';
   package CPAN::Meta::Check;
-  $CPAN::Meta::Check::VERSION = '0.012';
+  # vi:noet:sts=2:sw=2:ts=2
+  $CPAN::Meta::Check::VERSION = '0.018';
   use strict;
   use warnings;
   
@@ -6528,20 +6368,22 @@ $fatpacked{"CPAN/Meta/Check.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<
   our @EXPORT_OK = qw/check_requirements requirements_for verify_dependencies/;
   our %EXPORT_TAGS = (all => [ @EXPORT, @EXPORT_OK ] );
   
-  use CPAN::Meta::Prereqs '2.132830';
+  use CPAN::Meta::Prereqs 2.132830;
   use CPAN::Meta::Requirements 2.121;
   use Module::Metadata 1.000023;
   
   sub _check_dep {
   	my ($reqs, $module, $dirs) = @_;
   
-  	$module eq 'perl' and return ($reqs->accepts_module($module, $]) ? () : sprintf "Your Perl (%s) is not in the range '%s'", $], $reqs->requirements_for_module($module));
+  	return $reqs->accepts_module($module, $]) ? () : sprintf "Your Perl (%s) is not in the range '%s'", $], $reqs->requirements_for_module($module) if $module eq 'perl';
   
   	my $metadata = Module::Metadata->new_from_module($module, inc => $dirs);
   	return "Module '$module' is not installed" if not defined $metadata;
+  
   	my $version = eval { $metadata->version };
-  	return "Missing version info for module '$module'" if $reqs->requirements_for_module($module) and not $version;
-  	return sprintf 'Installed version (%s) of %s is not in range \'%s\'', $version, $module, $reqs->requirements_for_module($module) if not $reqs->accepts_module($module, $version || 0);
+  	return sprintf 'Installed version (%s) of %s is not in range \'%s\'',
+  			(defined $version ? $version : 'undef'), $module, $reqs->requirements_for_module($module)
+  		if not $reqs->accepts_module($module, $version || 0);
   	return;
   }
   
@@ -6549,9 +6391,11 @@ $fatpacked{"CPAN/Meta/Check.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<
   	my ($reqs, $module, $dirs) = @_;
   	my $metadata = Module::Metadata->new_from_module($module, inc => $dirs);
   	return if not defined $metadata;
+  
   	my $version = eval { $metadata->version };
-  	return "Missing version info for module '$module'" if not $version;
-  	return sprintf 'Installed version (%s) of %s is in range \'%s\'', $version, $module, $reqs->requirements_for_module($module) if $reqs->accepts_module($module, $version);
+  	return sprintf 'Installed version (%s) of %s is in range \'%s\'',
+  			(defined $version ? $version : 'undef'), $module, $reqs->requirements_for_module($module)
+  		if $reqs->accepts_module($module, $version);
   	return;
   }
   
@@ -6596,7 +6440,7 @@ $fatpacked{"CPAN/Meta/Check.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<
   
   =head1 VERSION
   
-  version 0.012
+  version 0.018
   
   =head1 SYNOPSIS
   
@@ -6629,8 +6473,6 @@ $fatpacked{"CPAN/Meta/Check.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<
   =item * L<Test::CheckDeps|Test::CheckDeps>
   
   =item * L<CPAN::Meta|CPAN::Meta>
-  
-  =for comment # vi:noet:sts=2:sw=2:ts=2
   
   =back
   
@@ -26343,6 +26185,105 @@ unshift @INC, bless \%fatpacked, $class;
   } # END OF FATPACK CODE
  BEGIN{ __mist::no_thanks( 'App::cpanminus::fatscript' ) } };
 ;BEGIN{
+#! perl
+
+# Parser.pm -- Getopt::Long object oriented interface
+# Author          : Johan Vromans
+# Created On      : Thu Nov  9 10:37:00 2023
+# Last Modified On: Sat Nov 11 17:48:49 2023
+# Update Count    : 13
+# Status          : Released
+
+package Getopt::Long::Parser;
+
+our $VERSION = 2.57;
+
+
+# Getopt::Long has a stub for Getopt::Long::Parser::new.
+use Getopt::Long ();
+no warnings 'redefine';
+
+sub new {
+    my $that = shift;
+    my $class = ref($that) || $that;
+    my %atts = @_;
+
+    # Register the callers package.
+    my $self = { caller_pkg => (caller)[0] };
+
+    bless ($self, $class);
+
+    my $default_config = Getopt::Long::_default_config();
+
+    # Process config attributes.
+    if ( defined $atts{config} ) {
+	my $save = Getopt::Long::Configure ($default_config, @{$atts{config}});
+	$self->{settings} = Getopt::Long::Configure ($save);
+	delete ($atts{config});
+    }
+    # Else use default config.
+    else {
+	$self->{settings} = $default_config;
+    }
+
+    if ( %atts ) {		# Oops
+	die(__PACKAGE__.": unhandled attributes: ".
+	    join(" ", sort(keys(%atts)))."\n");
+    }
+
+    $self;
+}
+
+use warnings 'redefine';
+
+
+sub configure {
+    my ($self) = shift;
+
+    # Restore settings, merge new settings in.
+    my $save = Getopt::Long::Configure ($self->{settings}, @_);
+
+    # Restore orig config and save the new config.
+    $self->{settings} = Getopt::Long::Configure ($save);
+}
+
+
+sub getoptions {
+    my ($self) = shift;
+
+    return $self->getoptionsfromarray(\@ARGV, @_);
+}
+
+sub getoptionsfromarray {
+    my ($self) = shift;
+
+    # Restore config settings.
+    my $save = Getopt::Long::Configure ($self->{settings});
+
+    # Call main routine.
+    my $ret = 0;
+    $Getopt::Long::caller = $self->{caller_pkg};
+
+    eval {
+	# Locally set exception handler to default, otherwise it will
+	# be called implicitly here, and again explicitly when we try
+	# to deliver the messages.
+	local ($SIG{__DIE__}) = 'DEFAULT';
+	$ret = Getopt::Long::GetOptionsFromArray (@_);
+    };
+
+    # Restore saved settings.
+    Getopt::Long::Configure ($save);
+
+    # Handle errors and return value.
+    die ($@) if $@;
+    return $ret;
+}
+
+
+1;
+ BEGIN{ __mist::no_thanks( 'Getopt::Long::Parser' ) } };
+;BEGIN{
 package Devel::CheckBin;
 use strict;
 use warnings;
@@ -26403,9 +26344,9 @@ package Devel::CheckLib;
 use 5.00405; #postfix foreach
 use strict;
 use vars qw($VERSION @ISA @EXPORT);
-$VERSION = '1.10';
+$VERSION = '1.16';
 use Config qw(%Config);
-use Text::ParseWords 'quotewords';
+use Text::ParseWords qw(quotewords shellwords);
 
 use File::Spec;
 use File::Temp;
@@ -26495,20 +26436,79 @@ sub _parse_line {
     return(@pieces);
 }
 
+sub _parsewords {
+    return shellwords @_ if $^O ne 'MSWin32';
+    # for Win32, take off "" but leave \
+    map { my $s=$_; $s =~ s/^"(.*)"$/$1/; $s } grep defined && length, quotewords '\s+', 1, @_;
+}
+
+sub _compile_cmd {
+    my ($Config_cc, $cc, $cfile, $exefile, $incpaths, $ld, $Config_libs, $lib, $libpaths) = @_;
+    my @sys_cmd = @$cc;
+    if ( $Config_cc eq 'cl' ) {                 # Microsoft compiler
+	# this is horribly sensitive to the order of arguments
+	push @sys_cmd,
+	    $cfile,
+	    (defined $lib ? "${lib}.lib" : ()),
+	    "/Fe$exefile",
+	    (map '/I'.$_, @$incpaths),
+	    "/link",
+	    @$ld,
+	    _parsewords($Config_libs),
+	    (defined $lib ? map '/libpath:'.$_, @$libpaths : ()),
+	    ;
+    } elsif($Config_cc =~ /bcc32(\.exe)?/) {    # Borland
+	push @sys_cmd,
+	    @$ld,
+	    (map "-I$_", @$incpaths),
+	    "-o$exefile",
+	    (defined $lib ? ((map "-L$_", @$libpaths), "-l$lib") : ()),
+	    $cfile,
+	    ;
+    } else { # Unix-ish: gcc, Sun, AIX (gcc, cc), ...
+	push @sys_cmd,
+	    (map "-I$_", @$incpaths),
+	    $cfile,
+	    (!defined $lib ? () : (
+	      (map "-L$_", @$libpaths),
+	      ($^O eq 'darwin' ? (map { "-Wl,-rpath,$_" } @$libpaths) : ()),
+	      "-l$lib",
+	    )),
+	    @$ld,
+	    "-o", $exefile,
+	    ;
+    }
+    @sys_cmd;
+}
+
+sub _make_cfile {
+    my ($use_headers, $function, $debug) = @_;
+    my $code = '';
+    $code .= qq{#include <$_>\n} for @$use_headers;
+    $code .= "int main(int argc, char *argv[]) { ".($function || 'return 0;')." }\n";
+    if ($debug) {
+	(my $c = $code) =~ s:^:# :gm;
+	warn "# Code:\n$c\n";
+    }
+    my ($ch, $cfile) = File::Temp::tempfile(
+	'assertlibXXXXXXXX', SUFFIX => '.c'
+    );
+    print $ch $code;
+    close $ch;
+    (my $ofile = $cfile) =~ s/\.c$/$Config{_o}/;
+    ($cfile, $ofile);
+}
+
 sub assert_lib {
     my %args = @_;
-    my (@libs, @libpaths, @headers, @incpaths);
-
-    # FIXME: these four just SCREAM "refactor" at me
-    @libs = (ref($args{lib}) ? @{$args{lib}} : $args{lib}) 
-        if $args{lib};
-    @libpaths = (ref($args{libpath}) ? @{$args{libpath}} : $args{libpath}) 
-        if $args{libpath};
-    @headers = (ref($args{header}) ? @{$args{header}} : $args{header}) 
-        if $args{header};
-    @incpaths = (ref($args{incpath}) ? @{$args{incpath}} : $args{incpath}) 
-        if $args{incpath};
+    $args{$_} = [$args{$_}]
+        for grep $args{$_} && !ref($args{$_}), qw(lib libpath header incpath);
+    my @libs = @{$args{lib} || []};
+    my @libpaths = @{$args{libpath} || []};
+    my @headers = @{$args{header} || []};
+    my @incpaths = @{$args{incpath} || []};
     my $analyze_binary = $args{analyze_binary};
+    my $execute = !$args{not_execute};
 
     my @argv = @ARGV;
     push @argv, _parse_line('\s+', 0, $ENV{PERL_MM_OPT}||'');
@@ -26526,15 +26526,14 @@ sub assert_lib {
         }
     }
 
-    # using special form of split to trim whitespace
     if(defined($args{LIBS})) {
-        foreach my $arg (split(' ', $args{LIBS})) {
+        foreach my $arg (_parsewords($args{LIBS})) {
             die("LIBS argument badly-formed: $arg\n") unless($arg =~ /^-[lLR]/);
             push @{$arg =~ /^-l/ ? \@libs : \@libpaths}, substr($arg, 2);
         }
     }
     if(defined($args{INC})) {
-        foreach my $arg (split(' ', $args{INC})) {
+        foreach my $arg (_parsewords($args{INC})) {
             die("INC argument badly-formed: $arg\n") unless($arg =~ /^-I/);
             push @incpaths, substr($arg, 2);
         }
@@ -26549,131 +26548,51 @@ sub assert_lib {
     # first figure out which headers we can't find ...
     for my $header (@headers) {
         push @use_headers, $header;
-        my($ch, $cfile) = File::Temp::tempfile(
-            'assertlibXXXXXXXX', SUFFIX => '.c'
-        );
-        my $ofile = $cfile;
-        $ofile =~ s/\.c$/$Config{_o}/;
-        print $ch qq{#include <$_>\n} for @use_headers;
-        print $ch qq{int main(void) { return 0; }\n};
-        close($ch);
+        my ($cfile, $ofile) = _make_cfile(\@use_headers, '', $args{debug});
         my $exefile = File::Temp::mktemp( 'assertlibXXXXXXXX' ) . $Config{_exe};
-        my @sys_cmd;
-        # FIXME: re-factor - almost identical code later when linking
-        if ( $Config{cc} eq 'cl' ) {                 # Microsoft compiler
-            require Win32;
-            @sys_cmd = (
-                @$cc,
-                $cfile,
-                "/Fe$exefile",
-                (map { '/I'.Win32::GetShortPathName($_) } @incpaths),
-		"/link",
-		@$ld,
-		split(' ', $Config{libs}),
-            );
-        } elsif($Config{cc} =~ /bcc32(\.exe)?/) {    # Borland
-            @sys_cmd = (
-                @$cc,
-                @$ld,
-                (map { "-I$_" } @incpaths),
-                "-o$exefile",
-                $cfile
-            );
-        } else { # Unix-ish: gcc, Sun, AIX (gcc, cc), ...
-            @sys_cmd = (
-                @$cc,
-                @$ld,
-                $cfile,
-                (map { "-I$_" } @incpaths),
-                "-o", "$exefile"
-            );
-        }
+        my @sys_cmd = _compile_cmd($Config{cc}, $cc, $cfile, $exefile, \@incpaths, $ld, $Config{libs});
         warn "# @sys_cmd\n" if $args{debug};
         my $rv = $args{debug} ? system(@sys_cmd) : _quiet_system(@sys_cmd);
-        push @missing, $header if $rv != 0 || ! -x $exefile;
+        push @missing, $header if $rv != 0 || ! -f $exefile;
         _cleanup_exe($exefile);
         unlink $cfile;
     }
 
     # now do each library in turn with headers
-    my($ch, $cfile) = File::Temp::tempfile(
-        'assertlibXXXXXXXX', SUFFIX => '.c'
-    );
-    my $ofile = $cfile;
-    $ofile =~ s/\.c$/$Config{_o}/;
-    print $ch qq{#include <$_>\n} foreach (@headers);
-    print $ch "int main(int argc, char *argv[]) { ".($args{function} || 'return 0;')." }\n";
-    close($ch);
+    my ($cfile, $ofile) = _make_cfile(\@use_headers, @args{qw(function debug)});
     for my $lib ( @libs ) {
+        last if $Config{cc} eq 'CC/DECC';          # VMS
         my $exefile = File::Temp::mktemp( 'assertlibXXXXXXXX' ) . $Config{_exe};
-        my @sys_cmd;
-        if ( $Config{cc} eq 'cl' ) {                 # Microsoft compiler
-            require Win32;
-            my @libpath = map { 
-                q{/libpath:} . Win32::GetShortPathName($_)
-            } @libpaths; 
-            # this is horribly sensitive to the order of arguments
-            @sys_cmd = (
-                @$cc,
-                $cfile,
-                "${lib}.lib",
-                "/Fe$exefile", 
-                (map { '/I'.Win32::GetShortPathName($_) } @incpaths),
-                "/link",
-                @$ld,
-                split(' ', $Config{libs}),
-                (map {'/libpath:'.Win32::GetShortPathName($_)} @libpaths),
-            );
-        } elsif($Config{cc} eq 'CC/DECC') {          # VMS
-        } elsif($Config{cc} =~ /bcc32(\.exe)?/) {    # Borland
-            @sys_cmd = (
-                @$cc,
-                @$ld,
-                "-o$exefile",
-                (map { "-I$_" } @incpaths),
-                (map { "-L$_" } @libpaths),
-                "-l$lib",
-                $cfile);
-        } else {                                     # Unix-ish
-                                                     # gcc, Sun, AIX (gcc, cc)
-            @sys_cmd = (
-                @$cc,
-                @$ld,
-                $cfile,
-                "-o", "$exefile",
-                (map { "-I$_" } @incpaths),
-                (map { "-L$_" } @libpaths),
-                "-l$lib",
-            );
-        }
+        my @sys_cmd = _compile_cmd($Config{cc}, $cc, $cfile, $exefile, \@incpaths, $ld, $Config{libs}, $lib, \@libpaths);
         warn "# @sys_cmd\n" if $args{debug};
-        local $ENV{LD_RUN_PATH} = join(":", @libpaths).":".$ENV{LD_RUN_PATH} unless $^O eq 'MSWin32';
+        local $ENV{LD_RUN_PATH} = join(":", grep $_, @libpaths, $ENV{LD_RUN_PATH}) unless $^O eq 'MSWin32' or $^O eq 'darwin';
         local $ENV{PATH} = join(";", @libpaths).";".$ENV{PATH} if $^O eq 'MSWin32';
         my $rv = $args{debug} ? system(@sys_cmd) : _quiet_system(@sys_cmd);
-        if ($rv != 0 || ! -x $exefile) {
+        if ($rv != 0 || ! -f $exefile) {
             push @missing, $lib;
         }
         else {
+            chmod 0755, $exefile;
             my $absexefile = File::Spec->rel2abs($exefile);
             $absexefile = '"'.$absexefile.'"' if $absexefile =~ m/\s/;
-            if (system($absexefile) != 0) {
-                push @wrongresult, $lib;
+            warn "# Execute($execute): $absexefile\n" if $args{debug};
+            if ($execute) {
+                my $retval = system($absexefile);
+                warn "# return value: $retval\n" if $args{debug};
+                push @wrongresult, $lib if $retval != 0;
             }
-            else {
-                if ($analyze_binary) {
-                    push @wronganalysis, $lib if !$analyze_binary->($lib, $exefile)
-                }
-            }
+            push @wronganalysis, $lib
+                if $analyze_binary and !$analyze_binary->($lib, $exefile);
         }
         _cleanup_exe($exefile);
-    } 
+    }
     unlink $cfile;
 
-    my $miss_string = join( q{, }, map { qq{'$_'} } @missing );
+    my $miss_string = join( q{, }, map qq{'$_'}, @missing );
     die("Can't link/include C library $miss_string, aborting.\n") if @missing;
-    my $wrong_string = join( q{, }, map { qq{'$_'} } @wrongresult);
+    my $wrong_string = join( q{, }, map qq{'$_'}, @wrongresult);
     die("wrong result: $wrong_string\n") if @wrongresult;
-    my $analysis_string = join(q{, }, map { qq{'$_'} } @wronganalysis );
+    my $analysis_string = join(q{, }, map qq{'$_'}, @wronganalysis );
     die("wrong analysis: $analysis_string") if @wronganalysis;
 }
 
@@ -26692,14 +26611,12 @@ sub _cleanup_exe {
         $pdbfile =~ s/$Config{_exe}$/.pdb/;
 	push @rmfiles, $ilkfile, $pdbfile;
     }
-    foreach (@rmfiles) {
-	if ( -f $_ ) {
-	    unlink $_ or warn "Could not remove $_: $!";
-	}
+    foreach (grep -f, @rmfiles) {
+	unlink $_ or warn "Could not remove $_: $!";
     }
     return
 }
-    
+
 # return ($cc, $ld)
 # where $cc is an array ref of compiler name, compiler flags
 # where $ld is an array ref of linker flags
@@ -26707,14 +26624,15 @@ sub _findcc {
     my ($debug, $user_ccflags, $user_ldflags) = @_;
     # Need to use $keep=1 to work with MSWin32 backslashes and quotes
     my $Config_ccflags =  $Config{ccflags};  # use copy so ASPerl will compile
+    $Config_ccflags =~ s:-O\S*::; # stop GCC optimising away test code
     my @Config_ldflags = ();
     for my $config_val ( @Config{qw(ldflags)} ){
         push @Config_ldflags, $config_val if ( $config_val =~ /\S/ );
     }
-    my @ccflags = grep { length } quotewords('\s+', 1, $Config_ccflags||'', $user_ccflags||'');
-    my @ldflags = grep { length && $_ !~ m/^-Wl/ } quotewords('\s+', 1, @Config_ldflags, $user_ldflags||'');
+    my @ccflags = grep { length } _parsewords($Config_ccflags||'', $user_ccflags||'');
+    my @ldflags = grep { length && $_ !~ m/^-Wl/ } _parsewords(@Config_ldflags, $user_ldflags||'');
     my @paths = split(/$Config{path_sep}/, $ENV{PATH});
-    my @cc = split(/\s+/, $Config{cc});
+    my @cc = _parsewords($Config{cc});
     if (check_compiler ($cc[0], $debug)) {
 	return ( [ @cc, @ccflags ], \@ldflags );
     }
@@ -26743,11 +26661,10 @@ sub check_compiler
 {
     my ($compiler, $debug) = @_;
     if (-f $compiler && -x $compiler) {
-	if ($debug) {
-	    warn("# Compiler seems to be $compiler\n");
-	}
+	warn "# Compiler seems to be $compiler\n" if $debug;
 	return 1;
     }
+    warn "# Compiler was not $compiler\n" if $debug;
     return '';
 }
 
@@ -27202,7 +27119,7 @@ sub notest ($) {
 sub script ($$) {
   my ( $self, $phase, $path, @args ) = @_;
   die "Unknown phase $phase" unless exists $self->{script}{$phase};
-  $self->store_dist_info( [ script => $phase ], $path, @args );
+  $self->store_dist_info( [ script => $phase ], [ $path, @args ]);
 }
 
 sub get_assertions           { my $self = shift; return @{ $self->{assert}}   }
@@ -28164,8 +28081,7 @@ $PREREQUISITE_DISTS = [
                         'MooX::late',
                         'Path::Class',
                         'Probe::Perl',
-                        'Software::License',
-                        'Software::License::None',
+                        'Software::License~0.102250',
                         'Sort::Key',
                         'Version::Next',
                         'local::lib~2.00',
