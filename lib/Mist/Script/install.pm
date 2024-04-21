@@ -304,7 +304,7 @@ source $MIST_ENV
 VERSION_ARCH_PATH="%s"
 LOCAL_LIB="$MIST_ROOT/perl5/$VERSION_ARCH_PATH"
 
-eval `mist_run perl -Mlocal::lib=$LOCAL_LIB`;
+eval `mist_run perl -Mlocal::lib=--no-create,$LOCAL_LIB`;
 export PATH="$MIST_ROOT/bin:$MIST_ROOT/sbin:$MIST_ROOT/script:$PATH"
 export PERL5LIB="$MIST_ROOT/lib:$PERL5LIB"
 export LD_LIBRARY_PATH=$MIST_ROOT/perl5/lib:$LD_LIBRARY_PATH
@@ -317,7 +317,7 @@ close $mist_run;
 my $global_mist_run = File::Spec->catfile( $mist_home, 'mist-run' );
 unlink $global_mist_run;
 symlink( $mist_run_fn, $global_mist_run )
-  or warn "Permission denied while creating ./mpan-run\n";
+  or warn "Permission denied while creating ./mist-run\n";
 
 for my $script_dir (qw/ bin sbin script /) {
 
