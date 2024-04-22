@@ -6,7 +6,6 @@ use Path::Class ();
 
 use Moo;
 use MooX::late;
-use MooX::HandlesVia;
 
 use Types::Standard qw( Str Int );
 use Type::Utils qw( declare as coerce from );

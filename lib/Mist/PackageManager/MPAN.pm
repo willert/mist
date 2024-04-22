@@ -75,7 +75,7 @@ sub begin_work {
 
   $self->mpan_dist->traverse( sub{
     my ( $dist, $cont ) = @_;
-    $self->distribution_index( $dist => {
+    $self->distribution_index( "$dist" => {
       'mtime'        => $dist->stat->mtime,
       'digest'       => md5_hex( $dist->slurp ),
     }) unless $dist->is_dir;
@@ -130,8 +130,8 @@ sub commit {
     # return $cont->() if $self->has_distribution_index_for( $dist )
     #   and $self->distribution_index( $dist )->{digest} eq md5_hex( $dist->slurp );
 
-    return $cont->() if $self->has_distribution_index_for( $dist )
-      and $self->distribution_index( $dist )->{mtime} == $dist->stat->mtime;
+    return $cont->() if $self->has_distribution_index_for( "$dist" )
+      and $self->distribution_index( "$dist" )->{mtime} == $dist->stat->mtime;
 
     $self->add_distribution_to_index( $dist );
     $updated_packages += 1;
