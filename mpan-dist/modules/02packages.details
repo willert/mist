@@ -50,7 +50,7 @@ CPAN::PackageDetails::PerlHash     0.263  B/BD/BDFOY/CPAN-PackageDetails-0.264.t
 CPAN::PackageDetails::Redis        0.263  B/BD/BDFOY/CPAN-PackageDetails-0.264.tar.gz
 CPAN::ParseDistribution             1.54  D/DC/DCANTRELL/CPAN-ParseDistribution-1.54.tar.gz
 CPAN::ParseDistribution::Unix          0  D/DC/DCANTRELL/CPAN-ParseDistribution-1.54.tar.gz
-Capture::Tiny                       0.48  D/DA/DAGOLDEN/Capture-Tiny-0.48.tar.gz
+Capture::Tiny                       0.50  D/DA/DAGOLDEN/Capture-Tiny-0.50.tar.gz
 Class::Inspector                    1.36  P/PL/PLICEASE/Class-Inspector-1.36.tar.gz
 Class::Inspector::Functions         1.36  P/PL/PLICEASE/Class-Inspector-1.36.tar.gz
 Class::Load                         0.25  E/ET/ETHER/Class-Load-0.25.tar.gz
@@ -290,7 +290,7 @@ Minilla::Migrate                       0  S/SK/SKAJI/Minilla-v3.1.23.tar.gz
 Minilla::ModuleMaker::ExtUtilsMakeMaker     0  S/SK/SKAJI/Minilla-v3.1.23.tar.gz
 Minilla::ModuleMaker::ModuleBuild      0  S/SK/SKAJI/Minilla-v3.1.23.tar.gz
 Minilla::ModuleMaker::ModuleBuildTiny     0  S/SK/SKAJI/Minilla-v3.1.23.tar.gz
-Minilla::Profile::Base             <%  %>  S/SK/SKAJI/Minilla-v3.1.23.tar.gz
+Minilla::Profile::Base                <%  %>
 Minilla::Profile::Default              0  S/SK/SKAJI/Minilla-v3.1.23.tar.gz
 Minilla::Profile::ExtUtilsMakeMaker     0  S/SK/SKAJI/Minilla-v3.1.23.tar.gz
 Minilla::Profile::ModuleBuild          0  S/SK/SKAJI/Minilla-v3.1.23.tar.gz
@@ -531,7 +531,7 @@ Text::MicroTemplate::File              0  K/KA/KAZUHO/Text-MicroTemplate-0.24.ta
 Text::Template                      1.61  M/MS/MSCHOUT/Text-Template-1.61.tar.gz
 Text::Template::Preprocess          1.61  M/MS/MSCHOUT/Text-Template-1.61.tar.gz
 Text::Tweaker                          0  R/RJ/RJBS/Sub-Exporter-0.991.tar.gz
-Try::Tiny                           0.31  E/ET/ETHER/Try-Tiny-0.31.tar.gz
+Try::Tiny                           0.32  E/ET/ETHER/Try-Tiny-0.32.tar.gz
 Type::Coercion                     2.004000  T/TO/TOBYINK/Type-Tiny-2.004000.tar.gz
 Type::Coercion::FromMoose          2.004000  T/TO/TOBYINK/Type-Tiny-2.004000.tar.gz
 Type::Coercion::Union              2.004000  T/TO/TOBYINK/Type-Tiny-2.004000.tar.gz
