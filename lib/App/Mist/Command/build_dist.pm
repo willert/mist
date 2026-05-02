@@ -7,7 +7,8 @@ use App::Mist -command;
 use Minilla::CLI;
 use Minilla::Util qw(cmd);
 
-no thanks 'CPAN::Uploader';
+# no thanks 'CPAN::Uploader'; <-- breaks on perl 5.40 and above
+BEGIN { $inc{'CPAN/Uploader.pm'} //= __FILE__; }
 
 sub execute {
   my ( $self, $opt, $args ) = @_;
