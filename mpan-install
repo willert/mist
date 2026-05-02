@@ -28085,8 +28085,7 @@ $PREREQUISITE_DISTS = [
                         'Software::License~0.102250',
                         'Sort::Key',
                         'Version::Next',
-                        'local::lib~2.00',
-                        'thanks'
+                        'local::lib~2.00'
                       ];
 ;
 };  BEGIN{ __mist::no_thanks( 'Mist::Script::install' ) } };
