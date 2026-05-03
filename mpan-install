@@ -28076,6 +28076,7 @@ $PREREQUISITE_DISTS = [
                         'Getopt::Long~2.42',
                         'Minilla~v3.1.2',
                         'Module::CPANfile~1.0002',
+                        'Module::Install',
                         'Module::Path',
                         'Moo',
                         'MooX::HandlesVia',
