@@ -22,6 +22,10 @@ package Mist::Script::usage;
    --parent BRANCH
        use another named branch as basis for branch to work on
 
+   --prove
+       after install, run `prove -l t` against this env
+       (pairs with --all-available-versions for compat sweeps)
+
    --all-available-versions
        run this mpan-install against all installed perl versions
 
