@@ -27,7 +27,7 @@ BEGIN {
     die <<"ERROR_MSG";
 Mist is not yet installed for perl $Config{version}-$Config{archname}.
 Please run:
-  cd $basedir; ./mpan-install --perl=$Config{version}
+  cd $basedir; ./mpan-install --perlbrew=$Config{version}
 ERROR_MSG
   }
 
