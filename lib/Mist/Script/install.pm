@@ -12,7 +12,7 @@ our @CMD_OPTS;
 BEGIN {
   my $help = 0;
   my $p = Getopt::Long::Parser->new;
-  $p->configure(qw/ default pass_through /);
+  $p->configure(qw/ default pass_through no_auto_abbrev /);
   $p->getoptions( 'help|?' => \$help );
   pod2usage( -verbose => 99, -sections => [qw/ NAME SYNOPSIS VERSION /])
     if $help;
@@ -22,7 +22,7 @@ BEGIN {
 my $all_versions;
 BEGIN {
   my $p = Getopt::Long::Parser->new;
-  $p->configure(qw/ default pass_through /);
+  $p->configure(qw/ default pass_through no_auto_abbrev /);
   $p->getoptions( 'all-available-versions' => \$all_versions );
 }
 
@@ -31,7 +31,7 @@ my %dist_options;
 BEGIN {
   @CMD_OPTS = @ARGV;
   my $p = Getopt::Long::Parser->new;
-  $p->configure(qw/ default pass_through /);
+  $p->configure(qw/ default pass_through no_auto_abbrev /);
   $p->getoptionsfromarray(
     \@CMD_OPTS,
     \%dist_options,

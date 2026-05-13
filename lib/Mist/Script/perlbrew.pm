@@ -25,7 +25,7 @@ my $pb_version;
 {
   my $p = Getopt::Long::Parser->new;
   my %arg_spec = ( "perlbrew=s" => \$pb_version );
-  $p->configure(qw/ default pass_through /);
+  $p->configure(qw/ default pass_through no_auto_abbrev /);
 
   # also remove opts from global argument list
   $p->getoptionsfromarray( \@Mist::Script::install::CMD_OPTS, %arg_spec );
