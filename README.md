@@ -1,19 +1,23 @@
 # App::Mist
 
-A per-project Perl environment manager: pin a Perl version, declare your
+A per-project Perl environment manager built on top of
+[perlbrew](https://perlbrew.pl/) and `cpanm`: pin a Perl version, declare your
 prereqs, and ship a single self-contained installer that boots a complete
 `./perl5/` from scratch on any target host.
 
 Think of it as Carton with two extra things baked in:
 
-1. **Perl version pinning via perlbrew** — your `mistfile` declares
-   `perl '5.20.3'`; the installer ensures that exact Perl is available before
-   touching any modules.
+1. **Perl version pinning via perlbrew.** Your `mistfile` declares
+   `perl '5.20.3'`; the installer drives perlbrew to make sure that exact
+   Perl is available (installing it if needed and permitted) and re-execs
+   itself under it before touching any modules. mist never builds Perl on its
+   own — it just orchestrates perlbrew. See *Perl versions and perlbrew*
+   below.
 2. **A fatpacked, self-contained installer.** `mist compile` produces
    `mpan-install` — a single Perl script that embeds `cpanm`, the prereq list,
    and (optionally) a bundled CPAN mirror in `./mpan-dist/`. The target host
-   needs only Perl and a C toolchain; no network access to CPAN is required
-   when the bundle is used as a mirror.
+   needs only a system Perl (plus a C toolchain) to bootstrap; no network
+   access to CPAN is required when the bundle is used as a mirror.
 
 The combination is what makes mist useful where Carton alone falls short:
 reproducible builds on hosts that may not match your dev box's Perl, and
