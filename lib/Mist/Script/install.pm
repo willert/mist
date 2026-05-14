@@ -134,6 +134,23 @@ chmod( $perm | 0755, $cmd_wrapper );
 Mist::Script::perl->init
   if eval{ Mist::Script::perl->can( 'init' ) };
 
+{
+  # Fail fast if the target perl's Module::CoreList doesn't know about $].
+  # Must run after Mist::Script::perl->init (so $] is the target perl) and
+  # before cpanm loads, so we beat cpanm's own check mid-resolution.
+  require Module::CoreList;
+  unless ( exists $Module::CoreList::version{ $] + 0 } ) {
+    die sprintf(
+      "Module::CoreList %s (loaded from %s) has no entries for perl %s.\n"
+      . "Install/upgrade Module::CoreList in this perl, or re-run\n"
+      . "./mpan-install under a perl whose core Module::CoreList is current.\n",
+      $Module::CoreList::VERSION,
+      $INC{ "Module/CoreList.pm" },
+      $],
+    );
+  }
+}
+
 # let cpanm parse the remaining options and figure out what
 # modules are requested for installation (if any)
 my $cpanm = App::cpanminus::script->new;
@@ -240,12 +257,17 @@ if ( eval { $dist->can( 'get_assertions' ) }) {
 my @callstack;
 if ( @CUSTOM_MODULES ) {
   @callstack = $dist->build_cpanm_call_stack(
-    { %dist_options, 'skip-prepended' => 1, 'skip-notest' => 1 },
+    { %dist_options,
+      'skip-prepended' => 1,
+      'skip-notest' => 1,
+      'skip-core-satisfied' => 1,
+    },
     @CUSTOM_MODULES
   );
 } else {
   @callstack = $dist->build_cpanm_call_stack(
-    \%dist_options, $PREREQUISITE_DISTS
+    { %dist_options, 'skip-core-satisfied' => 1 },
+    $PREREQUISITE_DISTS
   );
 }
 

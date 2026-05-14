@@ -196,7 +196,7 @@ sub build_cpanm_call_stack {
   my @prepended = $self->get_prepended_modules;
 
   # state variables
-  my ( %version, %scheduled, %dont_test, @callstack );
+  my ( %version, %scheduled, %dont_test, %core_satisfies, @callstack );
 
   # build hash of modules we don't want to test
   %dont_test = map{ $_ => 1 } $self->get_modules_not_to_test;
@@ -205,6 +205,7 @@ sub build_cpanm_call_stack {
   my $push_module_on_stack = sub{
     my $module = shift;
     return if $scheduled{ $module };
+    return if $core_satisfies{ $module };
 
     my $mod_spec = $version{ $module } ?
       join( q{~}, $module, $version{$module} ) : $module;
@@ -236,6 +237,28 @@ sub build_cpanm_call_stack {
 
     # prepended version requirement superseded cpanfile requirement
     $version{ $module } = $version if $version;
+  }
+
+  # filter out modules already satisfied by core for the running perl
+  if ( $opts{'skip-core-satisfied'} ) {
+    require Module::CoreList;
+    require CPAN::Meta::Requirements;
+    my $core = $Module::CoreList::version{ $] + 0 } || {};
+    for my $module ( @prepended, @prereqs ) {
+      my $core_ver = $core->{ $module };
+      next unless defined $core_ver;
+      my $want = $version{ $module };
+      if ( not defined $want or not length $want ) {
+        $core_satisfies{ $module } = 1;
+        next;
+      }
+      my $accepted = eval {
+        my $req = CPAN::Meta::Requirements->new;
+        $req->add_string_requirement( $module, $want );
+        $req->accepts_module( $module, $core_ver );
+      };
+      $core_satisfies{ $module } = 1 if $accepted;
+    }
   }
 
   # schedule prepended modules
