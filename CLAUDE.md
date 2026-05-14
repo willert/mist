@@ -16,10 +16,10 @@ Two things make this codebase unusual:
 All commands assume `./perl5/` already exists (i.e. someone has run `./mpan-install` at least once for the current Perl version). Run from the project root.
 
 - **Bootstrap / rebuild local Perl env:** `./mpan-install` (or `./mpan-install --perl 5.20.3` to pin Perl). Reads `cpanfile` + `mistfile`, installs into `./perl5/perl-<ver>-<arch>/`.
-- **Run a script under this project's env:** `./mist-run <cmd…>` (symlink to `perl5/bin/mist-run`) or `./perl5/bin/mist <subcommand>`.
+- **Run a script under this project's env:** `./mist-run <cmd…>` (symlink to `perl5/bin/mist-run`).
 - **Tests:** `prove -Ilib t/` (the suite is tiny — `t/mistfile.t` is essentially the only test; it exercises `Mist::Environment` parsing of the fixtures in `t/share/`).
 - **Single test:** `prove -Ilib -v t/mistfile.t`.
-- **Regenerate `mpan-install`** after changing any of the modules fatpacked into it: `./perl5/bin/mist compile`. This is the canonical way to update the installer; do not hand-edit `mpan-install`.
+- **Regenerate `mpan-install`** after changing any of the modules fatpacked into it: `mist compile`.
 - **Rebuild the *bundled* `mpan-dist/` from scratch** (rarely needed — only when fatpacked deps in the installer itself break): see `docs/bootstrap.sh` and `rebuild-5.20.3.sh`.
 - **Re-index `mpan-dist/`** after manually dropping a tarball in: `mist index`.
 - **Read-only inspection of the resolved mistfile:** `mist lib_paths` prints the library paths the env would use.
