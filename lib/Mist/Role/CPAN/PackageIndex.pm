@@ -146,9 +146,15 @@ sub add_distribution_to_index {
     }
 
     my $do_index = sub {
+      # Stringify in case $version is a version object (Module::Metadata
+      # and many .pm files using `version->declare(...)` return objects).
+      # CPAN::PackageDetails::_parse_version warns "Invalid version format"
+      # on objects and falls back to 0, producing thousands of warnings
+      # per reindex. The stringification overload yields the canonical
+      # version string and silences the noise.
       $index->add_entry(
         package_name => $pkg,
-        version      => $version // 0,
+        version      => defined $version ? "$version" : 0,
         path         => $current_path,
       );
     };
