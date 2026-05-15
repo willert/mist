@@ -149,7 +149,14 @@ sub add_distribution_to_index {
         next if $other_dist eq $current_dist;
 
         my $key = join "\0", $other_dist, $current_dist;
-        next if $self->_seen_collisions->{ $key }++;
+        next if exists $self->_seen_collisions->{ $key };
+        $self->_seen_collisions->{ $key } = {
+          existing_dist => $other_dist,
+          existing_path => "$other_path",
+          incoming_dist => $current_dist,
+          incoming_path => "$current_path",
+          first_pkg     => $pkg,
+        };
 
         printf STDERR
           "  [WARNING] Cross-dist collision: %s <-> %s (first: %s)\n"
@@ -207,11 +214,73 @@ sub reindex_distributions {
 
   $self->_seen_collisions( {} );
 
-  for my $path ( $self->_dist_tarballs_lowest_version_first ) {
+  my @paths = $self->_dist_tarballs_lowest_version_first;
+  for my $path ( @paths ) {
     $self->add_distribution_to_index( $path, $index );
   }
 
   $self->write_index( $index );
+  $self->_print_reindex_report( $index, \@paths );
+}
+
+# After a full reindex, summarise anything the build-master may want to
+# act on: cross-dist collisions (recap of inline warnings) and tarballs
+# under mpan-dist that no longer have any package entry pointing at
+# them (older versions superseded by highest-version-wins, dists whose
+# packages were stolen by a competing tarball, etc.).
+sub _print_reindex_report {
+  my ( $self, $index, $collected_paths ) = @_;
+
+  my $collisions = $self->_seen_collisions;
+  my @obsolete   = $self->_unreferenced_tarballs( $index, $collected_paths );
+
+  return unless %$collisions or @obsolete;
+
+  print STDERR "\n=== mist index report ===\n";
+
+  if ( %$collisions ) {
+    print STDERR "\nCross-dist collisions (one signal per dist pair; "
+               . "cleanup is iterative — re-run after resolving):\n";
+    for my $c ( map { $collisions->{ $_ } } sort keys %$collisions ) {
+      printf STDERR "  %s <-> %s (first: %s)\n    %s\n    %s\n",
+        $c->{existing_dist}, $c->{incoming_dist}, $c->{first_pkg},
+        $c->{existing_path}, $c->{incoming_path};
+    }
+  }
+
+  if ( @obsolete ) {
+    print STDERR "\nObsolete tarballs (in mpan-dist but unreferenced from "
+               . "02packages — typically superseded by a higher-version sibling, "
+               . "or out-competed for every package by another dist):\n";
+    print STDERR "  $_\n" for @obsolete;
+  }
+
+  print STDERR "\n";
+}
+
+# Diff the collected tarball set against paths actually referenced from
+# the freshly-built index. Returns relative paths in the same form
+# 02packages uses (e.g. R/RJ/RJBS/Foo-1.0.tar.gz or ../../vendor/Foo.tar.gz).
+sub _unreferenced_tarballs {
+  my ( $self, $index, $collected_paths ) = @_;
+
+  my $authors_id = $self->cpan_dist_root->subdir(qw/ authors id /);
+
+  # as_unique_sorted_list returns the final entries (highest version
+  # per package) — the same set that actually lands in 02packages. The
+  # raw entries hash also contains lower-version entries that get
+  # dropped at write time, which would mask the obsolescence. The
+  # method returns an arrayref even in list context, so deref.
+  my ( $final ) = $index->entries->as_unique_sorted_list;  # list ctx; arrayref
+  my %referenced = map { ( $_->path => 1 ) } @$final;
+
+  my @obsolete;
+  for my $path ( @$collected_paths ) {
+    my $rel = Path::Class::file( "$path" )->relative( $authors_id );
+    push @obsolete, "$rel" unless $referenced{ "$rel" };
+  }
+
+  return sort @obsolete;
 }
 
 # Collect every tarball under authors/id/ (and vendor/ when present),
