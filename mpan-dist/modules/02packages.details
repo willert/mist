@@ -5,7 +5,7 @@ Description: Package names for my private CPAN
 Disallow-Alpha-Versions: 0
 File: 02packages.details.txt
 Intended-For: My private CPAN
-Last-Updated: Fri, 15 May 2026 05:45:47 GMT
+Last-Updated: Fri, 15 May 2026 05:54:44 GMT
 Line-Count: 0
 URL: http://example.com/MyCPAN/modules/02packages.details.txt
 Written-By: /home/willert/Devel/mist/script/mist using CPAN::PackageDetails0.264

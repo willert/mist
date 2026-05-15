@@ -34,6 +34,15 @@ has cpan_index_file => (
   lazy_build => 1,
 );
 
+# Transient state across a single reindex_distributions run: tracks
+# which (existing_dist, incoming_dist) collision pairs have already
+# emitted a warning, so we don't spam one per affected package. Reset
+# at the start of each reindex.
+has _seen_collisions => (
+  is      => 'rw',
+  default => sub { {} },
+);
+
 sub create_empty_package_index {
   my $self = shift;
 
@@ -125,10 +134,12 @@ sub add_distribution_to_index {
 
     # Cross-dist collision warning: when a package already in the index
     # points at a tarball whose parsed dist name differs from ours, the
-    # index can't tell which dist canonically owns the package. Surface
-    # it so the build-master can remove the obsolete tarball. (The inner
-    # hash from get_hash is keyed by VERSION, not path — read paths off
-    # the entry objects themselves.)
+    # index can't tell which dist canonically owns the package. Dedup
+    # per (existing_dist, incoming_dist) so the build-master sees one
+    # signal per dist pair, not one per affected package. Cleanup is
+    # iterative — fix the surfaced pair, re-run, the next pair (if any)
+    # appears. (Inner hash from get_hash is keyed by VERSION, not path —
+    # read paths off the entry objects.)
     if ( $index->already_added( $pkg ) ) {
       my $existing = $index->entries->get_hash->{ $pkg } || {};
       for my $entry ( values %$existing ) {
@@ -136,12 +147,16 @@ sub add_distribution_to_index {
         next if $other_path eq "$current_path";
         my $other_dist = CPAN::DistnameInfo->new( $other_path )->dist // '';
         next if $other_dist eq $current_dist;
+
+        my $key = join "\0", $other_dist, $current_dist;
+        next if $self->_seen_collisions->{ $key }++;
+
         printf STDERR
-          "  [WARNING] Cross-dist collision for %s:\n"
-          . "    existing: %s (%s)\n"
-          . "    incoming: %s (%s)\n"
-          . "    incoming wins; remove obsolete tarball to silence.\n",
-          $pkg, $other_path, $other_dist, $current_path, $current_dist;
+          "  [WARNING] Cross-dist collision: %s <-> %s (first: %s)\n"
+          . "    %s\n"
+          . "    %s\n"
+          . "    Remove one tarball to resolve.\n",
+          $other_dist, $current_dist, $pkg, $other_path, $current_path;
       }
     }
 
@@ -189,6 +204,8 @@ sub parse_distribution {
 sub reindex_distributions {
   my $self  = shift;
   my $index = $self->create_empty_package_index;
+
+  $self->_seen_collisions( {} );
 
   for my $path ( $self->_dist_tarballs_lowest_version_first ) {
     $self->add_distribution_to_index( $path, $index );
