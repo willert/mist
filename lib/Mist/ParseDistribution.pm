@@ -119,7 +119,7 @@ sub _index_distroot {
   }
 
   my $no_index = ref $meta->{no_index} eq 'HASH' ? $meta->{no_index} : {};
-  my %ignored_dirs  = map { $_ => 1 } qw/ t xt inc /;
+  my %ignored_dirs  = map { $_ => 1 } qw/ t xt inc test /;
   $ignored_dirs{ $_ } = 1 for _listify( $no_index->{directory} );
   my %ignored_files = map { $_ => 1 } _listify( $no_index->{file} );
   my %ignored_pkgs  = map { $_ => 1 } _listify( $no_index->{package} );

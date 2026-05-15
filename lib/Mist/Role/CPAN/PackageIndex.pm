@@ -6,6 +6,7 @@ use MooX::late;
 
 use Path::Class ();
 use Carp;
+use version 0.74 ();
 
 use Mist::ParseDistribution;
 use CPAN::DistnameInfo;
@@ -117,13 +118,38 @@ sub add_distribution_to_index {
     $modules->{ $main_module } = $dist_name->version // 0;
   }
 
+  my $current_path = $dist_info->module_path;
+  my $current_dist = $dist_name->dist // '';
+
   while ( my ( $pkg, $version ) = each %$modules ) {
+
+    # Cross-dist collision warning: when a package already in the index
+    # points at a tarball whose parsed dist name differs from ours, the
+    # index can't tell which dist canonically owns the package. Surface
+    # it so the build-master can remove the obsolete tarball. (The inner
+    # hash from get_hash is keyed by VERSION, not path — read paths off
+    # the entry objects themselves.)
+    if ( $index->already_added( $pkg ) ) {
+      my $existing = $index->entries->get_hash->{ $pkg } || {};
+      for my $entry ( values %$existing ) {
+        my $other_path = $entry->path;
+        next if $other_path eq "$current_path";
+        my $other_dist = CPAN::DistnameInfo->new( $other_path )->dist // '';
+        next if $other_dist eq $current_dist;
+        printf STDERR
+          "  [WARNING] Cross-dist collision for %s:\n"
+          . "    existing: %s (%s)\n"
+          . "    incoming: %s (%s)\n"
+          . "    incoming wins; remove obsolete tarball to silence.\n",
+          $pkg, $other_path, $other_dist, $current_path, $current_dist;
+      }
+    }
 
     my $do_index = sub {
       $index->add_entry(
         package_name => $pkg,
         version      => $version // 0,
-        path         => $dist_info->module_path,
+        path         => $current_path,
       );
     };
 
@@ -155,23 +181,49 @@ sub parse_distribution {
 }
 
 sub reindex_distributions {
-  my $self = shift;
-
+  my $self  = shift;
   my $index = $self->create_empty_package_index;
 
-  $self->cpan_dist_root->subdir(qw/ authors id /)->traverse( sub{
-    my ( $dist, $cont ) = @_;
-    $self->add_distribution_to_index( $dist, $index ) unless $dist->is_dir;
-    return $cont->();
-  });
-
-  $self->cpan_dist_root->subdir(qw/ vendor /)->traverse( sub{
-      my ( $dist, $cont ) = @_;
-      $self->add_distribution_to_index( $dist, $index ) unless $dist->is_dir;
-      return $cont->();
-  }) if -d $self->cpan_dist_root->subdir(qw/ vendor /)->stringify;
+  for my $path ( $self->_dist_tarballs_lowest_version_first ) {
+    $self->add_distribution_to_index( $path, $index );
+  }
 
   $self->write_index( $index );
+}
+
+# Collect every tarball under authors/id/ (and vendor/ when present),
+# then sort so that within each dist the lowest-versioned tarball is
+# visited first and the highest is visited last. CPAN::PackageDetails
+# uses last-writer-wins for duplicate package entries, so this makes
+# every submodule attribute to the highest-version tarball of its dist.
+sub _dist_tarballs_lowest_version_first {
+  my $self = shift;
+
+  my @paths;
+  for my $root (
+    $self->cpan_dist_root->subdir(qw/ authors id /),
+    $self->cpan_dist_root->subdir(qw/ vendor /),
+  ) {
+    next unless -d $root->stringify;
+    $root->traverse( sub {
+      my ( $f, $cont ) = @_;
+      push @paths, $f unless $f->is_dir;
+      return $cont->();
+    });
+  }
+
+  return
+    map  { $_->[2] }
+    sort {
+         $a->[0] cmp $b->[0]
+      || ( eval { version->parse( $a->[1] ) <=> version->parse( $b->[1] ) } || 0 )
+      || $a->[2] cmp $b->[2]
+    }
+    map  {
+      my $info = CPAN::DistnameInfo->new( "$_" );
+      [ $info->dist // '', $info->version // 0, $_ ];
+    }
+    @paths;
 }
 
 sub write_index {
