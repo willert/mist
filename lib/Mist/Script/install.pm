@@ -234,6 +234,13 @@ local $ENV{HOME} = $workspace;
 local $ENV{MIST_APP_ROOT} = $mist_home;
 local $ENV{MIST_PERL5_LIBDIR} = File::Spec->catdir( $mist_home, $LOCAL_LIB_DIR );
 
+# Silence GNU tar's "Ignoring unknown extended header keyword 'SCHILY.*'"
+# spam when cpanm extracts tarballs created by Solaris star. bsdtar ignores
+# TAR_OPTIONS and doesn't emit these warnings, so this is GNU-tar-only.
+local $ENV{TAR_OPTIONS} = join q{ },
+  '--warning=no-unknown-keyword',
+  ( defined $ENV{TAR_OPTIONS} ? $ENV{TAR_OPTIONS} : () );
+
 my $dist = DISTRIBUTION->distinfo;
 
 system( @$_ ) for $dist->get_scripts( 'prepare' );

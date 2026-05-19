@@ -14,8 +14,8 @@
 # Getopt::Long.pm -- Universal options parsing
 # Author          : Johan Vromans
 # Created On      : Tue Sep 11 15:00:12 1990
-# Last Modified On: Sat Nov 11 17:48:41 2023
-# Update Count    : 1808
+# Last Modified On: Tue Jun 11 13:18:11 2024
+# Update Count    : 1811
 # Status          : Released
 
 ################ Module Preamble ################
@@ -28,7 +28,8 @@ use warnings;
 
 package Getopt::Long;
 
-our $VERSION = 2.57;
+# Must match Getopt::Long::Parser::VERSION!
+our $VERSION = 2.58;
 
 use Exporter;
 use base qw(Exporter);
@@ -1196,7 +1197,7 @@ sub FindOption ($$$$$) {
 		warn ("Value \"", $arg, "\" invalid for option ",
 		      $opt, " (",
 		      $type eq 'o' ? "extended " : '',
-		      "number expected)\n");
+		      "integer number expected)\n");
 		$error++;
 		# Push back.
 		unshift (@$argv, $starter.$rest) if defined $rest;
@@ -26187,16 +26188,20 @@ unshift @INC, bless \%fatpacked, $class;
 ;BEGIN{
 #! perl
 
-# Parser.pm -- Getopt::Long object oriented interface
+# Parser.pm -- Getopt::Long object-oriented interface
 # Author          : Johan Vromans
 # Created On      : Thu Nov  9 10:37:00 2023
-# Last Modified On: Sat Nov 11 17:48:49 2023
-# Update Count    : 13
+# Last Modified On: Tue Jun 11 13:17:57 2024
+# Update Count    : 16
 # Status          : Released
+
+use strict;
+use warnings;
 
 package Getopt::Long::Parser;
 
-our $VERSION = 2.57;
+# Must match Getopt::Long::VERSION!
+our $VERSION = 2.58;
 
 
 # Getopt::Long has a stub for Getopt::Long::Parser::new.
@@ -27902,6 +27907,13 @@ BASH
 local $ENV{HOME} = $workspace;
 local $ENV{MIST_APP_ROOT} = $mist_home;
 local $ENV{MIST_PERL5_LIBDIR} = File::Spec->catdir( $mist_home, $LOCAL_LIB_DIR );
+
+# Silence GNU tar's "Ignoring unknown extended header keyword 'SCHILY.*'"
+# spam when cpanm extracts tarballs created by Solaris star. bsdtar ignores
+# TAR_OPTIONS and doesn't emit these warnings, so this is GNU-tar-only.
+local $ENV{TAR_OPTIONS} = join q{ },
+  '--warning=no-unknown-keyword',
+  ( defined $ENV{TAR_OPTIONS} ? $ENV{TAR_OPTIONS} : () );
 
 my $dist = DISTRIBUTION->distinfo;
 
