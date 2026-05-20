@@ -34,7 +34,7 @@ sub run {
   my @steps = qw(
                   CheckUntrackedFiles
                   CheckOrigin
-                  BumpMainVersion
+                  BumpVersion
                   CheckChangesNoEdit
                   RegenerateFiles
                   RunHooks

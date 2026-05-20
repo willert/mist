@@ -109,9 +109,15 @@ project *itself* as a CPAN-style distribution — nothing to do with
 
 - **`mist build_dist`** — run the test suite, then build a release tarball
   (`Minilla dist`).
-- **`mist release`** — full Minilla release: tag, upload to CPAN, build.
-- **`mist local_release`** — a limited local release: tag and release
-  without the CPAN upload.
+- **`mist release`** — full Minilla release: build a tarball, test against
+  the *extracted* tarball (clean-room), tag and commit. Refuses to run
+  unless `minil.toml` sets `[release] do_not_upload_to_cpan` — a guard
+  against an accidental CPAN push, since mist no longer targets CPAN
+  publishing.
+- **`mist local_release`** — cut a release *point* in this project's own
+  git history: bump version, update `Changes`, test in-tree, commit, tag.
+  Builds *no* tarball — the dist other projects consume is built on demand
+  by `mist merge`, from the current checkout.
 
 ## The mistfile DSL
 

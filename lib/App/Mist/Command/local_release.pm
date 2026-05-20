@@ -7,7 +7,7 @@ use App::Mist -command;
 use Minilla::CLI;
 
 # no thanks 'CPAN::Uploader'; <-- breaks on perl 5.40 and above
-BEGIN { $inc{'CPAN/Uploader.pm'} //= __FILE__; }
+BEGIN { $INC{'CPAN/Uploader.pm'} //= __FILE__; }
 
 sub execute {
   my ( $self, $opt, $args ) = @_;
@@ -25,7 +25,7 @@ __END__
 
 =head1 NAME
 
-App::Mist::Command::local_release - release this project without uploading to CPAN
+App::Mist::Command::local_release - cut a tagged release commit without building a tarball
 
 =head1 SYNOPSIS
 
@@ -33,12 +33,19 @@ App::Mist::Command::local_release - release this project without uploading to CP
 
 =head1 DESCRIPTION
 
-Runs L<Minilla>'s C<local_release>: it tags and releases the current
-project as a distribution but does B<not> upload it to CPAN. Use it for
-in-house distributions that are shared through other channels -- a private
-mirror, or another project's C<mist merge>.
+Cuts a release B<point> in the current project's own git history: it bumps
+the version, updates F<Changes>, runs the test suite in-tree, then commits
+and tags. It does B<not> build a distribution tarball and does B<not>
+upload anything.
 
-Extra arguments are passed through to Minilla.
+The tarball that other projects consume is built on demand by
+L<mist merge|App::Mist::Command::merge>, which builds a fresh dist from a
+sibling project's I<current checkout> -- so C<local_release>'s job is only
+to leave that checkout at a clean, versioned, tagged commit.
+
+Use L<mist release|App::Mist::Command::release> instead when you want the
+full pipeline: a built tarball, clean-room tests against it, and a release
+commit. Extra arguments are passed through to Minilla.
 
 =head1 SEE ALSO
 

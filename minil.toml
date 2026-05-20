@@ -5,3 +5,10 @@ script_files = ['bin/*', 'sbin/*', 'script/*']
 
 [release]
 do_not_upload_to_cpan = true
+
+# Replaces Minilla's default no_index list, so the defaults must be repeated
+# here verbatim. The two lib/ entries keep the bundled Minilla overrides out
+# of both the version bump and the mpan-dist index -- they are Minilla-namespace
+# plugins, not App-Mist's own API surface.
+[no_index]
+directory = ['t', 'xt', 'inc', 'share', 'eg', 'examples', 'author', 'builder', 'lib/Minilla', 'lib/Mist/Minilla']
