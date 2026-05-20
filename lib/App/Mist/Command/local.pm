@@ -22,7 +22,7 @@ sub execute {
     '--local-lib-contained' => $ctx->local_lib,
     '--mirror-only',
     # use cpan for the requested package
-    '--mirror' => 'http://search.cpan.org/CPAN',
+    '--mirror' => 'https://www.cpan.org/',
   );
 
   my @modules  = grep{ !/^-/ } @$args;
