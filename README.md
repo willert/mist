@@ -54,6 +54,65 @@ load XS modules built for the project's 5.20. First failure is usually
 run under it). Reserve `mist-run` for tools that *should* run under the
 project's Perl.
 
+## Commands
+
+`mist` is an `App::Cmd` application: `mist commands` lists every subcommand
+with a one-line abstract, and `mist help <command>` shows its usage. Most
+commands carry only the abstract; `mist inject` has full help (`mist help
+inject`, or `perldoc App::Mist::Command::inject`). The set below is grouped
+by what each command touches.
+
+### Building and installing the environment
+
+- **`mist compile`** — regenerate `./mpan-install` from `mistfile` +
+  `cpanfile`. Run after any change to either. (See *The two entry points*
+  above.)
+- **`mist init`** — the one-shot bootstrap: `compile`, then inject every
+  declared dependency into `mpan-dist/`, run any `prepare`/`finalize`
+  scripts, and finally run `./mpan-install`. `-R` / `--rebuild` first wipes
+  `mpan-dist/` and `perl5/` and re-merges every `merge`d dist, for a
+  from-scratch rebuild.
+- **`mist run <cmd…>`** — run a command under the project's `perl5/`
+  environment. Equivalent to `./mist-run <cmd…>`, but works before
+  `mist-run` exists and regardless of the current directory.
+- **`mist lib_paths`** — print the project's `lib/` and `local::lib`
+  library paths, one per line. Handy for wiring up an editor or external
+  tool.
+
+### Curating the bundled mirror (`mpan-dist/`)
+
+- **`mist inject <module-spec>…`** — stage one or more distributions into
+  `mpan-dist/` and re-index. The workhorse; see its dedicated help
+  (`mist help inject`).
+- **`mist merge <path>`** — pull another mist-managed project (given by its
+  path on disk) into this one: inject its built distribution plus its own
+  mistfile's dependency stack, then splice a marker-delimited
+  `merge '…' => sub { … }` block into the local `mistfile`. This is how
+  those blocks get created — see the `merge` directive under *The mistfile
+  DSL*.
+- **`mist upgrade`** — find distributions in `mpan-dist/` that have newer
+  releases on CPAN (via `cpan-outdated`) and re-inject the newest versions.
+- **`mist index`** — rebuild `mpan-dist/modules/02packages.details*` from
+  whatever tarballs are physically present. Use after manually adding or
+  removing a tarball.
+- **`mist clean`** — delete tarballs under `mpan-dist/` that the index no
+  longer references — the superseded-version garbage collector.
+- **`mist local <module>…`** — install a module straight into `perl5/`
+  *without* vendoring it into `mpan-dist/`. For throwaway experiments: the
+  change does not survive a `--rebuild` and will not ship to other hosts.
+
+### Releasing this project as a distribution
+
+These wrap [Minilla](https://metacpan.org/pod/Minilla) and act on the
+project *itself* as a CPAN-style distribution — nothing to do with
+`mpan-dist/`.
+
+- **`mist build_dist`** — run the test suite, then build a release tarball
+  (`Minilla dist`).
+- **`mist release`** — full Minilla release: tag, upload to CPAN, build.
+- **`mist local_release`** — a limited local release: tag and release
+  without the CPAN upload.
+
 ## The mistfile DSL
 
 A `mistfile` is Perl code, not data. It's eval'd in a sandbox that exposes
