@@ -8,6 +8,8 @@ use App::Mist -command;
 use Mist::Role::cpanminus;
 use Mist::PackageManager::MPAN;
 
+sub usage_desc { '%c local %o <module>...' }
+
 sub execute {
   my ( $self, $opt, $args ) = @_;
   my $ctx = $self->app->ctx;
@@ -34,3 +36,40 @@ sub execute {
 }
 
 1;
+
+__END__
+
+=pod
+
+=head1 NAME
+
+App::Mist::Command::local - install a module into perl5/ without vendoring it
+
+=head1 SYNOPSIS
+
+  mist local Some::Module
+  mist local --notest Some::Module
+
+=head1 DESCRIPTION
+
+Installs one or more modules straight into the project's F<./perl5/> with
+C<cpanm>, fetching from CPAN. Unlike C<inject>, it does B<not> save the
+distribution into F<mpan-dist/>.
+
+The install is therefore local and temporary: it will not survive a
+C<mist init --rebuild>, and it will not ship to other hosts. Use C<local>
+for throwaway experiments; for anything a reproducible build depends on,
+use L<mist inject|App::Mist::Command::inject> and declare it in F<cpanfile>.
+
+Arguments beginning with C<-> are passed through to C<cpanm> as options;
+the remaining arguments are taken as module names.
+
+=head1 SEE ALSO
+
+L<App::Mist::Command::inject>
+
+=head1 AUTHORS
+
+Sebastian Willert <s.willert@wecare.de>
+
+=cut

@@ -21,6 +21,8 @@ use Cwd;
 use Try::Tiny;
 use Capture::Tiny ':all';
 
+sub usage_desc { '%c merge %o <project-path>' }
+
 sub execute {
   my ( $self, $opt, $args ) = @_;
   my $ctx = $self->app->ctx;
@@ -151,3 +153,44 @@ MERGE_SPEC
 }
 
 1;
+
+__END__
+
+=pod
+
+=head1 NAME
+
+App::Mist::Command::merge - merge another mist-managed project into this one
+
+=head1 SYNOPSIS
+
+  mist merge ../other-project
+
+=head1 DESCRIPTION
+
+Pulls another mist-managed project, given by its path on disk, into the
+current one. C<merge> builds and injects that project's distribution --
+together with the dependency call-stack from its own F<mistfile> -- into
+F<mpan-dist/>, and then splices a marker-delimited block into the local
+F<mistfile>:
+
+  ### <<<[Other::Dist] - keep this line intact
+  merge 'Other::Dist' => sub { ... };
+  ### [Other::Dist]>>> - keep this line intact
+
+This is how those C<merge> blocks are created in the first place -- see the
+C<merge> directive of the mistfile DSL. Re-running C<merge> on a project
+whose block already exists refreshes it in place.
+
+Because the F<mistfile> changes, C<merge> reminds you to run
+L<mist compile|App::Mist::Command::compile> afterwards.
+
+=head1 SEE ALSO
+
+L<App::Mist::Command::compile>, L<App::Mist::Command::init>
+
+=head1 AUTHORS
+
+Sebastian Willert <s.willert@wecare.de>
+
+=cut

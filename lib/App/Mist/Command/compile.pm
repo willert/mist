@@ -133,3 +133,41 @@ VERSION_INFO
 }
 
 1;
+
+__END__
+
+=pod
+
+=head1 NAME
+
+App::Mist::Command::compile - regenerate mpan-install from mistfile and cpanfile
+
+=head1 SYNOPSIS
+
+  mist compile
+
+=head1 DESCRIPTION
+
+Reads the project's F<mistfile> and F<cpanfile> and regenerates
+F<./mpan-install> -- the fatpacked, self-contained installer that bootstraps
+F<./perl5/> on any host. Run C<compile> after every change to either file.
+
+Before generating, C<compile> sanity-checks the project: when a
+F<MANIFEST.SKIP> is present it scans the non-skipped files for hard-coded
+C<#!.../bin/perl> shebang lines and warns about them (portable scripts
+should use C<#!/usr/bin/env perl>).
+
+Together with the generated F<./mpan-install>, C<compile> is one of the two
+commands you run routinely. See also L<mist init|App::Mist::Command::init>,
+which chains C<compile>, dependency injection and C<mpan-install> into a
+single step.
+
+=head1 SEE ALSO
+
+L<App::Mist::Command::init>
+
+=head1 AUTHORS
+
+Sebastian Willert <s.willert@wecare.de>
+
+=cut

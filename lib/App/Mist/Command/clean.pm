@@ -86,3 +86,38 @@ sub execute {
 }
 
 1;
+
+__END__
+
+=pod
+
+=head1 NAME
+
+App::Mist::Command::clean - remove superseded tarballs from mpan-dist
+
+=head1 SYNOPSIS
+
+  mist clean
+
+=head1 DESCRIPTION
+
+Compares the distribution tarballs physically present under
+F<mpan-dist/authors/> (and F<mpan-dist/vendor/>, if present) against the
+package index F<mpan-dist/modules/02packages.details.txt.gz>, and deletes
+every tarball the index no longer references.
+
+This is the garbage collector for distribution versions left behind when
+C<inject>, C<merge> or C<upgrade> supersede an older release with a newer
+one. It prints C<No stale distributions found> when there is nothing to
+remove, and does not modify the index itself.
+
+=head1 SEE ALSO
+
+L<App::Mist::Command::index>, L<App::Mist::Command::inject>,
+L<App::Mist::Command::upgrade>
+
+=head1 AUTHORS
+
+Sebastian Willert <s.willert@wecare.de>
+
+=cut

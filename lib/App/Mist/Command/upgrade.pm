@@ -48,3 +48,47 @@ sub execute {
 }
 
 1;
+
+__END__
+
+=pod
+
+=head1 NAME
+
+App::Mist::Command::upgrade - re-inject outdated distributions in mpan-dist
+
+=head1 SYNOPSIS
+
+  mist upgrade
+
+=head1 DESCRIPTION
+
+Catches the project's installed F<./perl5/> up to the module versions
+vendored in F<mpan-dist/>. Using the bundled C<cpan-outdated> helper, it
+compares each module installed under F<perl5/> against the version recorded
+in F<mpan-dist/>'s package index, and reinstalls -- from F<mpan-dist/> --
+every module whose installed copy lags behind. It prints C<All modules up
+to date> when nothing lags.
+
+This closes a gap that C<./mpan-install> cannot. C<mpan-install> resolves
+the F<cpanfile> prerequisites through C<cpanm>, which reinstalls a
+distribution only when its requirement is I<unsatisfied>: an older version
+that still satisfies the F<cpanfile> pin is left untouched, even once
+F<mpan-dist/> vendors something newer. C<upgrade> keys off the raw
+installed-versus-vendored version comparison instead, so it pulls the newer
+vendored release in regardless -- without the full F<perl5/> wipe and cold
+rebuild that would otherwise be the only way to get there.
+
+The typical trigger: F<mpan-dist/> is version-controlled, a teammate
+commits newer vendored tarballs, you pull them, and C<mist upgrade> brings
+your F<perl5/> into line incrementally.
+
+=head1 SEE ALSO
+
+L<App::Mist::Command::inject>, L<App::Mist::Command::init>
+
+=head1 AUTHORS
+
+Sebastian Willert <s.willert@wecare.de>
+
+=cut

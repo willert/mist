@@ -101,3 +101,60 @@ sub execute {
 }
 
 1;
+
+__END__
+
+=pod
+
+=head1 NAME
+
+App::Mist::Command::init - bootstrap the project environment in one step
+
+=head1 SYNOPSIS
+
+  mist init
+  mist init -R          # wipe mpan-dist/ and perl5/, rebuild from scratch
+
+=head1 DESCRIPTION
+
+The one-shot bootstrap. C<init> runs, in order:
+
+=over
+
+=item *
+
+C<compile> -- regenerate F<mpan-install>;
+
+=item *
+
+switch into the project's pinned perlbrew Perl;
+
+=item *
+
+inject every declared dependency into F<mpan-dist/> -- the C<prepend>ed
+modules first, then the C<notest> modules, then the F<cpanfile> prereqs;
+
+=item *
+
+run any C<prepare> / C<finalize> scripts declared in the mistfile;
+
+=item *
+
+run F<./mpan-install> to populate F<./perl5/>.
+
+=back
+
+With C<-R> / C<--rebuild> it first deletes F<mpan-dist/> and F<perl5/>
+outright and re-C<merge>s every merged sub-distribution, for a clean
+from-scratch rebuild.
+
+=head1 SEE ALSO
+
+L<App::Mist::Command::compile>, L<App::Mist::Command::inject>,
+L<App::Mist::Command::merge>
+
+=head1 AUTHORS
+
+Sebastian Willert <s.willert@wecare.de>
+
+=cut
