@@ -2,6 +2,18 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+  - release: seal the clean-room dist-test to the project's pinned
+    mpan-dist mirror -- install with --mirror-only under $^X, without
+    --with-develop, --notest for dependency suites, and RELEASE_TESTING
+    cleared for the install. Ends live-CPAN leakage and the foreign-perl
+    XS ABI crash during a release.
+  - merge: resolve strictly from the pinned mpan mirrors, never live
+    CPAN, so merging a sibling no longer drags the consumer's whole
+    dependency closure forward.
+  - notest: schedule notest modules in mistfile declaration order, not
+    hash order, so a notest module that is a dependency of another can
+    be listed first and installed --notest before the dependent.
+
 0.34 2014-05-26T19:30:01Z
 
   - Switch from linking to bash exec wrapper in perl5/{bin,sbin,script}
