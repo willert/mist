@@ -267,9 +267,12 @@ sub build_cpanm_call_stack {
   }
 
   # schedule remaining modules that are not tested before the remaining
-  # prerequisites to avoid prereqs pulling in this module without --notest
+  # prerequisites to avoid prereqs pulling in this module without --notest.
+  # Iterate in mistfile declaration order (not hash order) so a notest
+  # module that is a dependency of another notest module can be listed
+  # first and thus installed --notest before the dependent pulls it in.
   unless ( $opts{'skip-notest'} ) {
-    $push_module_on_stack->( $_ ) for keys %dont_test;
+    $push_module_on_stack->( $_ ) for $self->get_modules_not_to_test;
   }
 
   # schedule remaining prerequisites
