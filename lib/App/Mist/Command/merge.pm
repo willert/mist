@@ -65,6 +65,7 @@ sub execute {
     project_root => $ctx->project_root,
     local_lib    => $ctx->local_lib,
     workspace    => $ctx->workspace_lib,
+    mirror_only  => 1,    # merge resolves strictly from the pinned mpans
   });
 
   my $other_mistfile = $path->file( 'mistfile' );

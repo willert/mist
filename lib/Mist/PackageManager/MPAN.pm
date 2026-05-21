@@ -31,7 +31,16 @@ has mirror_list => (
   },
 );
 
+# When set, resolve strictly from the file:// mpan mirrors: no cpan.org in
+# the mirror list, and --mirror-only on the cpanm call. `merge` sets this --
+# merging a sibling must never reach out to live CPAN.
+has mirror_only => (
+  is      => 'ro',
+  default => sub { 0 },
+);
+
 sub _build_mirror_list {
+  my $self = shift;
   my @mirrors;
   if ( my $mist_root = $ENV{MIST_APP_ROOT}) {
     printf STDERR "Mist root: %s\n", $mist_root;
@@ -42,7 +51,7 @@ sub _build_mirror_list {
     push @mirrors, "file://${mpan}" if -d "$mpan";
   }
 
-  push @mirrors, 'http://www.cpan.org/';
+  push @mirrors, 'http://www.cpan.org/' unless $self->mirror_only;
 
   return \@mirrors;
 }
@@ -110,7 +119,7 @@ sub install {
 
     $self->cpanm_mirror_options,
 
-    # '--mirror-only',
+    ( $self->mirror_only ? '--mirror-only' : () ),
     # '--cascade-search'
   );
 
