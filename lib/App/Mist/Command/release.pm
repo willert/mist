@@ -22,6 +22,43 @@ sub execute {
          . "release could push to CPAN -- which mist no longer supports.\n"
          . "For a genuine CPAN upload, run `minil release` directly.\n";
 
+  # Seal the clean-room dist-test to the project's pinned mpan-dist mirror.
+  # Stock Minilla::Project::verify_prereqs shells `cpanm --installdeps
+  # --with-develop .`, which resolves against live CPAN -- defeating the
+  # pinning, and pulling a develop closure that mpan-dist does not vendor.
+  # Resolve runtime/test prereqs from mpan-dist only, drop --with-develop,
+  # and run cpanm under $^X so a foreign-perl cpanm shebang cannot apply.
+  # --notest: the clean-room dist-test's subject is core itself; the pinned
+  # mpan-dist set is already the vetting, so a dependency's own (often
+  # abandoned/fragile) test suite must not be able to block core's release.
+  my $mpan_mirror = 'file://' . $ctx->mpan_dist;
+  my $cpanm       = $ctx->cpanm_executable;
+  {
+    no warnings 'redefine';
+    *Minilla::Project::verify_prereqs = sub {
+      return unless $Minilla::AUTO_INSTALL;
+      # cpanm unpacks dist tarballs with GNU tar, which is noisy about the
+      # pax SCHILY.*/LIBARCHIVE.* headers they carry -- silence that.
+      local $ENV{TAR_OPTIONS} = '--warning=no-unknown-keyword';
+      # Installing the dependency closure is not release-testing OUR dist.
+      # DistTest sets RELEASE_TESTING=1; under it Test::Requires turns a
+      # dependency's missing *optional* test-dep into a hard BAIL_OUT, so an
+      # otherwise-fine dep tarball fails to install. Clear it for the install
+      # -- our own dist still gets tested with RELEASE_TESTING in run_tests.
+      delete local $ENV{RELEASE_TESTING};
+      printf STDERR
+          "mist release: installing prereqs from mpan-dist\n"
+        . "  perl   : %s (v%vd)\n"
+        . "  cpanm  : %s\n"
+        . "  mirror : %s\n",
+        $^X, $^V, "$cpanm", $mpan_mirror;
+      system( $^X, "$cpanm", '--quiet', '--notest', '--installdeps',
+              '--mirror', $mpan_mirror, '--mirror-only', '.' ) == 0
+        or die "mist release: cpanm --installdeps failed against "
+             . "${mpan_mirror}\n";
+    };
+  }
+
   my $minil = Minilla::CLI->new();
   $minil->run( release => @$args );
   $minil->run( dist => '--no-test', @$args );
