@@ -4,13 +4,13 @@
       "Sebastian Willert <s.willert@wecare.de>"
    ],
    "dynamic_config" : 0,
-   "generated_by" : "Minilla/v3.0.2, CPAN::Meta::Converter version 2.150005",
+   "generated_by" : "Minilla/v3.1.29, CPAN::Meta::Converter version 2.150010",
    "license" : [
       "unknown"
    ],
    "meta-spec" : {
       "url" : "http://search.cpan.org/perldoc?CPAN::Meta::Spec",
-      "version" : "2"
+      "version" : 2
    },
    "name" : "App-Mist",
    "no_index" : {
@@ -22,7 +22,9 @@
          "eg",
          "examples",
          "author",
-         "builder"
+         "builder",
+         "lib/Minilla",
+         "lib/Mist/Minilla"
       ]
    },
    "prereqs" : {
@@ -36,7 +38,7 @@
          "requires" : {
             "Test::CPAN::Meta" : "0",
             "Test::MinimumVersion::Fast" : "0.04",
-            "Test::PAUSE::Permissions" : "0.04",
+            "Test::PAUSE::Permissions" : "0.07",
             "Test::Pod" : "1.41",
             "Test::Spellunker" : "v0.2.7"
          }
@@ -57,17 +59,18 @@
             "File::HomeDir" : "0",
             "File::Share" : "0",
             "Getopt::Long" : "2.42",
-            "List::MoreUtils" : "0",
-            "Minilla" : "v0.11.0",
+            "Minilla" : "v3.1.2",
             "Module::CPANfile" : "1.0002",
+            "Module::Install" : "0",
             "Module::Path" : "0",
             "Moo" : "0",
             "MooX::HandlesVia" : "0",
             "MooX::late" : "0",
             "Path::Class" : "0",
             "Probe::Perl" : "0",
-            "Software::License" : "0",
+            "Software::License" : "0.102250",
             "Sort::Key" : "0",
+            "Version::Next" : "0",
             "local::lib" : "2.00",
             "perl" : "5.010"
          }
@@ -78,17 +81,19 @@
       "homepage" : "https://github.com/willert/mist",
       "repository" : {
          "type" : "git",
-         "url" : "git://github.com/willert/mist.git",
+         "url" : "https://github.com/willert/mist.git",
          "web" : "https://github.com/willert/mist"
       }
    },
-   "version" : "0.34",
+   "version" : "0.35",
    "x_contributors" : [
-      "Susanne Schmidt <sushee@outlook.com>",
       "Sebastian Willert <willert@cpan.org>",
       "Sebastian Willert <willert@gmail.com>",
+      "Sebastian Willert <willert@hermes>",
+      "Sebastian Willert <willert@localhost>",
       "Sebastian Willert <willert@loki>",
-      "Sebastian Willert <willert@hermes>"
+      "Susanne Schmidt <sushee@outlook.com>"
    ],
-   "x_serialization_backend" : "JSON::PP version 2.27300"
+   "x_serialization_backend" : "JSON::PP version 4.16",
+   "x_static_install" : 1
 }

@@ -2,6 +2,8 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+0.35 2026-05-22T03:25:25Z
+
   - release: seal the clean-room dist-test to the project's pinned
     mpan-dist mirror -- install with --mirror-only under $^X, without
     --with-develop, --notest for dependency suites, and RELEASE_TESTING
