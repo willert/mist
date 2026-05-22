@@ -13,6 +13,12 @@ Revision history for App::Mist
   - notest: schedule notest modules in mistfile declaration order, not
     hash order, so a notest module that is a dependency of another can
     be listed first and installed --notest before the dependent.
+  - mist-run: run the wrapped command directly instead of via perlbrew
+    exec. perlbrew exec runs the command as a forked child and exits 1
+    on any failure, so every non-zero exit code and signal-death status
+    collapsed to 1, and a stray perl sat as the parent of every command
+    and daemon. The generated mist.mistrc already runs perlbrew use, so
+    the extra exec layer was redundant.
 
 0.34 2014-05-26T19:30:01Z
 
