@@ -6,6 +6,9 @@
 
 remove MooX::HandlesVia from Mist::PackageManager::MPAN
 
+=back
+
+
 =head1 BUGS
 
 =over 4
@@ -16,6 +19,8 @@ Figure out why Devel::CheckCompiler and friends don't work
 on our servers (File::Temp seems to return files in read-only
 directories or even read-only files and is the likely issue
 here)
+
+=back
 
 
 =head1 PERL5 LIB HANDLING

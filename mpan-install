@@ -14,8 +14,8 @@
 # Getopt::Long.pm -- Universal options parsing
 # Author          : Johan Vromans
 # Created On      : Tue Sep 11 15:00:12 1990
-# Last Modified On: Tue Jun 11 13:18:11 2024
-# Update Count    : 1811
+# Last Modified On: Sat Nov 11 17:48:41 2023
+# Update Count    : 1808
 # Status          : Released
 
 ################ Module Preamble ################
@@ -28,8 +28,7 @@ use warnings;
 
 package Getopt::Long;
 
-# Must match Getopt::Long::Parser::VERSION!
-our $VERSION = 2.58;
+our $VERSION = 2.57;
 
 use Exporter;
 use base qw(Exporter);
@@ -1197,7 +1196,7 @@ sub FindOption ($$$$$) {
 		warn ("Value \"", $arg, "\" invalid for option ",
 		      $opt, " (",
 		      $type eq 'o' ? "extended " : '',
-		      "integer number expected)\n");
+		      "number expected)\n");
 		$error++;
 		# Push back.
 		unshift (@$argv, $starter.$rest) if defined $rest;
@@ -26188,20 +26187,16 @@ unshift @INC, bless \%fatpacked, $class;
 ;BEGIN{
 #! perl
 
-# Parser.pm -- Getopt::Long object-oriented interface
+# Parser.pm -- Getopt::Long object oriented interface
 # Author          : Johan Vromans
 # Created On      : Thu Nov  9 10:37:00 2023
-# Last Modified On: Tue Jun 11 13:17:57 2024
-# Update Count    : 16
+# Last Modified On: Sat Nov 11 17:48:49 2023
+# Update Count    : 13
 # Status          : Released
-
-use strict;
-use warnings;
 
 package Getopt::Long::Parser;
 
-# Must match Getopt::Long::VERSION!
-our $VERSION = 2.58;
+our $VERSION = 2.57;
 
 
 # Getopt::Long has a stub for Getopt::Long::Parser::new.
@@ -27259,9 +27254,12 @@ sub build_cpanm_call_stack {
   }
 
   # schedule remaining modules that are not tested before the remaining
-  # prerequisites to avoid prereqs pulling in this module without --notest
+  # prerequisites to avoid prereqs pulling in this module without --notest.
+  # Iterate in mistfile declaration order (not hash order) so a notest
+  # module that is a dependency of another notest module can be listed
+  # first and thus installed --notest before the dependent pulls it in.
   unless ( $opts{'skip-notest'} ) {
-    $push_module_on_stack->( $_ ) for keys %dont_test;
+    $push_module_on_stack->( $_ ) for $self->get_modules_not_to_test;
   }
 
   # schedule remaining prerequisites
@@ -27639,29 +27637,22 @@ fi
 perlbrew use "$MIST_PERLBREW_VERSION"
 PERLBREW_RC
 
-  if ( $run_quiet ) {
-
-    print $env <<'PERLBREW_RC';
+  # By the time these run, this rc has already sourced perlbrew's bashrc and
+  # run `perlbrew use "$MIST_PERLBREW_VERSION"`, so PATH/MANPATH/PERLBREW_PERL/
+  # ... already point at the requested perl -- a `perlbrew exec` layer here is
+  # redundant. Worse, `perlbrew exec` runs the command as a forked child and
+  # then exits 1 on any failure (real exit code and signal-death status lost),
+  # leaving a stray perl as the parent of every daemon. Run the command
+  # directly so exit codes, signals and the process identity pass straight
+  # through to the caller / service supervisor.
+  print $env <<'PERLBREW_RC';
 function mist_exec {
-   exec perlbrew exec --with "$MIST_PERLBREW_VERSION" --quiet "${@}"
+   exec "${@}"
 }
 function mist_run {
-   perlbrew exec --with "$MIST_PERLBREW_VERSION" --quiet "${@}"
+   "${@}"
 }
 PERLBREW_RC
-
-  } else {
-
-    print $env <<'PERLBREW_RC';
-function mist_exec {
-   exec perlbrew exec --with "$MIST_PERLBREW_VERSION" "${@}"
-}
-function mist_run {
-   perlbrew exec --with "$MIST_PERLBREW_VERSION" "${@}"
-}
-PERLBREW_RC
-
-  }
 
 }
 

@@ -27,4 +27,5 @@ export PATH="$LOCAL_LIB/bin:$LOCAL_LIB/sbin:$PATH"
 export PATH="$MIST_ROOT/bin:$MIST_ROOT/sbin:$MIST_ROOT/script:$PATH"
 export PERL5LIB="$MIST_ROOT/lib:$PERL5LIB"
 
-perlbrew $PERLBREW_OPTS "$@"
+# exec so this wrapper script does not linger as an extra process layer
+exec perlbrew $PERLBREW_OPTS "$@"

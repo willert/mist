@@ -178,29 +178,22 @@ fi
 perlbrew use "$MIST_PERLBREW_VERSION"
 PERLBREW_RC
 
-  if ( $run_quiet ) {
-
-    print $env <<'PERLBREW_RC';
+  # By the time these run, this rc has already sourced perlbrew's bashrc and
+  # run `perlbrew use "$MIST_PERLBREW_VERSION"`, so PATH/MANPATH/PERLBREW_PERL/
+  # ... already point at the requested perl -- a `perlbrew exec` layer here is
+  # redundant. Worse, `perlbrew exec` runs the command as a forked child and
+  # then exits 1 on any failure (real exit code and signal-death status lost),
+  # leaving a stray perl as the parent of every daemon. Run the command
+  # directly so exit codes, signals and the process identity pass straight
+  # through to the caller / service supervisor.
+  print $env <<'PERLBREW_RC';
 function mist_exec {
-   exec perlbrew exec --with "$MIST_PERLBREW_VERSION" --quiet "${@}"
+   exec "${@}"
 }
 function mist_run {
-   perlbrew exec --with "$MIST_PERLBREW_VERSION" --quiet "${@}"
+   "${@}"
 }
 PERLBREW_RC
-
-  } else {
-
-    print $env <<'PERLBREW_RC';
-function mist_exec {
-   exec perlbrew exec --with "$MIST_PERLBREW_VERSION" "${@}"
-}
-function mist_run {
-   perlbrew exec --with "$MIST_PERLBREW_VERSION" "${@}"
-}
-PERLBREW_RC
-
-  }
 
 }
 
