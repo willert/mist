@@ -36,7 +36,7 @@ App::Mist::Command::local_release - cut a tagged release commit without building
 Cuts a release B<point> in the current project's own git history: it bumps
 the version, runs the test suite in-tree, then commits and tags. It does
 B<not> build a distribution tarball, does B<not> upload anything, and does
-B<not> push the resulting commit or tag to a remote -- the tag is expected
+B<not> push the resulting commit or tag to a remote - the tag is expected
 to move repeatedly before it's ready for public consumption, so pushing is
 left to the operator.
 
@@ -47,7 +47,7 @@ bakes a C<E<lt>versionE<gt> E<lt>timestampE<gt>> line into F<Changes>.
 
 The tarball that other projects consume is built on demand by
 L<mist merge|App::Mist::Command::merge>, which builds a fresh dist from a
-sibling project's I<current checkout> -- so C<local_release>'s job is only
+sibling project's I<current checkout> - so C<local_release>'s job is only
 to leave that checkout at a clean, versioned, tagged commit.
 
 Use L<mist release|App::Mist::Command::release> instead when you want the
