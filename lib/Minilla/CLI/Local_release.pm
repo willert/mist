@@ -39,9 +39,8 @@ sub run {
                   RegenerateFiles
                   RunHooks
                   LocalTest
-                  RewriteChangesLocal
-                  Commit
-                  Tag
+                  CommitLocal
+                  TagLocal
               );
 
 
