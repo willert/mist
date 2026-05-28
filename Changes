@@ -2,6 +2,15 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+  - local_release: no longer push the release commit or the new tag to
+    origin, and no longer rewrites the {{$NEXT}} placeholder in Changes.
+    The local release point is expected to be re-cut many times before
+    it settles into something publishable -- pushing each intermediate
+    state is wrong, and rewriting {{$NEXT}} on every run broke the next
+    run's CheckChanges. The operator now drives the push explicitly, and
+    Changes gets its definitive version+timestamp line only when the
+    full `release` runs.
+
 0.35 2026-05-22T03:25:25Z
 
   - release: seal the clean-room dist-test to the project's pinned
