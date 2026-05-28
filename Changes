@@ -2,6 +2,11 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+  - release: skip Minilla's xt/ release-test generation by setting
+    MINILLA_DISABLE_WRITE_RELEASE_TEST. POD/CPAN-Meta/spelling failures
+    no longer interrupt the pipeline after the version bump; the
+    clean-room t/ run against the extracted tarball is unaffected.
+
   - local_release: no longer push the release commit or the new tag to
     origin, and no longer rewrites the {{$NEXT}} placeholder in Changes.
     The local release point is expected to be re-cut many times before
