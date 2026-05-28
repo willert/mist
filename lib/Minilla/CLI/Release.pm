@@ -1,4 +1,4 @@
-package Minilla::CLI::Local_release;
+package Minilla::CLI::Release;
 
 use strict;
 use warnings;
@@ -14,16 +14,16 @@ sub run {
   my ($self, @args) = @_;
 
   my $opts = {
-    test => 1,
-    trial => 0,
+    test    => 1,
+    trial   => 0,
     dry_run => 0,
   };
   parse_options(
     \@args,
-    'test!' => \$opts->{test},
-    'trial!' => \$opts->{trial},
-    'dry-run!' => \$opts->{dry_run},
-    'pause-config=s' => \$opts->{pause_config},
+    'test!'           => \$opts->{test},
+    'trial!'          => \$opts->{trial},
+    'dry-run!'        => \$opts->{dry_run},
+    'pause-config=s'  => \$opts->{pause_config},
   );
 
   my $project = Minilla::Project->new();
@@ -34,18 +34,22 @@ sub run {
   my @steps = qw(
                   CheckUntrackedFiles
                   CheckOrigin
+                  CheckReleaseBranch
                   BumpVersionSmart
-                  CheckChangesNoEdit
+                  CheckChanges
                   RegenerateFiles
                   RunHooks
-                  LocalTest
-                  CommitLocal
-                  TagLocal
+                  DistTest
+                  MakeDist
+
+                  UploadToCPAN
+
+                  RewriteChanges
+                  Commit
+                  TagPublish
               );
 
-
   my @klasses;
-  # Load all step classes.
   for (@steps) {
     my $klass = "Minilla::Release::$_";
     if (eval "require ${klass}; 1") {
@@ -56,9 +60,7 @@ sub run {
     }
   }
 
-  # And run all steps.
   for my $klass (@klasses) {
-    printf STDERR "Running %s\n", $klass;
     $klass->run($project, $opts);
   }
 }

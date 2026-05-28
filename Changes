@@ -7,6 +7,25 @@ Revision history for App::Mist
     no longer interrupt the pipeline after the version bump; the
     clean-room t/ run against the extracted tarball is unaffected.
 
+  - local_release + release: smart-bump heuristic. BumpVersion now
+    consults `git ls-remote --exit-code origin refs/tags/<current>` and
+    only bumps when the current source version's tag is on origin (i.e.
+    already published). A local-only tag is treated as in-flight and the
+    bump is skipped. Combined with TagLocal/TagPublish force-tagging, the
+    intended workflow is:
+      * cycle start (last release on origin) -> bump to next, tag locally
+      * iterate via repeated local_release -> stay on the same version,
+        tag moves to the current HEAD on each run
+      * final mist release -> publish that exact version; the local tag
+        is force-moved onto the release commit and pushed
+    Previously every local_release auto-bumped (pseudo-releasing 0.36,
+    0.37, 0.38, ... with no real-world presence), and then mist release
+    skipped past the intended version entirely. Consumers vendoring the
+    in-flight checkout via mist merge now see a stable version across
+    iterations, so no consumer-side cpanfile re-bump is needed when the
+    real release fires -- one final mist release in the source repo and
+    every consumer is already in the right state.
+
   - local_release: no longer push the release commit or the new tag to
     origin, and no longer rewrites the {{$NEXT}} placeholder in Changes.
     The local release point is expected to be re-cut many times before

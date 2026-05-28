@@ -1,4 +1,4 @@
-package Minilla::Release::TagLocal;
+package Minilla::Release::TagPublish;
 use strict;
 use warnings;
 use utf8;
@@ -15,7 +15,9 @@ sub run {
     return;
   }
 
-  cmd('git', 'tag', '-f', $project->format_tag($ver));
+  my $tag = $project->format_tag($ver);
+  cmd('git', 'tag', '-f', $tag);
+  cmd('git', 'push', 'origin', tag => $tag);
 }
 
 1;
