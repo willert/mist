@@ -59,6 +59,23 @@ sub execute {
     };
   }
 
+  # Skip Minilla's release-test generation. Minilla::WorkDir writes
+  # xt/minilla/*.t (POD, CPAN::Meta, MinimumVersion, Spellunker,
+  # PAUSE-Permissions) into the dist work dir and proves them under
+  # RELEASE_TESTING=1 before MakeDist. A failure there interrupts the
+  # pipeline AFTER BumpVersion/RegenerateFiles have modified lib/*.pm
+  # and META.json -- the only recovery is `git checkout -- <files>`
+  # before retry, and the cause is typically something trivial enough
+  # that the round-trip is pure overhead (an em dash in a =head1 cost
+  # exparse-interpreter-core 0.9908 a full pipeline cycle). Those
+  # checks belong pre-release (`mist run -- prove -lr xt/` over a
+  # hand-curated xt/), not as a release-time gate. The clean-room t/
+  # run against the extracted tarball is unaffected. The env var is
+  # undocumented Minilla internals -- WorkDir's call-site comment is
+  # literally "DO NOT USE THIS ENVIRONMENT VARIABLE." -- so a Minilla
+  # rename would make this stop working silently.
+  local $ENV{MINILLA_DISABLE_WRITE_RELEASE_TEST} = 1;
+
   my $minil = Minilla::CLI->new();
   $minil->run( release => @$args );
   $minil->run( dist => '--no-test', @$args );
