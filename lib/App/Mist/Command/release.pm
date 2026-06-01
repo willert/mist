@@ -7,6 +7,10 @@ use App::Mist -command;
 use Minilla::CLI;
 use Minilla::Project;
 
+use Config;
+use File::Spec;
+use File::Temp ();
+
 # no thanks 'CPAN::Uploader'; <-- breaks on perl 5.40 and above
 BEGIN { $INC{'CPAN/Uploader.pm'} //= __FILE__; }
 
@@ -33,29 +37,20 @@ sub execute {
   # abandoned/fragile) test suite must not be able to block core's release.
   my $mpan_mirror = 'file://' . $ctx->mpan_dist;
   my $cpanm       = $ctx->cpanm_executable;
+
+  # Install the released dist's dependency closure into a throwaway contained
+  # lib, and (further down) run the dist-test against only that lib. This keeps
+  # a release from mutating - or, on a failed install, corrupting - mist's own
+  # perl5, the env the mist CLI itself runs under. See _install_prereqs_contained
+  # and _cleanroom_inc below.
+  my $cleanroom     = File::Temp::tempdir( CLEANUP => 1 );
+  my @cleanroom_inc = _cleanroom_inc( $cleanroom );
+
   {
     no warnings 'redefine';
     *Minilla::Project::verify_prereqs = sub {
       return unless $Minilla::AUTO_INSTALL;
-      # cpanm unpacks dist tarballs with GNU tar, which is noisy about the
-      # pax SCHILY.*/LIBARCHIVE.* headers they carry -- silence that.
-      local $ENV{TAR_OPTIONS} = '--warning=no-unknown-keyword';
-      # Installing the dependency closure is not release-testing OUR dist.
-      # DistTest sets RELEASE_TESTING=1; under it Test::Requires turns a
-      # dependency's missing *optional* test-dep into a hard BAIL_OUT, so an
-      # otherwise-fine dep tarball fails to install. Clear it for the install
-      # -- our own dist still gets tested with RELEASE_TESTING in run_tests.
-      delete local $ENV{RELEASE_TESTING};
-      printf STDERR
-          "mist release: installing prereqs from mpan-dist\n"
-        . "  perl   : %s (v%vd)\n"
-        . "  cpanm  : %s\n"
-        . "  mirror : %s\n",
-        $^X, $^V, "$cpanm", $mpan_mirror;
-      system( $^X, "$cpanm", '--quiet', '--notest', '--installdeps',
-              '--mirror', $mpan_mirror, '--mirror-only', '.' ) == 0
-        or die "mist release: cpanm --installdeps failed against "
-             . "${mpan_mirror}\n";
+      _install_prereqs_contained( $cpanm, $mpan_mirror, $cleanroom );
     };
   }
 
@@ -76,9 +71,58 @@ sub execute {
   # rename would make this stop working silently.
   local $ENV{MINILLA_DISABLE_WRITE_RELEASE_TEST} = 1;
 
+  # Run the pipeline - dep install and dist-test both - resolving solely from
+  # the contained lib. Stripping (not extending) PERL5LIB is deliberate: it
+  # forces the dist's tests to resolve only from its declared closure, so a
+  # dependency used but not declared in the cpanfile fails the release instead
+  # of silently resolving from mist's shared perl5. This affects child procs
+  # (cpanm, the test scripts) only; the running mist process keeps mist's perl5
+  # in its in-memory @INC, so Minilla's own lazy loads are unaffected.
+  local $ENV{PERL5LIB} = join $Config{path_sep}, @cleanroom_inc;
+
   my $minil = Minilla::CLI->new();
   $minil->run( release => @$args );
   $minil->run( dist => '--no-test', @$args );
+}
+
+# The contained lib's @INC paths, arch-first to match local::lib / perl's own
+# ordering so an XS dist whose .pm ships in the arch dir resolves before a
+# pure-perl namesake. Used both as cpanm's --local-lib-contained target and as
+# the dist-test's PERL5LIB.
+sub _cleanroom_inc {
+  my $dir = shift;
+  return (
+    File::Spec->catdir( $dir, qw/ lib perl5 /, $Config{archname} ),
+    File::Spec->catdir( $dir, qw/ lib perl5 / ),
+  );
+}
+
+# Install the dist's declared prereq closure from the pinned mpan-dist mirror
+# into the contained lib $dir. --local-lib-contained keeps the install out of
+# mist's own perl5 and treats only $dir + core as satisfied, so the full
+# closure builds there. --notest: the pinned mpan-dist set is the vetting; a
+# dependency's own (often fragile) suite must not be able to block a release.
+sub _install_prereqs_contained {
+  my ( $cpanm, $mirror, $dir ) = @_;
+  # cpanm unpacks dist tarballs with GNU tar, which is noisy about the pax
+  # SCHILY.*/LIBARCHIVE.* headers they carry - silence that.
+  local $ENV{TAR_OPTIONS} = '--warning=no-unknown-keyword';
+  # Installing the closure is not release-testing OUR dist. DistTest sets
+  # RELEASE_TESTING=1; under it Test::Requires turns a dependency's missing
+  # *optional* test-dep into a hard BAIL_OUT. Clear it for the install - our
+  # own dist still gets tested with RELEASE_TESTING in run_tests.
+  delete local $ENV{RELEASE_TESTING};
+  printf STDERR
+      "mist release: installing prereqs from mpan-dist\n"
+    . "  perl   : %s (v%vd)\n"
+    . "  cpanm  : %s\n"
+    . "  mirror : %s\n"
+    . "  target : %s\n",
+    $^X, $^V, "$cpanm", $mirror, $dir;
+  system( $^X, "$cpanm", '--quiet', '--notest', '--installdeps',
+          '--local-lib-contained', $dir,
+          '--mirror', $mirror, '--mirror-only', '.' ) == 0
+    or die "mist release: cpanm --installdeps failed against ${mirror}\n";
 }
 
 1;
@@ -103,6 +147,13 @@ extracted tarball> -- a clean-room check that catches files missing from
 the dist -- then tags and commits the release. It then runs C<dist
 --no-test> to leave a built tarball in place (Minilla's C<release>
 followed by C<dist --no-test>).
+
+The dependency closure is installed into a throwaway contained lib and the
+tarball test runs hermetically against it, so a release never modifies the
+C<perl5> environment mist itself runs under. Because the test resolves only
+the dist's B<declared> dependencies, a module used but not listed in the
+project's F<cpanfile> fails the release rather than silently resolving from
+mist's shared C<perl5>.
 
 C<mist release> B<refuses to run> unless F<minil.toml> sets
 C<[release] do_not_upload_to_cpan> -- a guard against an accidental CPAN
