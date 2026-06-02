@@ -2,6 +2,13 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+  - release: detect --dry-run the way Minilla does (Getopt auto_abbrev), so
+    `mist release --dry` is treated as a dry run instead of running the trailing
+    `dist` and leaving a tarball. The exact-string check missed abbreviations.
+
+  - release POD: scope the hermeticity and non-interactive guarantees - the
+    dist-test misses configure-time deps, and fail-fast covers only the changelog prompt.
+
   - mistfile DSL: `script` now accepts trailing arguments (`script $phase =>
     $path, @args`); its ($$) prototype had capped the verb at the path, leaving
     the body's @args (run by install.pm as system($path, @args)) unreachable -

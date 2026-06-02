@@ -226,4 +226,52 @@ END_META
     'META provides block is authoritative and short-circuits the file walk';
 }
 
+# --- _is_indexable guard branches: DB / leading-underscore / exact-namespace -
+#
+# NO_INDEX_META above covers _is_indexable's no_index package and child-namespace
+# (Foo::Internal::*) branches. This covers the remaining three guards. Each
+# skipped package shares its file with a sibling that MUST stay indexable, so the
+# assertion fails loudly if a guard is dropped: removing a guard makes the
+# skipped package the file's first indexable one, so it - not the sibling - lands
+# in the map. The namespace fixture names a package EXACTLY equal to a no_index
+# namespace, which the child-prefix check (index($pkg,"$ns\::")==0) alone would
+# let through - only the `$pkg eq $ns` clause excludes it.
+
+GUARD_SKIPS: {
+  my $meta = <<'END_META';
+---
+name: Guard-1.0
+version: 1.0
+no_index:
+  namespace:
+    - Guard::Exact
+END_META
+
+  my $tarball = build_tarball(
+    $tmp, 'Guard-1.0',
+    'META.yml'      => $meta,
+    'lib/Guard.pm'  => "package Guard;\nour \$VERSION = '1.0';\n1;\n",
+    # 'DB' is skipped -> Guard::Db (declared after it) is what gets indexed.
+    'lib/Guard/Db.pm' =>
+      "package DB;\nour \$VERSION = '5';\npackage Guard::Db;\nour \$VERSION = '1.1';\n1;\n",
+    # a '_'-prefixed segment is skipped -> Guard::Real wins.
+    'lib/Guard/Hidden.pm' =>
+      "package Guard::_Hidden;\nour \$VERSION = '6';\npackage Guard::Real;\nour \$VERSION = '6.6';\n1;\n",
+    # package name == no_index namespace is skipped -> Guard::ExactReal wins.
+    'lib/Guard/Exact.pm' =>
+      "package Guard::Exact;\nour \$VERSION = '7';\npackage Guard::ExactReal;\nour \$VERSION = '7.7';\n1;\n",
+  );
+
+  my $modules = index_tarball( $tarball, $tmp );
+
+  is_deeply stringify_versions( $modules ),
+    {
+      'Guard'           => '1.0',
+      'Guard::Db'       => '1.1',
+      'Guard::Real'     => '6.6',
+      'Guard::ExactReal'=> '7.7',
+    },
+    'DB / leading-underscore / exact-namespace packages skipped; siblings indexed';
+}
+
 done_testing;

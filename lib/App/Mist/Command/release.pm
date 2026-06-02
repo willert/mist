@@ -10,6 +10,7 @@ use Minilla::Project;
 use Config;
 use File::Spec;
 use File::Temp ();
+use Getopt::Long ();
 
 # no thanks 'CPAN::Uploader'; <-- breaks on perl 5.40 and above
 BEGIN { $INC{'CPAN/Uploader.pm'} //= __FILE__; }
@@ -20,7 +21,7 @@ sub execute {
 
   $ctx->ensure_correct_perlbrew_context;
 
-  my $dry_run = grep { $_ eq '--dry-run' } @$args;
+  my $dry_run = _args_request_dry_run( $args );
 
   Minilla::Project->new->config->{release}{do_not_upload_to_cpan}
     or die "mist release: refusing to run.\n"
@@ -149,6 +150,24 @@ sub _install_prereqs_contained {
     or die "mist release: cpanm --installdeps failed against ${mirror}\n";
 }
 
+# True if @$args asks for a dry run, parsed the way Minilla will parse it.
+# Minilla::CLI::Release runs the args through Getopt::Long with its default
+# config (auto_abbrev on), so `--dry`, `--dry-r`, ... all reach it as
+# `--dry-run`. A plain `grep { $_ eq '--dry-run' }` here would miss those
+# abbreviations, leaving mist's view of dry-run out of step with Minilla's -
+# mist would run the trailing `dist` and leave a tarball for what Minilla
+# treated as a dry run. Probe a copy so @$args (forwarded to Minilla
+# verbatim) is untouched; pass_through ignores every other release option.
+sub _args_request_dry_run {
+  my $args = shift;
+  my @probe = @$args;
+  my $dry_run = 0;
+  local $SIG{__WARN__} = sub {};
+  Getopt::Long::Parser->new( config => [ 'pass_through' ] )
+    ->getoptionsfromarray( \@probe, 'dry-run!' => \$dry_run );
+  return $dry_run;
+}
+
 # True if Changes has at least one entry under the {{$NEXT}} marker, matching
 # Minilla::Release::CheckChanges' own regex so the gate stays consistent with it.
 sub _changes_has_next_entry {
@@ -182,12 +201,18 @@ the dist -- then tags and commits the release. It then runs C<dist
 --no-test> to leave a built tarball in place (Minilla's C<release>
 followed by C<dist --no-test>).
 
-The dependency closure is installed into a throwaway contained lib and the
-tarball test runs hermetically against it, so a release never modifies the
-C<perl5> environment mist itself runs under. Because the test resolves only
-the dist's B<declared> dependencies, a module used but not listed in the
-project's F<cpanfile> fails the release rather than silently resolving from
-mist's shared C<perl5>.
+The dependency closure is installed into a throwaway contained lib, never into
+the C<perl5> environment mist itself runs under, so a release cannot mutate - or,
+on a failed install, corrupt - mist's own environment. The extracted-tarball
+test suite then runs against only that contained lib, so a module used at run
+time or in F<t/> but not declared in the project's F<cpanfile> fails the release
+rather than silently resolving from mist's shared C<perl5>.
+
+This hermetic check is the B<test> phase. The build/configure step
+(F<Makefile.PL> / F<Build.PL>) is run by Minilla with mist's own C<@INC> passed
+through on C<-I>, which overrides the stripped C<PERL5LIB>, so a dependency
+needed only at configure time can still resolve from mist's C<perl5> and is not
+caught here - declare configure-time prereqs explicitly.
 
 C<mist release> B<refuses to run> unless F<minil.toml> sets
 C<[release] do_not_upload_to_cpan> -- a guard against an accidental CPAN
@@ -203,7 +228,14 @@ so a dry-run predicts that block rather than passing over it.
 
 A real release run without a terminal (CI, a background job) also fails fast on
 a missing C<{{$NEXT}}> entry instead of hanging on the interactive
-edit-the-changelog prompt; an interactive release still gets that prompt.
+edit-the-changelog prompt; an interactive release still gets that prompt. That
+fail-fast covers the changelog prompt only - it is not a general guarantee of
+non-interactive operation. If the current version's tag is already on origin the
+version-bump step prompts for the next version (defaulting silently when there is
+no terminal, after writing the bumped version into the source files); the
+intended C<local_release> -E<gt> C<release> workflow sidesteps this, since the
+tag is still local-only at release time and the bump is skipped. Prefer running a
+real release on a terminal.
 
 For a lightweight release that only bumps the version and tags the commit
 -- without building or testing a tarball -- use

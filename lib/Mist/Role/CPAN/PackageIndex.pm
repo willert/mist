@@ -290,6 +290,16 @@ sub _unreferenced_tarballs {
 # dot/underscore-separated numeric components instead; this also keeps v-strings
 # (v1.2.3) and long CPAN::Meta versions (2.150010) in intuitive order, and does
 # not choke on v-strings the way version->parse("v$ver") would.
+#
+# Tradeoff of the per-component compare: each component is matched with /(\d+)/
+# and compared numerically, so a fractional component's leading zeros are lost.
+# Versions differing only in those zeros collapse or invert - 0.05 and 0.5
+# compare equal, 0.009 sorts ABOVE 0.01 - and an underscore TRIAL component
+# sorts above its stable base (1.23_01 > 1.23). This is the unavoidable cost of
+# reading '1.10' as a point release rather than the decimal 1.1: the two
+# readings are mutually exclusive and point-release ordering is the one mpan-dist
+# needs. Real mpan-dist tarballs carry plain dotted/point-release versions where
+# this never bites; the cases are pinned in t/package-index.t to keep them visible.
 sub _version_parts {
   my $v = shift;
   $v = '0' unless defined $v && length $v;

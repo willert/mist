@@ -114,6 +114,49 @@ is_deeply
 is_deeply \@got_versions, [qw/ 1.2 1.9 1.10 /],
   'Foo tarballs visited lowest-version first; 1.10 is newest, visited last';
 
+# --- _version_cmp: direct unit coverage ------------------------------------
+#
+# The ordering test above exercises _version_cmp only through plain dotted point
+# releases. Pin its behaviour directly for the forms it explicitly handles -
+# v-strings, underscore (TRIAL) components, long CPAN::Meta versions, absent and
+# undef components - and lock in the documented tradeoffs of the per-component
+# compare so a change to the dotted "1.10 > 1.9" semantics surfaces here.
+
+{
+  my $cmp = \&Mist::Role::CPAN::PackageIndex::_version_cmp;
+  my $sgn = sub { ( shift ) <=> 0 };   # assert ordering, not raw magnitude
+
+  # Point-release semantics - the whole reason the helper exists.
+  is $sgn->( $cmp->( '1.2',  '1.10' ) ), -1, '1.2 < 1.10 (point release)';
+  is $sgn->( $cmp->( '1.9',  '1.10' ) ), -1, '1.9 < 1.10 (multi-digit point release)';
+  is $sgn->( $cmp->( '1.10', '1.10' ) ),  0, '1.10 == 1.10';
+
+  # v-strings: leading 'v' stripped, then compared per dotted component.
+  is $sgn->( $cmp->( 'v1.2.3', 'v1.2.10' ) ), -1, 'v1.2.3 < v1.2.10';
+  is $sgn->( $cmp->( 'v1.2.3', '1.2.3'   ) ),  0, 'v-prefix ignored: v1.2.3 == 1.2.3';
+
+  # Long CPAN::Meta-style version compares as a single numeric component.
+  is $sgn->( $cmp->( '2.15', '2.150010' ) ), -1, '2.15 < 2.150010';
+
+  # An absent trailing component counts as 0.
+  is $sgn->( $cmp->( '1.2', '1.2.1' ) ), -1, '1.2 < 1.2.1 (absent component is 0)';
+
+  # undef / empty normalise to 0.
+  is $sgn->( $cmp->( undef, '0' ) ), 0, 'undef normalises to 0';
+  is $sgn->( $cmp->( '',    '0' ) ), 0, 'empty string normalises to 0';
+
+  # --- documented tradeoffs (see the comment above _version_parts) ----------
+  # These assert the KNOWN limitation, not desired behaviour: comparing each
+  # component numerically drops a fractional component's leading zeros. Pinned
+  # so the cost stays visible and any change to it is a conscious one.
+  is $sgn->( $cmp->( '0.05',    '0.5'  ) ), 0,
+    'TRADEOFF: 0.05 == 0.5 (leading-zero fractional components collapse)';
+  is $sgn->( $cmp->( '0.009',   '0.01' ) ), 1,
+    'TRADEOFF: 0.009 > 0.01 (leading-zero fractional components invert)';
+  is $sgn->( $cmp->( '1.23_01', '1.23' ) ), 1,
+    'TRADEOFF: 1.23_01 > 1.23 (underscore TRIAL sorts above its stable base)';
+}
+
 # --- _unreferenced_tarballs ------------------------------------------------
 
 # Build an index by hand so the "referenced" set is fully under our

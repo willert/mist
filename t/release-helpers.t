@@ -48,6 +48,37 @@ is_deeply
   'cleanroom_inc uses its $dir argument verbatim (distinct prefixes)';
 
 # ---------------------------------------------------------------------------
+# _args_request_dry_run: must agree with how Minilla::CLI::Release will parse
+# the very same @$args. Minilla parses with Getopt::Long's default config
+# (auto_abbrev on), so any unambiguous abbreviation of --dry-run counts; a bare
+# string-equality check would miss those and let mist run the trailing `dist`
+# (leaving a tarball) for what Minilla treated as a dry run. It must also leave
+# @$args untouched, since the same arrayref is forwarded to Minilla verbatim.
+# ---------------------------------------------------------------------------
+
+{
+  my $probe = \&App::Mist::Command::release::_args_request_dry_run;
+
+  my @cases = (
+    [ []                       => 0, 'no args' ],
+    [ ['--dry-run']            => 1, 'full --dry-run' ],
+    [ ['--dry']                => 1, 'abbreviation --dry' ],
+    [ ['--dry-r']              => 1, 'abbreviation --dry-r' ],
+    [ ['--no-dry-run']         => 0, 'negated --no-dry-run' ],
+    [ ['--trial', '--dry-run'] => 1, '--dry-run alongside another option' ],
+    [ ['--no-test']            => 0, 'unrelated option only' ],
+    [ ['foo', '--dry']         => 1, 'positional arg before the abbreviation' ],
+  );
+
+  for my $case ( @cases ) {
+    my ( $args, $want, $label ) = @$case;
+    my @copy = @$args;
+    is( ( $probe->( \@copy ) ? 1 : 0 ), $want, "dry-run probe: $label" );
+    is_deeply( \@copy, $args, "dry-run probe leaves args untouched: $label" );
+  }
+}
+
+# ---------------------------------------------------------------------------
 # _changes_has_next_entry: reads ./Changes from CWD. with_changes chdirs into a
 # fresh temp dir, optionally writes Changes, calls the sub, then ALWAYS restores
 # cwd - including the no-file path. The newdir object is held in a lexical so it
