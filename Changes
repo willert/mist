@@ -2,6 +2,19 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+  - release: install the dist's dependency closure into a throwaway contained
+    lib and run the dist-test hermetically - a release never writes into (or can
+    corrupt) mist's own perl5, and a dependency used but not declared in the
+    cpanfile fails the dist-test instead of silently resolving from the shared
+    perl5. Covered by t/release-cleanroom.t.
+
+  - release: add --dry-run (build + clean-room dist-test, no bump/commit/tag/
+    push). Both --dry-run and any non-interactive release now fail fast on a
+    missing {{$NEXT}} changelog entry instead of hanging on Minilla's
+    interactive edit-Changes prompt; an interactive release keeps the prompt.
+
+  - merge: print a 'mist compile' hint instead of $0's absolute path.
+
 0.36 2026-05-28T18:54:57Z
 
   - release: skip Minilla's xt/ release-test generation by setting
