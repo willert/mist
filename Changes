@@ -2,6 +2,8 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+0.38 2026-06-02T20:53:23Z
+
   - release: add --candidate=<ID> to promote the build a --dry-run leaves behind,
     reusing its installed dependency closure (the slow part on a big release)
     instead of installing again; still bumps, rebuilds and retests. The candidate
