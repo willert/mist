@@ -2,6 +2,12 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+  - release: add --candidate=<ID> to promote the build a --dry-run leaves behind,
+    reusing its installed dependency closure (the slow part on a big release)
+    instead of installing again; still bumps, rebuilds and retests. The candidate
+    is fingerprint-guarded (refuses if cpanfile/mistfile/mpan-dist/perl changed)
+    and ephemeral (each --dry-run wipes prior ones).
+
   - release: detect --dry-run the way Minilla does (Getopt auto_abbrev), so
     `mist release --dry` is treated as a dry run instead of running the trailing
     `dist` and leaving a tarball. The exact-string check missed abbreviations.

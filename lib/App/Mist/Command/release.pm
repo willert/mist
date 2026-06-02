@@ -11,6 +11,7 @@ use Config;
 use File::Spec;
 use File::Temp ();
 use Getopt::Long ();
+use Digest::SHA ();
 
 # no thanks 'CPAN::Uploader'; <-- breaks on perl 5.40 and above
 BEGIN { $INC{'CPAN/Uploader.pm'} //= __FILE__; }
@@ -21,7 +22,33 @@ sub execute {
 
   $ctx->ensure_correct_perlbrew_context;
 
-  my $dry_run = _args_request_dry_run( $args );
+  # --candidate=<id> promotes a build a previous --dry-run left on disk (see the
+  # "Reusing a dry-run's build" POD section). Pull it off a copy of the args;
+  # @minil_args is what we forward to Minilla, with --candidate removed because
+  # Minilla does not know it. --dry-run and everything else pass through.
+  my ( $candidate, @minil_args ) = _extract_candidate( $args );
+  my $dry_run = _args_request_dry_run( \@minil_args );
+
+  # --candidate takes a value, and two malformed forms slip past Getopt's
+  # pass_through: a bare `--candidate` (no value) survives in @minil_args, and
+  # `--candidate --foo` swallows the next option as its "value" (so $candidate
+  # starts with a dash). Left alone, the bare form would fall through to a normal
+  # release with `--candidate` forwarded to Minilla - i.e. a fat-fingered promote
+  # silently becomes a real release. Demand a real value.
+  if ( ( defined $candidate and $candidate =~ /\A-/ )
+       or grep { /\A--candidate\b/ } @minil_args ) {
+    die "mist release: --candidate needs an id value, e.g. --candidate=<ID>.\n";
+  }
+
+  die "mist release: --dry-run and --candidate are mutually exclusive.\n"
+    if $dry_run and defined $candidate;
+
+  if ( defined $candidate ) {
+    # Used unsanitised as a directory name below; keep it to the shape
+    # _new_candidate_id emits so a crafted value can't escape the workspace.
+    _valid_candidate_id( $candidate )
+      or die "mist release: invalid candidate id '$candidate'.\n";
+  }
 
   Minilla::Project->new->config->{release}{do_not_upload_to_cpan}
     or die "mist release: refusing to run.\n"
@@ -53,19 +80,50 @@ sub execute {
   my $mpan_mirror = 'file://' . $ctx->mpan_dist;
   my $cpanm       = $ctx->cpanm_executable;
 
-  # Install the released dist's dependency closure into a throwaway contained
-  # lib, and (further down) run the dist-test against only that lib. This keeps
-  # a release from mutating - or, on a failed install, corrupting - mist's own
-  # perl5, the env the mist CLI itself runs under. See _install_prereqs_contained
-  # and _cleanroom_inc below.
-  my $cleanroom     = File::Temp::tempdir( CLEANUP => 1 );
-  my @cleanroom_inc = _cleanroom_inc( $cleanroom );
+  # Choose where the dist's dependency closure lives, and whether to (re)install
+  # it. In every mode the dist-test runs against this contained lib only, so a
+  # release never mutates - or, on a failed install, corrupts - mist's own perl5,
+  # the env the mist CLI itself runs under.
+  #   normal release   throwaway tempdir, installed fresh, gone at exit
+  #   --dry-run        a persisted candidate dir under the project workspace,
+  #                    installed fresh and kept for a later --candidate promote
+  #   --candidate=ID   an existing candidate dir, REUSED as-is (install skipped)
+  #                    after a fingerprint check proves it still matches the
+  #                    current cpanfile/mistfile/mpan-dist/perl
+  # See _candidate_dir, _release_fingerprint and the candidate helpers below.
+  my ( $lib_dir, $tmp, $reuse );
+  if ( defined $candidate ) {
+    my $dir = _candidate_dir( $ctx, $candidate );
+    -d $dir->stringify
+      or die "mist release: unknown release candidate '$candidate'.\n"
+           . "Run `mist release --dry-run` to build one.\n";
+    if ( my $why = _candidate_staleness( $ctx, $dir ) ) {
+      die "mist release: release candidate '$candidate' is stale - $why.\n"
+        . "Run `mist release --dry-run` to rebuild it.\n";
+    }
+    $lib_dir = $dir->stringify;
+    $reuse   = 1;
+  }
+  elsif ( $dry_run ) {
+    _gc_release_candidates( $ctx );    # ephemeral: a new dry-run supersedes them
+    $candidate = _new_candidate_id();
+    my $dir = _candidate_dir( $ctx, $candidate );
+    $dir->mkpath;
+    $lib_dir = $dir->stringify;
+  }
+  else {
+    $tmp     = File::Temp->newdir( CLEANUP => 1 );
+    $lib_dir = "$tmp";
+  }
+
+  my @cleanroom_inc = _cleanroom_inc( $lib_dir );
 
   {
     no warnings 'redefine';
     *Minilla::Project::verify_prereqs = sub {
       return unless $Minilla::AUTO_INSTALL;
-      _install_prereqs_contained( $cpanm, $mpan_mirror, $cleanroom );
+      return if $reuse;    # the candidate already holds the validated closure
+      _install_prereqs_contained( $cpanm, $mpan_mirror, $lib_dir );
     };
   }
 
@@ -106,8 +164,26 @@ sub execute {
   $ENV{PERL_MINILLA_SKIP_CHECK_CHANGE_LOG} = 1 if $dry_run or not -t STDIN;
 
   my $minil = Minilla::CLI->new();
-  $minil->run( release => @$args );
-  $minil->run( dist => '--no-test', @$args ) unless $dry_run;
+  $minil->run( release => @minil_args );
+
+  if ( $dry_run ) {
+    # The build validated. Stamp the candidate with the current fingerprint -
+    # its presence also marks the dry-run as having completed - and print the
+    # exact promote command. The "mist release --candidate=" prefix is stable so
+    # it can be scraped from the output.
+    _write_candidate_fingerprint( $ctx, $lib_dir );
+    printf STDERR
+        "\nmist release: dry-run validated; build kept as release candidate.\n"
+      . "Release this validated build with: mist release --candidate=%s\n",
+        $candidate;
+    return;
+  }
+
+  $minil->run( dist => '--no-test', @minil_args );
+
+  # A promoted candidate has served its purpose; retire it so it can't be reused
+  # against a now-released (and version-bumped) tree.
+  _remove_release_candidate( $ctx, $candidate ) if $reuse;
 }
 
 # The contained lib's @INC paths, arch-first to match local::lib / perl's own
@@ -148,6 +224,140 @@ sub _install_prereqs_contained {
           '--local-lib-contained', $dir,
           '--mirror', $mirror, '--mirror-only', '.' ) == 0
     or die "mist release: cpanm --installdeps failed against ${mirror}\n";
+}
+
+# Pull --candidate=<id> off a copy of @$args (left untouched - it is forwarded to
+# Minilla verbatim) and return ( $id_or_undef, @args_without_candidate ).
+# pass_through leaves every other option, including --dry-run, in place and in
+# order. Minilla does not know --candidate, so it must not reach it.
+sub _extract_candidate {
+  my $args = shift;
+  my @rest = @$args;
+  my $id;
+  local $SIG{__WARN__} = sub {};
+  Getopt::Long::Parser->new( config => [ 'pass_through' ] )
+    ->getoptionsfromarray( \@rest, 'candidate=s' => \$id );
+  return ( $id, @rest );
+}
+
+# Release candidates live under the per-project mist workspace (~/.mist/<proj>/),
+# out of the source tree entirely - no gitignore needed, and the dir persists
+# between the dry-run process and the later promote process.
+sub _candidates_root { $_[0]->workspace->subdir( 'release-candidates' ) }
+sub _candidate_dir   { _candidates_root( $_[0] )->subdir( $_[1] ) }
+
+# Ephemeral by design: each --dry-run wipes every prior candidate first, so only
+# the most recent build is ever promotable. Botch one and you re-dry-run.
+sub _gc_release_candidates {
+  my $ctx  = shift;
+  my $root = _candidates_root( $ctx );
+  return unless -d $root->stringify;
+  my $gone = 0;
+  for my $child ( $root->children ) {
+    next unless $child->is_dir;
+    $child->rmtree;
+    $gone++;
+  }
+  printf STDERR "mist release: cleared %d prior release candidate(s)\n", $gone
+    if $gone;
+}
+
+sub _remove_release_candidate {
+  my ( $ctx, $id ) = @_;
+  return unless defined $id;
+  my $dir = _candidate_dir( $ctx, $id );
+  $dir->rmtree if -d $dir->stringify;
+}
+
+# Candidate ids are used unsanitised as a directory name under the workspace, so
+# they must stay within the hex+dash shape _new_candidate_id emits - this is the
+# guard against a crafted --candidate escaping the workspace (e.g. '../../etc').
+sub _valid_candidate_id {
+  my $id = shift;
+  return defined $id && $id =~ /\A[0-9a-fA-F-]{1,64}\z/ ? 1 : 0;
+}
+
+# A fresh, unique, UUID-shaped handle per dry-run. The id is an ephemeral label,
+# never re-derived, so uniqueness - not cryptographic strength - is all it needs;
+# /dev/urandom when available, a hash of pid+time+rand otherwise.
+sub _new_candidate_id {
+  my $bytes;
+  if ( open my $rand, '<:raw', '/dev/urandom' ) {
+    read $rand, $bytes, 16;
+    close $rand;
+  }
+  unless ( defined $bytes and length $bytes == 16 ) {
+    $bytes = substr Digest::SHA::sha256( join( '-', $$, time, rand ) ), 0, 16;
+  }
+  my $hex = unpack 'H*', $bytes;
+  return join '-',
+    map { substr $hex, $_->[0], $_->[1] }
+    [ 0, 8 ], [ 8, 4 ], [ 12, 4 ], [ 16, 4 ], [ 20, 12 ];
+}
+
+# Fingerprint of everything that decides the dependency closure: the perl + arch
+# the lib was built for, plus the cpanfile, mistfile and mpan-dist index. Stored
+# with a candidate and rechecked at promote time so a changed dependency set (or
+# a perl switch, which would invalidate the lib's XS) refuses the promote rather
+# than shipping against a stale closure. The dist's OWN version is deliberately
+# absent - bumping it does not change the closure, so the candidate stays valid
+# across the release bump.
+sub _release_fingerprint {
+  my $ctx = shift;
+  return _fingerprint(
+    "$^V", $Config{archname},
+    $ctx->cpanfile->stringify,
+    $ctx->project_root->file( 'mistfile' )->stringify,
+    $ctx->mpan_dist->file(qw/ modules 02packages.details.txt.gz /)->stringify,
+  );
+}
+
+# Pure: SHA-256 of perl + arch + each file's path and (if present) contents. A
+# missing file contributes only its path, so the digest is stable either way.
+sub _fingerprint {
+  my ( $perl, $arch, @files ) = @_;
+  my $sha = Digest::SHA->new( 256 );
+  $sha->add( "perl\0${perl}\0arch\0${arch}\0" );
+  for my $file ( @files ) {
+    $sha->add( "file\0${file}\0" );
+    if ( -f $file and open my $fh, '<', $file ) {
+      binmode $fh;
+      $sha->addfile( $fh );
+      close $fh;
+    }
+    $sha->add( "\0" );
+  }
+  return $sha->hexdigest;
+}
+
+sub _fingerprint_file {
+  my $dir = shift;
+  return File::Spec->catfile( "$dir", '.mist-release-fingerprint' );
+}
+
+sub _write_candidate_fingerprint {
+  my ( $ctx, $dir ) = @_;
+  my $file = _fingerprint_file( $dir );
+  open my $fh, '>', $file
+    or die "mist release: cannot write candidate fingerprint ${file}: $!\n";
+  print {$fh} _release_fingerprint( $ctx ), "\n";
+  close $fh;
+}
+
+# Returns a reason string (true) if the candidate must NOT be reused, or '' when
+# it is fresh. Fail closed: a missing/unreadable fingerprint counts as stale.
+sub _candidate_staleness {
+  my ( $ctx, $dir ) = @_;
+  my $file = _fingerprint_file( $dir );
+  return 'no fingerprint (the dry-run did not complete)' unless -f $file;
+  open my $fh, '<', $file or return 'fingerprint unreadable';
+  my $stored = readline $fh;
+  close $fh;
+  $stored //= '';
+  chomp $stored;
+  return 'cpanfile, mistfile, mpan-dist or perl changed since the dry-run'
+    if $stored ne _release_fingerprint( $ctx );
+  return '';
 }
 
 # True if @$args asks for a dry run, parsed the way Minilla will parse it.
@@ -191,6 +401,7 @@ App::Mist::Command::release - tag, test and package a full release
 
   mist release
   mist release --dry-run
+  mist release --candidate=<ID>
 
 =head1 DESCRIPTION
 
@@ -225,6 +436,31 @@ F<Changes> rewrite, no commit, no tag, and no push. Use it to confirm a release
 would build and test cleanly before committing to it. Like a real release it
 requires a F<Changes> entry under C<{{$NEXT}}> and fails fast if there is none,
 so a dry-run predicts that block rather than passing over it.
+
+=head2 Reusing a dry-run's build with C<--candidate>
+
+A C<--dry-run> additionally keeps its validated contained lib on disk as a
+B<release candidate> under the project's mist workspace, and prints the command
+to promote it:
+
+  Release this validated build with: mist release --candidate=<ID>
+
+C<mist release --candidate=<ID>> then runs a normal release but B<reuses> that
+candidate's already-installed dependency closure instead of installing it again.
+This matters when the install is the slow part: a large closure can take a long
+time to build, and dry-run-then-release otherwise pays for it twice. Only the
+install is skipped - the release still bumps the version, rebuilds the tarball at
+the new version, and re-runs the clean-room dist-test against the reused lib.
+
+The candidate ID is ephemeral. Each C<--dry-run> first deletes any earlier
+candidates, so only the most recent is promotable, and a candidate is removed
+once promoted. Before reusing one, C<--candidate> checks a fingerprint stored
+with it - the F<cpanfile>, F<mistfile>, the mpan-dist index, and the perl
+version and architecture. If any of those changed since the dry-run (or the
+fingerprint is missing because the dry-run did not finish), the promote
+B<refuses> and asks for a fresh C<--dry-run> rather than releasing against a
+stale dependency set. The dist's own version is not part of the fingerprint, so
+the version bump a release performs does not invalidate the candidate.
 
 A real release run without a terminal (CI, a background job) also fails fast on
 a missing C<{{$NEXT}}> entry instead of hanging on the interactive

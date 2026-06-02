@@ -9,6 +9,7 @@ use File::Spec;
 use File::Temp ();
 use Cwd ();
 use Config;
+use Path::Class ();
 
 # Loading App::Mist::Command::release triggers App::Mist's BEGIN, which resolves
 # the project perl5/ relative to $RealBin - absent in the clean-room dist work
@@ -20,6 +21,20 @@ BEGIN {
 }
 
 use App::Mist::Command::release;
+
+sub spew {
+  my ( $file, $content ) = @_;
+  open my $fh, '>', $file or die "open $file: $!";
+  print {$fh} $content;
+  close $fh;
+}
+
+sub slurp {
+  my ( $file ) = @_;
+  open my $fh, '<', $file or die "open $file: $!";
+  local $/;
+  return <$fh>;
+}
 
 # ---------------------------------------------------------------------------
 # _cleanroom_inc: pure string builder. Returns a 2-element list, arch-first,
@@ -204,5 +219,203 @@ my $before = Cwd::getcwd();
 with_changes("{{\$NEXT}}\n  - foo\n");
 my $after = Cwd::getcwd();
 is $after, $before, 'cwd is restored after a with_changes call';
+
+# ---------------------------------------------------------------------------
+# _extract_candidate: pulls --candidate=<id> off a COPY of the args (the caller's
+# arrayref is forwarded to Minilla verbatim and must be left intact) and returns
+# (id, remaining-args). Minilla does not know --candidate, so it must not survive
+# into the forwarded args; --dry-run and every other option must, in order.
+# ---------------------------------------------------------------------------
+{
+  my $extract = \&App::Mist::Command::release::_extract_candidate;
+
+  my ( $id, @rest ) = $extract->( [] );
+  is $id, undef, 'no --candidate -> undef id';
+  is_deeply \@rest, [], '... and empty rest';
+
+  ( $id, @rest ) = $extract->( [ '--candidate=abc-123' ] );
+  is $id, 'abc-123', '--candidate=VALUE extracted';
+  is_deeply \@rest, [], '... and removed from the forwarded args';
+
+  ( $id, @rest ) = $extract->( [ '--candidate', 'xyz' ] );
+  is $id, 'xyz', 'space-separated --candidate VALUE extracted';
+
+  ( $id, @rest ) = $extract->( [ '--trial', '--candidate=u-1', '--no-test' ] );
+  is $id, 'u-1', '--candidate extracted from among other options';
+  is_deeply \@rest, [ '--trial', '--no-test' ],
+    '... leaving the other options in their original order';
+
+  ( $id, @rest ) = $extract->( [ '--dry-run' ] );
+  is $id, undef, '--dry-run alone -> no candidate';
+  is_deeply \@rest, [ '--dry-run' ], '... and --dry-run passes through';
+
+  my $orig = [ '--candidate=keep', '--dry-run' ];
+  $extract->( $orig );
+  is_deeply $orig, [ '--candidate=keep', '--dry-run' ],
+    'the caller-supplied arrayref is not mutated';
+}
+
+# ---------------------------------------------------------------------------
+# _new_candidate_id: a fresh, unique, UUID-shaped ephemeral handle each call.
+# ---------------------------------------------------------------------------
+{
+  my $new = \&App::Mist::Command::release::_new_candidate_id;
+  my $a = $new->();
+  my $b = $new->();
+  like $a, qr/\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/,
+    '_new_candidate_id is 8-4-4-4-12 lowercase hex';
+  isnt $a, $b, 'successive ids differ (ephemeral, not re-derivable)';
+}
+
+# ---------------------------------------------------------------------------
+# _fingerprint: pure SHA of perl + arch + each file's path and contents. Same
+# inputs -> identical digest; any change -> different; a missing file is stable.
+# This is the staleness guard that lets --candidate refuse a changed dep set.
+# ---------------------------------------------------------------------------
+{
+  my $fp   = \&App::Mist::Command::release::_fingerprint;
+  my $spew = sub {
+    my ( $f, $c ) = @_;
+    open my $fh, '>', $f or die "open $f: $!";
+    print {$fh} $c;
+    close $fh;
+  };
+
+  my $fpdir = File::Temp->newdir( CLEANUP => 1 );
+  my $cpan  = File::Spec->catfile( "$fpdir", 'cpanfile' );
+  my $mist  = File::Spec->catfile( "$fpdir", 'mistfile' );
+  $spew->( $cpan, "requires 'Foo';\n" );
+  $spew->( $mist, "perl '5.20.3';\n" );
+
+  my $base = $fp->( 'v5.20.3', 'x86_64-linux', $cpan, $mist );
+
+  is $fp->( 'v5.20.3', 'x86_64-linux', $cpan, $mist ), $base,
+    'same perl/arch/files -> identical digest';
+  isnt $fp->( 'v5.38.2', 'x86_64-linux', $cpan, $mist ), $base,
+    'different perl version -> different digest';
+  isnt $fp->( 'v5.20.3', 'aarch64-linux', $cpan, $mist ), $base,
+    'different archname -> different digest';
+
+  $spew->( $cpan, "requires 'Foo';\nrequires 'Bar';\n" );
+  isnt $fp->( 'v5.20.3', 'x86_64-linux', $cpan, $mist ), $base,
+    'changed file content -> different digest';
+
+  my $absent = File::Spec->catfile( "$fpdir", 'nope' );
+  is $fp->( 'v5.20.3', 'x86_64-linux', $absent ),
+     $fp->( 'v5.20.3', 'x86_64-linux', $absent ),
+    'a missing file is handled deterministically (no die)';
+  isnt $fp->( 'v5.20.3', 'x86_64-linux', $absent ),
+       $fp->( 'v5.20.3', 'x86_64-linux', $mist ),
+    'missing vs present file -> different digest';
+}
+
+# ---------------------------------------------------------------------------
+# Candidate lifecycle: path construction, _gc_release_candidates (ephemeral
+# wipe), _remove_release_candidate, and the _write_candidate_fingerprint ->
+# _candidate_staleness round-trip. Driven by a minimal fake ctx exposing only
+# the accessors these helpers touch, so no real project / perl install is needed.
+# ---------------------------------------------------------------------------
+{
+  package FakeCtx;
+  sub new          { my ( $c, %a ) = @_; bless { %a }, $c }
+  sub workspace    { $_[0]{workspace} }
+  sub cpanfile     { $_[0]{cpanfile} }
+  sub project_root { $_[0]{project_root} }
+  sub mpan_dist    { $_[0]{mpan_dist} }
+}
+
+{
+  my $R = 'App::Mist::Command::release';
+
+  my $tmp  = File::Temp->newdir( CLEANUP => 1 );
+  my $base = Path::Class::dir( "$tmp" );
+  my $ws   = $base->subdir( 'workspace' );
+  $ws->mkpath;
+
+  my $proj = $base->subdir( 'proj' );
+  $proj->subdir( 'mpan-dist', 'modules' )->mkpath;
+  my $cpanfile = $proj->file( 'cpanfile' );
+  my $mistfile = $proj->file( 'mistfile' );
+  my $mpan     = $proj->subdir( 'mpan-dist' );
+  my $index    = $mpan->file(qw/ modules 02packages.details.txt.gz /)->stringify;
+  spew( "$cpanfile", "requires 'Foo';\n" );
+  spew( "$mistfile", "perl '5.20.3';\n" );
+  spew( $index, "idx-v1" );
+
+  my $ctx = FakeCtx->new(
+    workspace    => $ws,
+    cpanfile     => $cpanfile,
+    project_root => $proj,
+    mpan_dist    => $mpan,
+  );
+
+  my $root = $R->can('_candidates_root')->( $ctx );
+  is "$root", $ws->subdir( 'release-candidates' )->stringify,
+    '_candidates_root is <workspace>/release-candidates';
+  is "${\ $R->can('_candidate_dir')->( $ctx, 'abc' )}",
+     $ws->subdir( 'release-candidates', 'abc' )->stringify,
+    '_candidate_dir is <root>/<id>';
+
+  # _gc_release_candidates wipes every prior candidate
+  $root->subdir( $_ )->mkpath for qw/ one two /;
+  ok -d $root->subdir( 'one' )->stringify, 'precondition: candidate "one" exists';
+  $R->can('_gc_release_candidates')->( $ctx );
+  ok !-d $root->subdir( 'one' )->stringify, '_gc_release_candidates removed "one"';
+  ok !-d $root->subdir( 'two' )->stringify, '... and "two"';
+
+  # _remove_release_candidate removes just the named one
+  my $solo = $R->can('_candidate_dir')->( $ctx, 'solo' );
+  $solo->mkpath;
+  $R->can('_remove_release_candidate')->( $ctx, 'solo' );
+  ok !-d $solo->stringify, '_remove_release_candidate removed "solo"';
+
+  # fingerprint round-trip. EACH file input must flip staleness, or a dropped
+  # input from _release_fingerprint would silently weaken the fail-closed guard.
+  # (perl + arch are already covered by the _fingerprint primitive test above.)
+  my $cdir = $R->can('_candidate_dir')->( $ctx, 'fp' );
+  $cdir->mkpath;
+
+  for my $input ( [ cpanfile => "$cpanfile" ],
+                  [ mistfile => "$mistfile" ],
+                  [ '02packages index' => $index ] ) {
+    my ( $name, $file ) = @$input;
+    # rewrite a fresh fingerprint against the current tree, then mutate just
+    # this one input and confirm the candidate goes stale.
+    $R->can('_write_candidate_fingerprint')->( $ctx, "$cdir" );
+    is $R->can('_candidate_staleness')->( $ctx, "$cdir" ), '',
+      "fresh fingerprint before touching $name -> not stale";
+    spew( $file, slurp( $file ) . "\n# changed\n" );
+    ok $R->can('_candidate_staleness')->( $ctx, "$cdir" ),
+      "changed $name -> stale (each fingerprint input is wired in)";
+  }
+
+  $R->can('_write_candidate_fingerprint')->( $ctx, "$cdir" );
+  unlink $R->can('_fingerprint_file')->( "$cdir" );
+  like $R->can('_candidate_staleness')->( $ctx, "$cdir" ), qr/no fingerprint/,
+    'missing fingerprint -> stale (fail closed)';
+}
+
+# ---------------------------------------------------------------------------
+# _valid_candidate_id: the path-traversal guard. Accept the hex+dash shape
+# _new_candidate_id emits; reject empty, over-long, and anything with path or
+# option characters that could escape the workspace dir.
+# ---------------------------------------------------------------------------
+{
+  my $ok = \&App::Mist::Command::release::_valid_candidate_id;
+
+  ok $ok->( App::Mist::Command::release::_new_candidate_id() ),
+    '_new_candidate_id output passes its own guard';
+  ok $ok->( 'abc-123' ),       'short hex-ish id accepted';
+  ok $ok->( 'F' x 64 ),        '64 chars accepted (boundary)';
+
+  ok !$ok->( undef ),          'undef rejected';
+  ok !$ok->( '' ),             'empty rejected';
+  ok !$ok->( 'F' x 65 ),       '65 chars rejected (boundary)';
+  ok !$ok->( '..' ),           'parent-dir rejected';
+  ok !$ok->( '../../etc' ),    'path traversal rejected';
+  ok !$ok->( 'a/b' ),          'slash rejected';
+  ok !$ok->( '--dry-run' ),    'option-shaped value rejected';
+  ok !$ok->( 'has space' ),    'whitespace rejected';
+}
 
 done_testing;
