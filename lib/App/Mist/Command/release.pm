@@ -20,11 +20,25 @@ sub execute {
 
   $ctx->ensure_correct_perlbrew_context;
 
+  my $dry_run = grep { $_ eq '--dry-run' } @$args;
+
   Minilla::Project->new->config->{release}{do_not_upload_to_cpan}
     or die "mist release: refusing to run.\n"
          . "minil.toml does not set [release] do_not_upload_to_cpan, so this\n"
          . "release could push to CPAN -- which mist no longer supports.\n"
          . "For a genuine CPAN upload, run `minil release` directly.\n";
+
+  # Changelog gate, hardened. Stock Minilla CheckChanges prompts to edit Changes
+  # when {{$NEXT}} has no entry and loops forever without a TTY (its prompt
+  # panics, then retries). Fail fast instead for a --dry-run and for any
+  # non-interactive run; a real release on a terminal still falls through to
+  # Minilla's interactive prompt below. A dry-run thus fails here exactly as the
+  # real release would, rather than silently passing.
+  if ( not _changes_has_next_entry() and ( $dry_run or not -t STDIN ) ) {
+    die "mist release: Changes has no entry under {{\$NEXT}}.\n"
+      . "Add this release's changes under the {{\$NEXT}} line first"
+      . ( $dry_run ? " (a real release would block here too).\n" : ".\n" );
+  }
 
   # Seal the clean-room dist-test to the project's pinned mpan-dist mirror.
   # Stock Minilla::Project::verify_prereqs shells `cpanm --installdeps
@@ -80,9 +94,19 @@ sub execute {
   # in its in-memory @INC, so Minilla's own lazy loads are unaffected.
   local $ENV{PERL5LIB} = join $Config{path_sep}, @cleanroom_inc;
 
+  # Minilla's release steps honour --dry-run (no version bump, no Changes
+  # rewrite, no commit, no tag, no push - they log what they would do), and the
+  # clean-room dist-test still runs as a real validation. Skip the trailing
+  # `dist` for a dry-run (it does not parse --dry-run and should leave no
+  # tarball). Suppress Minilla's own CheckChanges where we already gated it above
+  # (dry-run / non-interactive); a real release on a terminal keeps the
+  # interactive prompt.
+  local $ENV{PERL_MINILLA_SKIP_CHECK_CHANGE_LOG};
+  $ENV{PERL_MINILLA_SKIP_CHECK_CHANGE_LOG} = 1 if $dry_run or not -t STDIN;
+
   my $minil = Minilla::CLI->new();
   $minil->run( release => @$args );
-  $minil->run( dist => '--no-test', @$args );
+  $minil->run( dist => '--no-test', @$args ) unless $dry_run;
 }
 
 # The contained lib's @INC paths, arch-first to match local::lib / perl's own
@@ -125,6 +149,15 @@ sub _install_prereqs_contained {
     or die "mist release: cpanm --installdeps failed against ${mirror}\n";
 }
 
+# True if Changes has at least one entry under the {{$NEXT}} marker, matching
+# Minilla::Release::CheckChanges' own regex so the gate stays consistent with it.
+sub _changes_has_next_entry {
+  return 0 unless -f 'Changes';
+  open my $fh, '<', 'Changes' or return 0;
+  my $changes = do { local $/; <$fh> };
+  return $changes =~ /^\{\{\$NEXT\}\}\h*\R+\h+\S/m ? 1 : 0;
+}
+
 1;
 
 __END__
@@ -138,6 +171,7 @@ App::Mist::Command::release - tag, test and package a full release
 =head1 SYNOPSIS
 
   mist release
+  mist release --dry-run
 
 =head1 DESCRIPTION
 
@@ -159,6 +193,17 @@ C<mist release> B<refuses to run> unless F<minil.toml> sets
 C<[release] do_not_upload_to_cpan> -- a guard against an accidental CPAN
 push, since mist no longer targets CPAN publishing. For a genuine CPAN
 upload, run C<minil release> directly.
+
+With C<--dry-run> the full pipeline runs - including the clean-room dist-test -
+but the mutating steps only report what they would do: no version bump, no
+F<Changes> rewrite, no commit, no tag, and no push. Use it to confirm a release
+would build and test cleanly before committing to it. Like a real release it
+requires a F<Changes> entry under C<{{$NEXT}}> and fails fast if there is none,
+so a dry-run predicts that block rather than passing over it.
+
+A real release run without a terminal (CI, a background job) also fails fast on
+a missing C<{{$NEXT}}> entry instead of hanging on the interactive
+edit-the-changelog prompt; an interactive release still gets that prompt.
 
 For a lightweight release that only bumps the version and tags the commit
 -- without building or testing a tarball -- use
