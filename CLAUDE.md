@@ -15,7 +15,7 @@ Two things make this codebase unusual:
 
 All commands assume `./perl5/` already exists (i.e. someone has run `./mpan-install` at least once for the current Perl version). Run from the project root.
 
-- **Bootstrap / rebuild local Perl env:** `./mpan-install` (or `./mpan-install --perl 5.20.3` to pin Perl). Reads `cpanfile` + `mistfile`, installs into `./perl5/perl-<ver>-<arch>/`.
+- **Bootstrap / rebuild local Perl env:** `./mpan-install` (or `./mpan-install --perlbrew 5.20.3` to pin Perl). Reads `cpanfile` + `mistfile`, installs into `./perl5/perl-<ver>-<arch>/`.
 - **Run a script under this project's env:** `./mist-run <cmd…>` (symlink to `perl5/bin/mist-run`).
 - **Tests:** `prove -Ilib t/` (the suite is tiny — `t/mistfile.t` is essentially the only test; it exercises `Mist::Environment` parsing of the fixtures in `t/share/`).
 - **Single test:** `prove -Ilib -v t/mistfile.t`.
@@ -56,7 +56,7 @@ There is no separate lint step. Build/release is via Minilla (`minil`), but rele
 ## Conventions and gotchas
 
 - **`perl5/` and `mpan-dist/` in this repo are real, not artifacts to ignore.** `perl5/` is the local env for *this* project (gitignored); `mpan-dist/` is the bundled CPAN mirror that gets fatpacked into `mpan-install` (committed).
-- **Perl version is pinned to 5.20.3** in `mistfile`. Newer Perls *can* be used by passing `--perl` to `mpan-install`, but the bundled tarballs in `mpan-dist/` were curated for 5.20.3 — expect breakage on much newer Perls (the recent `cpanm` update in `b06e58f` exists specifically to make the installer work on 5.38+).
+- **Perl version is pinned to 5.20.3** in `mistfile`. Newer Perls *can* be used by passing `--perlbrew` to `mpan-install`, but the bundled tarballs in `mpan-dist/` were curated for 5.20.3 — expect breakage on much newer Perls (the recent `cpanm` update in `b06e58f` exists specifically to make the installer work on 5.38+).
 - **Don't `cd` into `perl5/`** to "fix" things — wipe it and re-run `./mpan-install` instead.
 - **Shebangs:** `mist compile` walks the project (respecting `MANIFEST.SKIP`) and warns on `#!/usr/bin/perl` or `#!/usr/bin/env perl5.*` style shebangs. Use `#!/usr/bin/env perl`.
 - **Read-only git by default** per the user's global CLAUDE.md. Releases happen through Minilla; never hand-bump `Changes` or version numbers without asking.
