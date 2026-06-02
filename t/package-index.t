@@ -41,7 +41,7 @@ my $root = Path::Class::dir( "$tmp" );
 # dist => [ author-path-segments..., [ versions ] ]
 my %fixture = (
   Foo => { author => [qw/ F FO FOO /], versions => [qw/ 1.10 1.2 1.9 /] },
-  Bar => { author => [qw/ B BA BAR /], versions => [qw/ 0.01 0.10 /]     },
+  Bar => { author => [qw/ B BA BAR /], versions => [qw/ 0.9 0.10 /]      },
 );
 
 # Map "Dist-Version" => absolute Path::Class::File of its tarball, so the
@@ -79,12 +79,13 @@ my $idx = Mist::CPAN::PackageIndex->new( cpan_dist_root => $root );
 # --- _dist_tarballs_lowest_version_first -----------------------------------
 
 # Intended order: dist ASC, then version ASC in the dotted/PAUSE sense
-# where 1.10 is a later point release than 1.9 (1.2 < 1.9 < 1.10). This is
-# the ordering the role's own comment relies on ("lowest first, highest
-# last, so highest-version-wins attributes each package to the newest
-# tarball").
+# where 1.10 is a later point release than 1.9 (1.2 < 1.9 < 1.10). Both dists
+# carry a pair a lexical sort would invert - Bar 0.9 < 0.10 and Foo 1.9 < 1.10 -
+# so the assertion fails if the numeric compare regresses to string order. This
+# is the ordering the role's own comment relies on ("lowest first, highest last,
+# so highest-version-wins attributes each package to the newest tarball").
 my @expected_order = (
-  $tarball{ 'Bar-0.01' },
+  $tarball{ 'Bar-0.9'  },
   $tarball{ 'Bar-0.10' },
   $tarball{ 'Foo-1.2'  },
   $tarball{ 'Foo-1.9'  },
@@ -167,7 +168,7 @@ is_deeply \@got_versions, [qw/ 1.2 1.9 1.10 /],
 my $index = $idx->create_empty_package_index;
 
 my %referenced_paths = (
-  'Bar::A' => 'B/BA/BAR/Bar-0.01.tar.gz',
+  'Bar::A' => 'B/BA/BAR/Bar-0.9.tar.gz',
   'Bar::B' => 'B/BA/BAR/Bar-0.10.tar.gz',
   'Foo::A' => 'F/FO/FOO/Foo-1.2.tar.gz',
   'Foo::B' => 'F/FO/FOO/Foo-1.10.tar.gz',
@@ -203,5 +204,56 @@ for my $file ( @collected ) {
 my @none = $idx->_unreferenced_tarballs( $full_index, \@collected );
 is_deeply \@none, [],
   '_unreferenced_tarballs is empty when every tarball is referenced';
+
+# --- vendor/ tarballs ------------------------------------------------------
+#
+# _dist_tarballs_lowest_version_first walks vendor/ in addition to authors/id/,
+# and _unreferenced_tarballs expresses every path relative to authors/id - so a
+# vendor tarball is addressed as ../../vendor/NAME. The fixture above only
+# populates authors/id, leaving both branches untested; build a separate tree
+# with one tarball in each location and confirm the vendor one is collected and,
+# when unreferenced, reported in the ../../vendor form.
+
+VENDOR: {
+  my $vtmp  = File::Temp->newdir( CLEANUP => 1 );
+  my $vroot = Path::Class::dir( "$vtmp" );
+
+  my $aid  = $vroot->subdir(qw/ authors id A AU AUTH /);
+  my $vdir = $vroot->subdir(qw/ vendor /);
+  $_->mkpath for $aid, $vdir;
+
+  for my $spec ( [ $aid, 'Auth-1.0' ], [ $vdir, 'Vend-2.0' ] ) {
+    my ( $dir, $name ) = @$spec;
+    my $tar = Archive::Tar->new;
+    $tar->add_data( "$name/lib/Stub.pm", "package Stub; 1;\n" );
+    $tar->write( $dir->file( "$name.tar.gz" )->stringify, COMPRESS_GZIP );
+  }
+
+  my $vidx = Mist::CPAN::PackageIndex->new( cpan_dist_root => $vroot );
+
+  my %basename =
+    map { Path::Class::file( "$_" )->basename => 1 }
+    $vidx->_dist_tarballs_lowest_version_first;
+
+  ok $basename{ 'Vend-2.0.tar.gz' },
+    '_dist_tarballs_lowest_version_first collects tarballs under vendor/';
+  ok $basename{ 'Auth-1.0.tar.gz' },
+    '... alongside tarballs under authors/id/';
+
+  # Reference only the authors/id tarball, so the vendor one is the lone orphan
+  # and must come back as ../../vendor/Vend-2.0.tar.gz (authors/id-relative).
+  my @collected = $vidx->_dist_tarballs_lowest_version_first;
+  my $index     = $vidx->create_empty_package_index;
+  $index->add_entry(
+    package_name => 'Stub',
+    version      => '1.0',
+    path         => File::Spec->catfile(qw/ A AU AUTH Auth-1.0.tar.gz /),
+  );
+
+  my @orphans = $vidx->_unreferenced_tarballs( $index, \@collected );
+  is_deeply \@orphans,
+    [ File::Spec->catfile(qw/ .. .. vendor Vend-2.0.tar.gz /) ],
+    'unreferenced vendor tarball is reported as ../../vendor/Vend-2.0.tar.gz';
+}
 
 done_testing;
