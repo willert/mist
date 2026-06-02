@@ -2,6 +2,12 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+  - mistfile DSL: `script` now accepts trailing arguments (`script $phase =>
+    $path, @args`); its ($$) prototype had capped the verb at the path, leaving
+    the body's @args (run by install.pm as system($path, @args)) unreachable -
+    widened to ($$@). Also dropped assert's dead runtime coderef croak; its
+    (&@) prototype already enforces a block at compile time.
+
 0.37 2026-06-02T11:02:46Z
 
   - PackageIndex: order dist tarballs by numeric version components so a

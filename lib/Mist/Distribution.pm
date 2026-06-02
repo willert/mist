@@ -87,9 +87,10 @@ sub merge($&) {
 }
 
 sub assert(&@) {
+  # The (&@) prototype (mirrored onto the mistfile DSL verb by
+  # Mist::Environment::_bind) already forces a block/sub at compile time, so
+  # $code is always a coderef here - no runtime type check is reachable.
   my ( $self, $code ) = @_;
-  croak "assert needs a block, not " . ref $code
-    unless ref $code eq 'CODE';
   $self->store_dist_info( assert => $code );
 }
 
@@ -129,7 +130,11 @@ sub notest ($) {
   $self->store_dist_info( notest => $module );
 }
 
-sub script ($$) {
+# ($$@): phase + path, then any number of arguments for the script. The DSL
+# verb mirrors this prototype, so the trailing args are reachable from a
+# mistfile (`script prepare => q{x.pl}, q{--flag};`); install.pm runs each
+# entry as system( $path, @args ).
+sub script ($$@) {
   my ( $self, $phase, $path, @args ) = @_;
   die "Unknown phase $phase" unless exists $self->{script}{$phase};
   $self->store_dist_info( [ script => $phase ], [ $path, @args ]);

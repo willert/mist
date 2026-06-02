@@ -130,12 +130,11 @@ ASSERT_MULTIPLE: {
 }
 
 ASSERT_NON_CODEREF: {
-  # assert() with a non-coderef argument dies. Note the death is NOT the
-  # runtime croak "assert needs a block" at Distribution.pm:91 -- the (&@)
-  # prototype on sub assert (mirrored onto the DSL-generated sub by
-  # Mist::Environment::_bind) rejects any non-block first argument at
-  # compile time. So from the mistfile DSL the line-91 croak is effectively
-  # unreachable; what the author actually sees is this prototype error.
+  # assert() requires a block: the (&@) prototype (mirrored onto the DSL verb
+  # by Mist::Environment::_bind) rejects any non-block first argument at compile
+  # time. That prototype is the sole guard - the redundant runtime CODE-ref
+  # croak that used to sit in the body was unreachable from the DSL and has been
+  # removed.
   my $err = parse_expect_die('assert q{not a coderef};');
   like $err, qr/must be block or sub \{\}/,
     'assert with a non-coderef argument dies (prototype rejects it at compile time)';
@@ -174,26 +173,20 @@ SCRIPT_NOT_DEDUPED: {
 }
 
 SCRIPT_SINGLE_PATH_SUPPORTED: {
-  # Only the single-path form is actually usable from the mistfile DSL.
+  # The single-path form (no trailing args).
   my $dist = parse_source('script prepare => q{only.pl};');
   is_deeply [ $dist->get_scripts('prepare') ], [ ['only.pl'] ],
     'script with a single path is stored as a one-element arrayref';
 }
 
-SCRIPT_EXTRA_ARGS_PROTOTYPE_CLASH: {
-  # INCONSISTENCY (source bug, left unchanged on purpose):
-  #   sub script ($$) { my ( $self, $phase, $path, @args ) = @_; ... }
-  # The body deliberately captures @args and stores [ $path, @args ], so it
-  # is written to accept extra per-script arguments. But the ($$) prototype
-  # (mirrored onto the DSL sub by Mist::Environment::_bind) caps the verb at
-  # exactly two scalar args. So passing extra args
-  #     script prepare => q{x.pl}, q{--flag};
-  # is a COMPILE error ("Too many arguments for ...::script"), and the @args
-  # capture is dead code from the DSL's point of view. We pin the observed
-  # behaviour here rather than the (unreachable) intent.
-  my $err = parse_expect_die('script prepare => q{x.pl}, q{--flag};');
-  like $err, qr/Too many arguments for .*script/,
-    'script with extra args is rejected at compile time by the ($$) prototype';
+SCRIPT_EXTRA_ARGS: {
+  # script accepts trailing arguments after the path: the ($$@) prototype lets
+  # the DSL pass them and the body stores [ $path, @args ] (install.pm runs each
+  # entry as system( $path, @args )).
+  my $dist = parse_source('script prepare => q{x.pl}, q{--flag}, q{--more};');
+  is_deeply [ $dist->get_scripts('prepare') ],
+    [ [ 'x.pl', '--flag', '--more' ] ],
+    'script stores trailing args alongside the path';
 }
 
 # --- dist_path verb --------------------------------------------------------
