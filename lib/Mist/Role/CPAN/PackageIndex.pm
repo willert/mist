@@ -283,6 +283,30 @@ sub _unreferenced_tarballs {
   return sort @obsolete;
 }
 
+# Order distribution version strings the way point releases are actually cut:
+# 1.2 < 1.9 < 1.10. version->parse (and CPAN::Version->vcmp) read a bare decimal
+# '1.10' as 1.1, which sorts it below 1.9 and inverts the highest-version-wins
+# dedup below for any dist with a multi-digit point release. Compare the
+# dot/underscore-separated numeric components instead; this also keeps v-strings
+# (v1.2.3) and long CPAN::Meta versions (2.150010) in intuitive order, and does
+# not choke on v-strings the way version->parse("v$ver") would.
+sub _version_parts {
+  my $v = shift;
+  $v = '0' unless defined $v && length $v;
+  $v =~ s/^v//i;
+  return [ map { /(\d+)/ ? $1 : 0 } split /[._]/, $v ];
+}
+
+sub _version_cmp {
+  my @x = @{ _version_parts( shift ) };
+  my @y = @{ _version_parts( shift ) };
+  for my $i ( 0 .. ( @x > @y ? $#x : $#y ) ) {
+    my $c = ( $x[$i] // 0 ) <=> ( $y[$i] // 0 );
+    return $c if $c;
+  }
+  return 0;
+}
+
 # Collect every tarball under authors/id/ (and vendor/ when present),
 # then sort so that within each dist the lowest-versioned tarball is
 # visited first and the highest is visited last. CPAN::PackageDetails
@@ -308,7 +332,7 @@ sub _dist_tarballs_lowest_version_first {
     map  { $_->[2] }
     sort {
          $a->[0] cmp $b->[0]
-      || ( eval { version->parse( $a->[1] ) <=> version->parse( $b->[1] ) } || 0 )
+      || _version_cmp( $a->[1], $b->[1] )
       || $a->[2] cmp $b->[2]
     }
     map  {

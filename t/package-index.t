@@ -101,36 +101,18 @@ my @got_versions =
   grep { CPAN::DistnameInfo->new( "$_" )->dist eq 'Foo' }
   @got;
 
-# KNOWN BUG (TODO): _dist_tarballs_lowest_version_first sorts via bare
-# version->parse() on the raw dist-version strings. version.pm interprets
-# "1.2"/"1.9"/"1.10" as decimal floats (1.200 / 1.900 / 1.100), so it
-# ranks Foo-1.10 *below* Foo-1.2 - the opposite of the dotted/PAUSE
-# convention the role's "highest version visited last" dedup depends on.
-# Net effect: for any dist with a multi-digit point release (1.10, 1.20,
-# ...), packages attribute to the wrong (older) tarball. The Bar pair
-# (0.01 < 0.10) happens to order correctly only because 0.010 < 0.100 as
-# floats too. A correct comparator would treat these as dotted versions
-# (e.g. version->parse("v$ver")) or defer to CPAN::DistnameInfo's own
-# version ordering. The two assertions below encode the *intended*
-# behaviour and will start passing once the comparator is fixed.
-TODO: {
-  local $TODO = 'version->parse() reads dist versions as decimal floats: '
-              . '1.10 (=1.100) sorts below 1.2 (=1.200); '
-              . 'breaks highest-version-wins for multi-digit point releases';
+# Ordered by dist ASC, then version ASC by NUMERIC components so a multi-digit
+# point release sorts newest (1.2 < 1.9 < 1.10), then path ASC. A bare
+# version->parse() would read "1.10" as the decimal 1.1 and rank it below 1.9,
+# inverting the highest-version-wins dedup; the role uses _version_cmp (numeric
+# dot/underscore components) precisely to avoid that.
+is_deeply
+  [ map { "$_" } @got ],
+  [ map { "$_" } @expected_order ],
+  'ordered by dist ASC, version ASC (1.2 < 1.9 < 1.10), path ASC';
 
-  is_deeply
-    [ map { "$_" } @got ],
-    [ map { "$_" } @expected_order ],
-    'ordered by dist ASC, version ASC in dotted sense (1.2 < 1.9 < 1.10), path ASC';
-
-  is_deeply \@got_versions, [qw/ 1.2 1.9 1.10 /],
-    'Foo tarballs visited lowest-version first in dotted sense (1.10 newest)';
-}
-
-# Document the *actual* (buggy) order too, so this test stays green and
-# any future change in the ordering - intended or not - is noticed here.
-is_deeply \@got_versions, [qw/ 1.10 1.2 1.9 /],
-  'ACTUAL order today: 1.10, 1.2, 1.9 (decimal-float interpretation; see TODO)';
+is_deeply \@got_versions, [qw/ 1.2 1.9 1.10 /],
+  'Foo tarballs visited lowest-version first; 1.10 is newest, visited last';
 
 # --- _unreferenced_tarballs ------------------------------------------------
 

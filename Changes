@@ -2,6 +2,11 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+  - PackageIndex: order dist tarballs by numeric version components so a
+    multi-digit point release sorts newest (1.9 < 1.10); version->parse read
+    '1.10' as 1.1 and could attribute submodules to the older tarball. Handles
+    v-strings and long CPAN::Meta versions; smoke-tested over mpan-dist.
+
   - release: install the dist's dependency closure into a throwaway contained
     lib and run the dist-test hermetically - a release never writes into (or can
     corrupt) mist's own perl5, and a dependency used but not declared in the
