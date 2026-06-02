@@ -13,6 +13,16 @@ Revision history for App::Mist
     missing {{$NEXT}} changelog entry instead of hanging on Minilla's
     interactive edit-Changes prompt; an interactive release keeps the prompt.
 
+  - Add a unit-test suite for the core logic: cpanm call-stack ordering
+    (incl. the notest declaration-order invariant), mistfile DSL verbs + merge
+    folding, Mist::Environment::as_code, the release changelog gate, the
+    PAUSE-style module indexer (inline-version + POD-trap), mpan-dist tarball
+    ordering/orphans, and Context::fetch_prereqs. ~200 assertions across t/.
+
+  - MANIFEST.SKIP: anchor the `mistfile` skip to `^mistfile$` so t/mistfile.t and
+    the t/share/mistfile.* fixtures ship in the dist; the release dist-test was
+    silently NOTESTS (the unanchored pattern excluded the whole suite).
+
   - merge: print a 'mist compile' hint instead of $0's absolute path.
 
 0.36 2026-05-28T18:54:57Z

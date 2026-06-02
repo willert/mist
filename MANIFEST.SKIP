@@ -57,7 +57,9 @@ cover_db
 # no mist environment
 ^mpan-dist/
 ^mpan-install
-mistfile
+# anchored: the project's own top-level mistfile only - NOT t/mistfile.t or the
+# t/share/mistfile.* parser fixtures, which must ship so the dist-test can run.
+^mistfile$
 
 # No temp and local files
 \btmp[\._]*
