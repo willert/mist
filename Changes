@@ -2,6 +2,8 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+0.37 2026-06-02T11:02:46Z
+
   - PackageIndex: order dist tarballs by numeric version components so a
     multi-digit point release sorts newest (1.9 < 1.10); version->parse read
     '1.10' as 1.1 and could attribute submodules to the older tarball. Handles
