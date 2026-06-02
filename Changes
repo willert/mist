@@ -9,6 +9,9 @@ Revision history for App::Mist
   - release POD: scope the hermeticity and non-interactive guarantees - the
     dist-test misses configure-time deps, and fail-fast covers only the changelog prompt.
 
+  - index: fall back to META.json when a dist ships no META.yml, so a JSON-only
+    dist's provides/no_index are honoured; dists shipping META.yml are unaffected.
+
   - mistfile DSL: `script` now accepts trailing arguments (`script $phase =>
     $path, @args`); its ($$) prototype had capped the verb at the path, leaving
     the body's @args (run by install.pm as system($path, @args)) unreachable -

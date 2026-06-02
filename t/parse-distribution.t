@@ -9,6 +9,7 @@ use Cwd ();
 use File::Spec;
 use File::Temp ();
 use Archive::Tar ();
+use JSON::PP ();
 
 use Mist::ParseDistribution;
 
@@ -272,6 +273,109 @@ END_META
       'Guard::ExactReal'=> '7.7',
     },
     'DB / leading-underscore / exact-namespace packages skipped; siblings indexed';
+}
+
+# --- META.json fallback when META.yml is absent ------------------------------
+#
+# _read_meta prefers META.yml (unchanged behaviour); only when META.yml is
+# absent does it fall back to META.json, parsed via CPAN::Meta. These three
+# cases pin that fallback: a JSON-only dist must have its provides and no_index
+# honoured, and when BOTH metas are present META.yml must still win.
+
+# A complete-enough meta-spec v2 document, encoded from a Perl structure so the
+# JSON is always well-formed (no hand-written brace matching). Each case merges
+# in name/version plus a provides or no_index block.
+sub meta_json {
+  my (%extra) = @_;
+  return JSON::PP->new->canonical->encode( {
+    abstract       => 'test',
+    author         => [ 'test' ],
+    dynamic_config => 0,
+    generated_by   => 'test',
+    license        => [ 'perl_5' ],
+    'meta-spec'    => { version => 2 },
+    release_status => 'stable',
+    %extra,
+  } );
+}
+
+META_JSON_PROVIDES: {
+  my $json = meta_json(
+    name     => 'ProvJson', version => '5.0',
+    provides => {
+      'ProvJson::Declared' => { file => 'lib/ProvJson/Declared.pm', version => '5.5' },
+    },
+  );
+
+  my $tarball = build_tarball(
+    $tmp, 'ProvJson-5.0',
+    'META.json'                  => $json,
+    'lib/ProvJson.pm'            => "package ProvJson;\nour \$VERSION = '5.0';\n1;\n",
+    'lib/ProvJson/Declared.pm'   => "package ProvJson::Declared;\nour \$VERSION = '5.5';\n1;\n",
+  );
+
+  my $modules = index_tarball( $tarball, $tmp );
+
+  is_deeply stringify_versions( $modules ),
+    { 'ProvJson::Declared' => '5.5' },
+    'META.json provides is honoured (yml absent) and short-circuits the file walk';
+}
+
+META_JSON_NO_INDEX: {
+  my $json = meta_json(
+    name     => 'MetaJson', version => '2.0',
+    no_index => {
+      directory => [ 'private' ],
+      package   => [ 'MetaJson::Secret' ],
+      namespace => [ 'MetaJson::Internal' ],
+    },
+  );
+
+  my $tarball = build_tarball(
+    $tmp, 'MetaJson-2.0',
+    'META.json'                       => $json,
+    'lib/MetaJson.pm'                 => "package MetaJson;\nour \$VERSION = '2.0';\n1;\n",
+    'private/MetaJson/Hidden.pm'      => "package MetaJson::Hidden;\nour \$VERSION = '7';\n1;\n",
+    'lib/MetaJson/Secret.pm'          => "package MetaJson::Secret;\nour \$VERSION = '8';\n1;\n",
+    'lib/MetaJson/Internal/Detail.pm' => "package MetaJson::Internal::Detail;\nour \$VERSION = '9';\n1;\n",
+  );
+
+  my $modules = index_tarball( $tarball, $tmp );
+
+  is_deeply stringify_versions( $modules ),
+    { 'MetaJson' => '2.0' },
+    'META.json no_index directory/package/namespace all exclude their matches (yml absent)';
+}
+
+META_YML_WINS_OVER_JSON: {
+  my $yml = <<'END_YML';
+---
+name: MetaBoth
+version: 1.0
+provides:
+  MetaBoth::FromYml:
+    file: lib/MetaBoth/FromYml.pm
+    version: 1.0
+END_YML
+
+  my $json = meta_json(
+    name     => 'MetaBoth', version => '2.0',
+    provides => {
+      'MetaBoth::FromJson' => { file => 'lib/MetaBoth/FromJson.pm', version => '2.0' },
+    },
+  );
+
+  my $tarball = build_tarball(
+    $tmp, 'MetaBoth-1.0',
+    'META.yml'   => $yml,
+    'META.json'  => $json,
+  );
+
+  my $modules = index_tarball( $tarball, $tmp );
+
+  is_deeply stringify_versions( $modules ),
+    { 'MetaBoth::FromYml' => '1.0' },
+    'with both metas present, META.yml wins and META.json is ignored';
 }
 
 done_testing;

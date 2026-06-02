@@ -13,6 +13,7 @@ use CPAN::ParseDistribution::Unix;
 use Devel::AssertOS::Unix;
 
 use Module::Metadata 1.000033;
+use CPAN::Meta ();
 use Archive::Tar ();
 use Archive::Zip ();
 use Cwd ();
@@ -169,10 +170,27 @@ sub _is_indexable {
 
 sub _read_meta {
   my ( $self, $distroot ) = @_;
-  my ( $meta_file ) = glob "$distroot/META.yml";
-  return undef unless $meta_file and -f $meta_file;
-  my $meta = eval { YAML::LoadFile( $meta_file ) };
-  return ref $meta eq 'HASH' ? $meta : undef;
+
+  # META.yml is read exactly as before, so every dist that ships it indexes
+  # identically. Fall back to META.json (via CPAN::Meta, which reads the v2
+  # format) only when META.yml is absent, so a JSON-only dist still has its
+  # provides / no_index honoured instead of dropping to the .pm file walk.
+  # Both readers fail soft: a malformed file returns undef and the caller
+  # walks the files. as_struct yields a plain hashref whose provides/no_index
+  # match the shape _index_distroot already expects.
+  my ( $yml ) = glob "$distroot/META.yml";
+  if ( $yml and -f $yml ) {
+    my $meta = eval { YAML::LoadFile( $yml ) };
+    return ref $meta eq 'HASH' ? $meta : undef;
+  }
+
+  my ( $json ) = glob "$distroot/META.json";
+  if ( $json and -f $json ) {
+    my $meta = eval { CPAN::Meta->load_file( $json )->as_struct };
+    return ref $meta eq 'HASH' ? $meta : undef;
+  }
+
+  return undef;
 }
 
 sub _listify {
