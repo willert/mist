@@ -157,8 +157,11 @@ tree, not proven infrastructure. The same discount applies to the symlink resolu
 in `_build_local_lib` (Context.pm:174) and the generic-symlink relink
 (install.pm:418-428): both fire only in the branch case.
 
-- Build the failure-injection / atomicity / rollback / append-leak tests the project
-  lacks (the suite is essentially `t/mistfile.t`).
+- Build the install-time failure-injection / atomicity / rollback / append-leak harness
+  the project lacks. The unit suite is healthy and already reaches the install/Script
+  layer (`t/script-perlbrew-stdin.t`, `t/build-cpanm-call-stack.t`, plus the parse-layer
+  tests); what is missing is exercising a real `./mpan-install` against a sandbox -
+  killing it mid-build and asserting generation immutability and rollback.
 - Audit and fix the seed+swap primitive against the immutability invariant - or
   rewrite it to that invariant, since branch was written for dev experimentation where
   immutability was never required. The code is cheap either way (the seed is one `cp
