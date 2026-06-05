@@ -296,6 +296,9 @@ MSG
 
     { local $SIG{__WARN__} = sub{}; local::lib->import('--deactivate-all') }
 
+    # Unlike mpan-install's installer re-exec (Mist::Script::perlbrew), do NOT
+    # sever STDIN here: this re-exec also backs `mist run`, which must pass the
+    # caller's STDIN through to the executed command.
     exec $pb_exec, 'exec', '--quiet', '--with', $pb_version,
       dist_file( 'App-Mist', 'perlbrew-wrapper.bash' ), $0, @ARGV;
   } else {

@@ -125,6 +125,15 @@ sub ensure_runtime_is_correct_perl_version {
       ( my $cmd_name = "$0 @INITIAL_ARGS") =~ s/[\n\r\s]+$//;
       $cmd_name =~ s/\s{2,}/ /;
       printf "Restarting $cmd_name under %s [%s]\n", $pb_version, $pb_archname;
+
+      # A non-tty STDIN (background job, CI, agent harness) may be a pipe that
+      # never reaches EOF. Nothing in the install path wants input, but the
+      # re-exec'd installer inherits fd 0, so a downstream read (a dist's
+      # Makefile.PL reading STDIN directly, say) would block forever. Sever it
+      # so such reads get immediate EOF; a real tty is left alone so genuine
+      # prompts still work.
+      open STDIN, '<', File::Spec->devnull unless -t STDIN;
+
       exec $pb_exec, 'exec', @pb_options, $0, @INITIAL_ARGS;
     }
   }
