@@ -16,6 +16,7 @@ our $PERLBREW_DEFAULT_VERSION;
 use File::Spec ();
 use Getopt::Long 2.42;
 use Config;
+use FindBin ();
 
 my $run_quiet = 0;
 my $pb_root   = $ENV{PERLBREW_ROOT} || $PERLBREW_ROOT;
@@ -34,15 +35,77 @@ my $pb_version;
   $p->getoptionsfromarray( \@INITIAL_ARGS, %arg_spec );
 }
 
+# Capture explicitness before the env/default fallbacks below: only a literal
+# --perlbrew counts as the user confirming a switch.
+my $pb_explicit = defined $pb_version;
+
 $pb_version ||= $ENV{MIST_PERLBREW_VERSION};
 $pb_version ||= $PERLBREW_DEFAULT_VERSION;
 undef $pb_version if $pb_version and $pb_version eq 'system';
 
 sub init {
+  guard_against_implicit_switch();
   find_perl_version_manager_executable();
   assert_availability_of_requested_perl_version();
   ensure_runtime_is_correct_perl_version();
   check_runtime_environment();
+}
+
+# --- Implicit-switch guard ------------------------------------------------
+
+# Pure decision: given the active perl, the requested target and the mode,
+# return 'proceed', 'confirm' (ask on a tty) or 'refuse' (die, no tty). Kept
+# free of I/O so the precedence is unit-testable (t/switch-verdict.t).
+sub _switch_verdict {
+  my %a = @_;   # active, target, explicit, build_only, interactive
+  return 'proceed' if $a{build_only};       # --build-only never activates
+  return 'proceed' if $a{explicit};         # --perlbrew is its own confirmation
+  return 'proceed' if !defined $a{active};  # fresh workdir / pre-symlink layout
+  return 'proceed' if $a{active} eq $a{target};
+  return $a{interactive} ? 'confirm' : 'refuse';
+}
+
+# The active perl is whatever perl5/bin/mist-run points at. readlink yields
+# undef when it is not a symlink (a fresh install or an old single-file
+# layout), which _switch_verdict reads as "nothing to switch away from".
+sub _active_perl_version {
+  my $app_root = $ENV{MIST_APP_ROOT} || $FindBin::Bin;
+  my $body = readlink File::Spec->catfile(
+    $app_root, qw/ perl5 bin mist-run / );
+  return undef unless defined $body;
+  my ( $version ) = $body =~ m/perl-([\d.]+)/;
+  return $version;
+}
+
+# A bare ./mpan-install that would change the active perl is an implicit switch:
+# confirm it on a tty, refuse it without one (so a deploy/CI run that forgot to
+# pin --perlbrew dies loudly rather than silently reverting the perl). Runs
+# before the perlbrew re-exec so a declined switch wastes no closure build.
+sub guard_against_implicit_switch {
+  return if $ENV{MIST_PERLBREW_VERSION};   # re-exec'd pass / external selection
+  return unless $pb_version;               # no perl management at all
+
+  ( my $target = $pb_version ) =~ s/^perl-//;
+  my $active = _active_perl_version();
+
+  my $verdict = _switch_verdict(
+    active      => $active,
+    target      => $target,
+    explicit    => $pb_explicit,
+    build_only  => $Mist::Script::install::build_only,
+    interactive => ( -t STDIN ? 1 : 0 ),
+  );
+
+  return if $verdict eq 'proceed';
+
+  if ( $verdict eq 'refuse' ) {
+    die "FATAL: refusing to implicitly switch perl from $active to $target.\n"
+      . "Re-run with --perlbrew=$target to confirm the switch.\n";
+  }
+
+  print "This workdir runs on $active, switch to $target? [y/N] ";
+  my $answer = <STDIN>;
+  exit 1 unless defined $answer and $answer =~ /\A\s*y/i;
 }
 
 # --- Internals ------------------------------------------------------------

@@ -49,6 +49,14 @@ ARTIFACT_CARRIES_SYMLINK_ACTIVATION: {
     'committed mpan-install carries the --build-only option';
 }
 
+ARTIFACT_CARRIES_SWITCH_GUARD: {
+  # Step-1 switch-guard: reaches the committed installer only via `mist compile`.
+  like $src, qr/sub _switch_verdict/,
+    'committed mpan-install carries the implicit-switch decision sub';
+  like $src, qr/switch to \$target/,
+    'committed mpan-install carries the interactive switch prompt';
+}
+
 HEAD_READABLE_VERSION_MARKER: {
   # Not a drift check (those are the greps above) - this guards the nudge-infra
   # invariant that compile stamps a parseable version marker near the top of
