@@ -37,4 +37,20 @@ ARTIFACT_KEEPS_VERSION_LISTING_HELPER: {
     'list_available_perl_versions survives (still used by the availability check)';
 }
 
+HEAD_READABLE_VERSION_MARKER: {
+  # Not a drift check (those are the greps above) - this guards the nudge-infra
+  # invariant that compile stamps a parseable version marker near the top of
+  # every installer, for all time. Structure only: it exists, parses, and is
+  # head-readable - never a specific version value (that would re-conflate it
+  # with the change-specific greps and go stale every release).
+  my @head = ( split /\n/, $src )[ 0 .. 4 ];
+  my ( $line ) = grep { defined && /App::Mist version\s+\d/ } @head;
+  ok $line,
+    'mpan-install carries a head-readable version marker (for the staleness nudge)';
+
+  my ( $version ) = ( $line // '' ) =~ /App::Mist version\s+(\d+(?:\.\d+)*)/;
+  like $version // '', qr/\A\d+(?:\.\d+)*\z/,
+    'the version marker parses to a dotted version number';
+}
+
 done_testing;
