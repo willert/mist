@@ -37,6 +37,18 @@ ARTIFACT_KEEPS_VERSION_LISTING_HELPER: {
     'list_available_perl_versions survives (still used by the availability check)';
 }
 
+ARTIFACT_CARRIES_SYMLINK_ACTIVATION: {
+  # Step-1 restructure: per-perl wrapper bodies, atomic symlink activation and
+  # the --build-only flag. These reach the committed installer only through
+  # `mist compile`, so they double as the drift guard for this changeset.
+  like $src, qr/sub _activate_symlink/,
+    'committed mpan-install carries the atomic symlink-activation helper';
+  like $src, qr/mist-run-\$arch_path/,
+    'committed mpan-install builds per-perl wrapper bodies (mist-run-<ver>-<arch>)';
+  like $src, qr/\bbuild-only\b/,
+    'committed mpan-install carries the --build-only option';
+}
+
 HEAD_READABLE_VERSION_MARKER: {
   # Not a drift check (those are the greps above) - this guards the nudge-infra
   # invariant that compile stamps a parseable version marker near the top of

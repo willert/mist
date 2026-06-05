@@ -27700,6 +27700,7 @@ BEGIN {
 
 
 my ( $branch, $parent, $prove );
+our $build_only;
 my %dist_options;
 BEGIN {
   @CMD_OPTS = @ARGV;
@@ -27709,10 +27710,11 @@ BEGIN {
     \@CMD_OPTS,
     \%dist_options,
 
-    # those two are not included in %dist_options
-    'branch:s' => \$branch,
-    'parent=s' => \$parent,
-    'prove'    => \$prove,
+    # these are not included in %dist_options
+    'branch:s'   => \$branch,
+    'parent=s'   => \$parent,
+    'prove'      => \$prove,
+    'build-only' => \$build_only,
 
     # the following are accessible via %dist_options
     'force-tests',
@@ -27720,6 +27722,10 @@ BEGIN {
     'skip-notest',
   );
 }
+
+# Build populates this perl's lib/body/rc; Activate repoints the stable
+# selectors at them. --build-only does Build but skips Activate.
+my $activate = $build_only ? 0 : 1;
 
 our $MPAN_DIST_DIR || die '$MPAN_DIST_DIR not set';
 our $PERL5_BASE_LIB = 'perl5';
@@ -27840,6 +27846,17 @@ sub run_cpanm {
   return $result;
 }
 
+# Atomic activation: stage the symlink under a temp name, then rename it over
+# the live selector. rename(2) is atomic, so a reader never sees a missing or
+# half-written link.
+sub _activate_symlink {
+  my ( $target, $link ) = @_;
+  my $tmp = "${link}.tmp.$$";
+  unlink $tmp;
+  symlink( $target, $tmp ) or die "Failed to stage symlink $tmp -> $target: $!";
+  rename( $tmp, $link )    or die "Failed to activate symlink $link -> $target: $!";
+}
+
 
 die "mpan-install can not run as root\n" if $> == 0;
 
@@ -27867,25 +27884,52 @@ if ( not -r $mpan or not -w $local_lib ) {
 my $p5_dir = realpath( File::Spec->catdir( $local_lib, File::Spec->updir ));
 my $rc_dir = File::Spec->catdir( $p5_dir, 'etc' );
 mkpath( $rc_dir );
-my $mist_rc = File::Spec->catfile( $rc_dir, 'mist.mistrc' );
-open my $env, '>', $mist_rc;    # to catch write errors early on
-
 my $bin_dir = File::Spec->catdir( $p5_dir, 'bin' );
 mkpath( $bin_dir );
-my $mist_run_fn = File::Spec->catfile( $bin_dir, 'mist-run');
 
-open my $mist_run, '>', $mist_run_fn; # to catch write errors early on
+# Build writes per-perl artifacts under stable, version-tagged names; Activate
+# repoints the bare selectors (mist-run, mist.mistrc) at them. The per-perl
+# body and rc are what let an alternate-perl build leave the live env alone.
+my $body_name = "mist-run-$arch_path";
+my $body_fn   = File::Spec->catfile( $bin_dir, $body_name );
+my $rc_name   = "mist.mistrc-$arch_path";
+my $rc_fn     = File::Spec->catfile( $rc_dir, $rc_name );
+
+my $mist_run_fn = File::Spec->catfile( $bin_dir, 'mist-run' );    # selector symlink
+my $mist_rc     = File::Spec->catfile( $rc_dir, 'mist.mistrc' );  # convenience alias
+
+# Installing a *different* perl than the active one builds into its own dir,
+# body and rc and never touches the selector until the final atomic flip, so it
+# is atomic for free. Re-installing the active perl mutates its one lib dir
+# live, so during that build the selector is stubbed to fail loudly.
+my $active_body   = readlink $mist_run_fn;
+my $is_cross      = defined( $active_body ) && $active_body ne $body_name;
+my $stub_selector = $activate && !$is_cross;
+
+open my $env, '>', $rc_fn        # open early to catch write errors
+  or die "Creating $rc_fn failed: $!";
+
+open my $body, '>', $body_fn
+  or die "Creating $body_fn failed: $!";
 {
-  my $perm = ( stat $mist_run_fn )[2] & 07777;
-  chmod( $perm | 0755, $mist_run_fn );
+  my $perm = ( stat $body_fn )[2] & 07777;
+  chmod( $perm | 0755, $body_fn );
 }
 
-print $mist_run <<'BASH';
+if ( $stub_selector ) {
+  unlink $mist_run_fn;   # may be a symlink to an old body; never write through it
+  open my $stub, '>', $mist_run_fn
+    or die "Creating $mist_run_fn failed: $!";
+  print $stub <<'BASH';
 #!/bin/bash
 
 echo "FATAL: Mist environment not fully installed";
 exit 1;
 BASH
+  close $stub;
+  my $perm = ( stat $mist_run_fn )[2] & 07777;
+  chmod( $perm | 0755, $mist_run_fn );
+}
 
 local $ENV{HOME} = $workspace;
 local $ENV{MIST_APP_ROOT} = $mist_home;
@@ -27960,12 +28004,10 @@ require local::lib;
 }
 
 close $env;
-close $mist_run;
 
-open $mist_run, '>', $mist_run_fn; # reopen mist-run and flesh it out
-
-# my $arch_path = File::Spec->abs2rel( $LOCAL_LIB_DIR, $PERL5_BASE_LIB );
-printf $mist_run <<'WRAPPER', $mist_home, $mist_rc, $arch_path;
+# The per-perl body sources its own per-perl rc by baked path, so a single
+# repoint of the perl5/bin/mist-run selector switches the whole executed env.
+printf $body <<'WRAPPER', $mist_home, $rc_fn, $arch_path;
 #!/bin/bash
 
 MIST_ROOT="%s"
@@ -27998,14 +28040,25 @@ export LD_LIBRARY_PATH=$MIST_ROOT/perl5/lib:$LD_LIBRARY_PATH
 mist_exec "${@}"
 WRAPPER
 
-close $mist_run;
+close $body;
 
-my $global_mist_run = File::Spec->catfile( $mist_home, 'mist-run' );
-unlink $global_mist_run;
-symlink( $mist_run_fn, $global_mist_run )
-  or warn "Permission denied while creating ./mist-run\n";
+if ( $activate ) {
+  # Activate: repoint the stable selectors at this perl's freshly-built body
+  # and rc. rename(2) over the existing link makes each flip atomic, so a
+  # cross-perl switch is complete or not at all.
+  _activate_symlink( $body_name, $mist_run_fn );
+  _activate_symlink( $rc_name,   $mist_rc );
 
-for my $script_dir (qw/ bin sbin script /) {
+  my $global_mist_run = File::Spec->catfile( $mist_home, 'mist-run' );
+  unlink $global_mist_run;
+  symlink( $mist_run_fn, $global_mist_run )
+    or warn "Permission denied while creating ./mist-run\n";
+}
+
+# Re-generating the bin/sbin/script shims is part of Activate (they funnel
+# through the selector), so iterate the empty list to skip them when only
+# building.
+for my $script_dir ( $activate ? (qw/ bin sbin script /) : () ) {
 
   my $loc_script_dir = File::Spec->catdir( $perl5_baselib, $script_dir );
 
@@ -28084,9 +28137,10 @@ if ( $branch ) {
   }
 }
 
-system $mist_run_fn => prove => ( '-l', 't' ) if $prove;
+system $body_fn => prove => ( '-l', 't' ) if $prove;
 
-print <<"SUCCESS";
+if ( $activate ) {
+  print <<"SUCCESS";
 
 Successfully created a mist environment for this distribution.
 To enable it put the following line in your scripts:
@@ -28097,6 +28151,18 @@ automatically prepended to \$PATH) you can also use this wrapper script:
 $mist_run_fn my_script.pl [OPTIONS ..]
 
 SUCCESS
+} else {
+  print <<"SUCCESS";
+
+Successfully built $arch_path without activating it; the active perl is
+unchanged. Run binaries from this build directly via:
+$body_fn my_script.pl [OPTIONS ..]
+
+or enable it in a shell with:
+source $rc_fn
+
+SUCCESS
+}
 ; BEGIN {$MPAN_DIST_DIR = 'mpan-dist';
 ;
 $PREREQUISITE_DISTS = [
@@ -28149,6 +28215,8 @@ package Mist::Script::usage;
    --skip-prepended    don't prepend those modules requested in mistfile
    --skip-notest       don't prepend modules marked as 'notest' in mistfile
    --perlbrew VERSION  use this perlbrew-managed perl version
+   --build-only        build (or rebuild) the target perl's environment but
+                       do not activate it; the current selector is untouched
 
    --branch [BRANCH]
        work on a named local::lib branch (defaults to git branch)

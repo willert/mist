@@ -16,6 +16,8 @@ package Mist::Script::usage;
    --skip-prepended    don't prepend those modules requested in mistfile
    --skip-notest       don't prepend modules marked as 'notest' in mistfile
    --perlbrew VERSION  use this perlbrew-managed perl version
+   --build-only        build (or rebuild) the target perl's environment but
+                       do not activate it; the current selector is untouched
 
    --branch [BRANCH]
        work on a named local::lib branch (defaults to git branch)
