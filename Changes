@@ -2,6 +2,11 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+  - mist: add a git-style global -C <path> option that chdirs before the
+    subcommand runs, so the project root and the perlbrew re-exec resolve from
+    <path>. Repeatable (relative paths chain like git's), accepts -C path,
+    -C=path and -Cpath. Covered by t/app-chdir-option.t.
+
 0.39 2026-06-05T02:11:36Z
 
   - mist run: add --perlbrew=<ver> to run a command under the matching

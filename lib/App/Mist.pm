@@ -55,9 +55,58 @@ sub ctx {
   $self->{ctx} //= App::Mist::Context->new;
 }
 
+# git-style global "-C <path>": run as if mist had been started in <path>.
+# Applied before App::Cmd dispatches, so the project root (found by walking up
+# from cwd) and everything downstream resolve from there. The options are
+# stripped from @ARGV so the perlbrew re-exec in App::Mist::Context does not
+# re-apply a relative path on top of the already-changed cwd.
+sub run {
+  my $class = shift;
+  for my $path ( $class->_shift_chdir_paths( \@ARGV ) ) {
+    next unless length $path;          # -C "" leaves the cwd unchanged, like git
+    chdir $path or die "mist: cannot chdir to '$path': $!\n";
+  }
+  return $class->SUPER::run( @_ );
+}
+
+# Pull leading -C options off the front of an argv arrayref and return their
+# paths in order. Accepts "-C <path>", "-C=<path>" and "-C<path>". Applying the
+# paths with successive chdir gives git's rule that a non-absolute -C is taken
+# relative to the preceding one for free.
+sub _shift_chdir_paths {
+  my ( $class, $argv ) = @_;
+  my @paths;
+  while ( @$argv and $argv->[0] =~ /\A-C(=?.*)\z/s ) {
+    if ( length $1 ) {                 # -C<path> or -C=<path>
+      ( my $path = $1 ) =~ s/\A=//;
+      shift @$argv;
+      push @paths, $path;
+    } else {                           # -C <path>
+      shift @$argv;
+      die "mist: option -C requires a path argument\n" unless @$argv;
+      push @paths, shift @$argv;
+    }
+  }
+  return @paths;
+}
+
 1;
 
 __END__
+
+=head1 GLOBAL OPTIONS
+
+=head2 -C <path>
+
+Run as if C<mist> had been started in C<< <path> >> instead of the current
+directory. It is parsed before the subcommand, so the project root (located by
+walking up for F<mistfile> / F<cpanfile>) and everything derived from it
+resolve from C<< <path> >>.
+
+May be given more than once; as with C<git -C>, a non-absolute C<< <path> >> is
+taken relative to the preceding one, and an empty C<< -C '' >> leaves the
+directory unchanged. The forms C<-C path>, C<-C=path> and C<-Cpath> are all
+accepted.
 
 =head1 AUTHORS
 
