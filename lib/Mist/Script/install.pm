@@ -19,13 +19,6 @@ BEGIN {
 }
 
 
-my $all_versions;
-BEGIN {
-  my $p = Getopt::Long::Parser->new;
-  $p->configure(qw/ default pass_through no_auto_abbrev /);
-  $p->getoptions( 'all-available-versions' => \$all_versions );
-}
-
 my ( $branch, $parent, $prove );
 my %dist_options;
 BEGIN {
@@ -46,22 +39,6 @@ BEGIN {
     'skip-prepended',
     'skip-notest',
   );
-}
-
-if ( $all_versions ) {
-  my $vm = "Mist::Script::perl";
-  die "No version manager installed" unless UNIVERSAL::can( $vm, 'init' );
-  $vm->find_perl_version_manager_executable;
-  my @versions = $vm->list_available_perl_versions;
-  for my $version ( 'system', @versions ) {
-    system $0 => @ARGV, "--perlbrew=${version}";
-  } continue {
-    print "\n\n";
-  }
-
-  # finally re-run default so all symlinks will be set up correctly
-  system $0 => @ARGV;
-  exit;
 }
 
 our $MPAN_DIST_DIR || die '$MPAN_DIST_DIR not set';
