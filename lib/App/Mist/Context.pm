@@ -238,9 +238,12 @@ sub get_merge_path_for {
 
 sub ensure_correct_perlbrew_context {
   my $self = shift;
+  my $pb_version_override = shift;
 
   my $pb_root    = $self->perlbrew_root;
-  my $pb_version = $self->perl_version || return;
+  my $pb_version = ( defined $pb_version_override and length $pb_version_override )
+    ? $pb_version_override
+    : ( $self->perl_version || return );
 
   my $pb_exec = qx{ which perlbrew } || "${pb_root}/bin/perlbrew";
   chomp $pb_exec;
