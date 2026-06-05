@@ -2,6 +2,18 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+0.39 2026-06-05T02:11:36Z
+
+  - mist run: add --perlbrew=<ver> to run a command under the matching
+    ./perl5/perl-<ver>-<arch>/ instead of the mistfile-pinned perl, for testing a
+    dist against several perls built side by side; bypasses the version-pinned
+    perl5/bin/mist-run wrapper.
+
+  - mpan-install: sever non-tty STDIN before the perlbrew re-exec, so a
+    from-scratch install in a background/CI/agent context no longer hangs on an
+    inherited never-EOF pipe (a downstream read gets immediate EOF). Covered by
+    t/script-perlbrew-stdin.t.
+
 0.38 2026-06-02T20:53:23Z
 
   - release: add --candidate=<ID> to promote the build a --dry-run leaves behind,
