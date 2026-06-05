@@ -110,6 +110,13 @@ active" - which the switch-guard reads, and which `ls -l` shows at a glance.
 
 ### Step 1 - symlink activation + switch ergonomics
 
+**Status: done and tested.** Commits bc7ec01 (Build/Activate split, per-perl
+bodies, `--build-only`, same-perl loud stub), 9bc619b (switch-guard), ea19dcb
+(real-install harness). Every bullet below is implemented; coverage lives in
+`t/mpan-install-activation.t` (end-to-end) and `t/switch-verdict.t` (the guard's
+precedence). User-facing SKILL.md docs for the new flags/layout are deferred to
+mist's next release (unreleased to downstream).
+
 Delivers multi-perl coexistence, safe and inspectable switching, the Build/Activate
 split, and atomic *cross-perl* switching. Makes no atomicity claim for the same-perl
 case. Touches none of the risky CoW path.
@@ -157,11 +164,13 @@ tree, not proven infrastructure. The same discount applies to the symlink resolu
 in `_build_local_lib` (Context.pm:174) and the generic-symlink relink
 (install.pm:418-428): both fire only in the branch case.
 
-- Build the install-time failure-injection / atomicity / rollback / append-leak harness
-  the project lacks. The unit suite is healthy and already reaches the install/Script
-  layer (`t/script-perlbrew-stdin.t`, `t/build-cpanm-call-stack.t`, plus the parse-layer
-  tests); what is missing is exercising a real `./mpan-install` against a sandbox -
-  killing it mid-build and asserting generation immutability and rollback.
+- Extend the install-time harness `t/mpan-install-activation.t` (built in step 1)
+  with the CoW-specific scenarios it does not yet cover: inject a failure mid-build
+  and assert the prior generation is byte-identical (immutability), roll back by
+  repointing the symlink and assert the prior env is restored, and assert no
+  `perllocal.pod` append-leak. The sandbox toolkit (`build_installer` /
+  `make_sandbox` / `run_install` / `plant_selector`) and the `assert { die }`
+  failure-injection lever are already there to build on.
 - Audit and fix the seed+swap primitive against the immutability invariant - or
   rewrite it to that invariant, since branch was written for dev experimentation where
   immutability was never required. The code is cheap either way (the seed is one `cp
