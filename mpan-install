@@ -27762,7 +27762,7 @@ BEGIN {
 }
 
 
-my ( $branch, $parent, $prove );
+my ( $branch, $parent, $prove, $resume, $rebuild );
 our $build_only;
 my %dist_options;
 BEGIN {
@@ -27778,6 +27778,8 @@ BEGIN {
     'parent=s'   => \$parent,
     'prove'      => \$prove,
     'build-only' => \$build_only,
+    'resume!'    => \$resume,
+    'rebuild'    => \$rebuild,
 
     # the following are accessible via %dist_options
     'force-tests',
@@ -27799,29 +27801,94 @@ our $PERL5_BASE_LIB = 'perl5';
 
 my $arch_path = join( q{-}, 'perl', $Config{version}, $Config{archname} );
 
-our $LOCAL_LIB_DIR   = File::Spec->catdir(
-  $PERL5_BASE_LIB, join( q{-}, $arch_path, $branch ? $branch : () )
-);
+# A generation's final name is perl5/generations/<arch_path>-<id>: a named
+# --branch, else a monotonic counter (highest existing completed counter + 1).
+# It is built under a -build suffix and renamed to the final name only once the
+# build succeeds (the promote step near the end), so an interrupted build is
+# self-labelling - a leftover ...-build dir is junk, never a seed parent or a
+# rollback target - and the counter only ever numbers completed generations.
+my $gen_container = File::Spec->catdir( $PERL5_BASE_LIB, 'generations' );
 
-# hard-link parent's local::lib content to new branch to get CoW-like behavior
-if ( $parent ) {
-  die "--parent needs --branch to be specified\n"
-    unless $branch;
+my $gen_name;
+if ( defined $branch ) {
+  $gen_name = join( q{-}, $arch_path, $branch );
+} else {
+  my $max = 0;
+  for ( glob File::Spec->catdir( $gen_container, "${arch_path}-*" ) ) {
+    my ( $n ) = ( File::Spec->splitdir( $_ ) )[-1] =~ m/^\Q${arch_path}\E-(\d+)\z/
+      or next;
+    $max = $n if $n > $max;
+  }
+  $gen_name = join( q{-}, $arch_path, $max + 1 );
+}
 
-  my $parent_lib_dir = File::Spec->catdir(
-    $PERL5_BASE_LIB, join( q{-}, $arch_path, $parent )
-  );
-  die "Parent branch lib $parent_lib_dir doesn't exist"
-    unless -d $parent_lib_dir;
-  print "Hard-linking contents of $parent branch to $branch\n";
-  system cp => ( '--link', '--no-clobber', '--archive', $parent_lib_dir => $LOCAL_LIB_DIR );
+our $LOCAL_LIB_DIR = File::Spec->catdir( $gen_container, "${gen_name}-build" );
 
-  # perllocal.pod is appended to in place; left hard-linked, an install into the
-  # branch would write through the shared inode and mutate the parent too. Break
-  # the link so the branch gets its own file - it is an install log, not
-  # load-bearing, so letting it regenerate fresh is harmless.
-  require File::Find;
-  File::Find::find( sub { unlink $_ if $_ eq 'perllocal.pod' }, $LOCAL_LIB_DIR );
+# Resume an interrupted build. A failed build leaves its ...-build dir behind, and
+# the counter is deterministic (a failure never completes, so a re-run recomputes
+# the same counter and lands on the same dir), so the re-run continues where cpanm
+# stopped - the way re-running cpanm, or the pre-generation in-place build, always
+# behaved. Only a *fresh* ...-build is seeded; an existing one is built into as-is.
+# Two opt-outs of the default resume, both safe because the build is staged in a
+# fresh generation and only swapped in on success:
+#   --no-resume  discard a resumable leftover and reseed from the parent (a clean
+#                delta rebuild). $resume is undef by default and 1 for an explicit
+#                --resume; only --no-resume sets it to a defined-false.
+#   --rebuild    also discard, and skip the CoW seed entirely, so cpanm builds the
+#                whole closure into an empty generation - a true clean room that
+#                sheds files orphaned across generations (an additive CoW seed
+#                never removes a dependency dropped from the closure).
+my $discard_leftover = ( defined $resume and not $resume ) || $rebuild;
+File::Path::rmtree( $LOCAL_LIB_DIR ) if $discard_leftover and -e $LOCAL_LIB_DIR;
+unless ( $rebuild or -d $LOCAL_LIB_DIR ) {
+
+  # Seed the new generation copy-on-write from its parent: hard-link the parent's
+  # tree so unchanged files share inodes and only what cpanm replaces costs disk.
+  # The parent is an explicit --parent, else this named branch itself (re-installing
+  # a named generation updates it), else the generation this perl currently runs
+  # (the perl5/<arch_path> symlink, or a legacy real lib dir being migrated), else
+  # nothing on a first install.
+  my $generic_rel = File::Spec->catdir( $PERL5_BASE_LIB, $arch_path );
+  my $seed_from;
+  if ( defined $parent ) {
+    $seed_from = File::Spec->catdir( $gen_container, join( q{-}, $arch_path, $parent ) );
+    die "Parent generation $seed_from doesn't exist\n" unless -d $seed_from;
+  } elsif ( defined $branch and -d File::Spec->catdir( $gen_container, $gen_name ) ) {
+    $seed_from = File::Spec->catdir( $gen_container, $gen_name );
+  } elsif ( -l $generic_rel ) {
+    $seed_from = File::Spec->catdir( $PERL5_BASE_LIB, readlink $generic_rel );
+  } elsif ( -d $generic_rel ) {
+    $seed_from = $generic_rel;
+  }
+
+  if ( $seed_from and -d $seed_from ) {
+    File::Path::mkpath( $gen_container );
+    print "Seeding generation ${gen_name} from $seed_from\n";
+
+    # Hard-link the parent's tree so unchanged files share inodes (cheap on ext4,
+    # XFS, btrfs, ... - safe because cpanm installs files anew rather than editing
+    # in place, so a shared file is never mutated through the parent). On a
+    # filesystem without hard links (FAT, some network/FUSE mounts) the link
+    # fails; fall back to a full copy so the generation is still correct, just
+    # without the disk sharing. A seed that cannot even be copied dies here,
+    # before any activation, so the live environment is left untouched.
+    if ( system( cp => '--link', '--no-clobber', '--archive', $seed_from, $LOCAL_LIB_DIR ) != 0 ) {
+      File::Path::rmtree( $LOCAL_LIB_DIR );
+      if ( system( cp => '--archive', $seed_from, $LOCAL_LIB_DIR ) != 0 ) {
+        File::Path::rmtree( $LOCAL_LIB_DIR );
+        die "Failed to seed generation from $seed_from\n";
+      }
+    }
+
+    # perllocal.pod is appended to in place, and a .mist-built-* marker belongs to
+    # the generation that wrote it; left hard-linked from the seed they would tie
+    # this generation to its parent. Break those links (perllocal is a regenerable
+    # install log; the marker is rewritten fresh at promote).
+    require File::Find;
+    File::Find::find( sub {
+      unlink $_ if $_ eq 'perllocal.pod' or /^\.mist-built-/;
+    }, $LOCAL_LIB_DIR );
+  }
 }
 
 our $PREPEND_DISTS ||= eval {[ DISTRIBUTION->distinfo->get_prepended_modules ]};
@@ -27927,17 +27994,28 @@ sub _activate_symlink {
   rename( $tmp, $link )    or die "Failed to activate symlink $link -> $target: $!";
 }
 
+# Make the freshly built generation current for this perl by pointing the
+# perl5/<arch_path> selector at it. The target is relative to perl5/, so it
+# resolves natively for the wrapper and local::lib. A legacy real lib dir
+# (pre-generation layout) is migrated in place: its tree is already hard-linked
+# into the new generation, so dropping the directory entry loses no data.
+sub _activate_generation {
+  my ( $generic, $gen_relpath ) = @_;
+  if ( -l $generic or not -e $generic ) {
+    _activate_symlink( $gen_relpath, $generic );
+  } elsif ( -d $generic ) {
+    File::Path::rmtree( $generic );
+    symlink( $gen_relpath, $generic )
+      or die "Failed to link $generic to generation $gen_relpath: $!";
+  } else {
+    die "$generic exists but is neither a symlink nor a directory\n";
+  }
+}
+
 
 die "mpan-install can not run as root\n" if $> == 0;
 
 my $workspace = tempdir();
-
-die <<"MSG" if -l $local_lib;
-Directory
-$local_lib
-is a symlink to a branch, please remove it manually and
-restart ./mpan-install or specify a branch to install to.
-MSG
 
 mkpath( $local_lib );
 
@@ -27951,7 +28029,8 @@ if ( not -r $mpan or not -w $local_lib ) {
   exit 1;
 }
 
-my $p5_dir = realpath( File::Spec->catdir( $local_lib, File::Spec->updir ));
+# perl5/ root - not $local_lib/.. , which now resolves to perl5/generations
+my $p5_dir = realpath( $perl5_baselib );
 my $rc_dir = File::Spec->catdir( $p5_dir, 'etc' );
 mkpath( $rc_dir );
 my $bin_dir = File::Spec->catdir( $p5_dir, 'bin' );
@@ -27968,13 +28047,15 @@ my $rc_fn     = File::Spec->catfile( $rc_dir, $rc_name );
 my $mist_run_fn = File::Spec->catfile( $bin_dir, 'mist-run' );    # selector symlink
 my $mist_rc     = File::Spec->catfile( $rc_dir, 'mist.mistrc' );  # convenience alias
 
-# Installing a *different* perl than the active one builds into its own dir,
-# body and rc and never touches the selector until the final atomic flip, so it
-# is atomic for free. Re-installing the active perl mutates its one lib dir
-# live, so during that build the selector is stubbed to fail loudly.
-my $active_body   = readlink $mist_run_fn;
-my $is_cross      = defined( $active_body ) && $active_body ne $body_name;
-my $stub_selector = $activate && !$is_cross;
+# Each install builds an isolated generation and swaps the lib symlink atomically
+# on success, so the active environment is never mutated in place - a mid-build
+# failure just orphans the staging generation and the old one stays live. No loud
+# stub is needed. The one case that must not move the live generation is
+# --build-only of the perl that is *currently active*: it stages the build
+# without making it current.
+my $active_body     = readlink $mist_run_fn;
+my $is_active_perl  = defined( $active_body ) && $active_body eq $body_name;
+my $repoint_generic = !( $build_only && $is_active_perl );
 
 open my $env, '>', $rc_fn        # open early to catch write errors
   or die "Creating $rc_fn failed: $!";
@@ -27984,21 +28065,6 @@ open my $body, '>', $body_fn
 {
   my $perm = ( stat $body_fn )[2] & 07777;
   chmod( $perm | 0755, $body_fn );
-}
-
-if ( $stub_selector ) {
-  unlink $mist_run_fn;   # may be a symlink to an old body; never write through it
-  open my $stub, '>', $mist_run_fn
-    or die "Creating $mist_run_fn failed: $!";
-  print $stub <<'BASH';
-#!/bin/bash
-
-echo "FATAL: Mist environment not fully installed";
-exit 1;
-BASH
-  close $stub;
-  my $perm = ( stat $mist_run_fn )[2] & 07777;
-  chmod( $perm | 0755, $mist_run_fn );
 }
 
 local $ENV{HOME} = $workspace;
@@ -28053,7 +28119,36 @@ run_cpanm( @$_ ) for @callstack;
 
 system( @$_ ) for $dist->get_scripts( 'finalize' );
 
-printf $env <<'MIST_ENV', $ENV{MIST_APP_ROOT}, $ENV{MIST_PERL5_LIBDIR};
+# Promote: the build succeeded, so freeze it into a completed generation. Drop
+# any marker inherited via the seed, stamp this generation's own completion time
+# (the counter in the dir name orders generations; the marker records when, since
+# cp --archive leaves the dir mtime unreliable), then atomically rename ...-build
+# to its final name. A failed build never reaches here, so it stays a labelled
+# ...-build dir.
+unlink $_ for glob File::Spec->catfile( $local_lib, '.mist-built-*' );
+{
+  my @t = gmtime;
+  my $marker = File::Spec->catfile( $local_lib,
+    sprintf '.mist-built-%04d%02d%02dT%02d%02d%02dZ',
+      $t[5] + 1900, $t[4] + 1, $t[3], $t[2], $t[1], $t[0] );
+  if ( open my $m, '>', $marker ) { close $m }
+  else { warn "Could not write build marker $marker: $!\n" }
+}
+
+my $final_lib = File::Spec->catdir( $perl5_baselib, 'generations', $gen_name );
+File::Path::rmtree( $final_lib ) if $branch and -e $final_lib;   # named-branch re-install
+rename( $local_lib, $final_lib )
+  or die "Failed to promote $local_lib to $final_lib: $!";
+$local_lib = $final_lib;
+
+# Lib-level Activate: point this perl's generation selector at the completed
+# generation (atomic rename). The rc and body below bake the stable generic path
+# perl5/<arch_path>, which resolves through this symlink, so a later generation
+# swap (an upgrade or a rollback) takes effect without rewriting them.
+my $gen_relpath = File::Spec->catdir( 'generations', $gen_name );
+_activate_generation( $generic_libdir, $gen_relpath ) if $repoint_generic;
+
+printf $env <<'MIST_ENV', $ENV{MIST_APP_ROOT}, $generic_libdir;
 # This file is automatically generated by ./mpan-install
 # DO NOT EDIT
 
@@ -28070,7 +28165,7 @@ if ( eval{ Mist::Script::perl->can( 'write_env' )} ) {
 require local::lib;
 {
   local $SIG{__WARN__} = sub{};
-  print $env local::lib->environment_vars_string_for( "${local_lib}" );
+  print $env local::lib->environment_vars_string_for( "${generic_libdir}" );
 }
 
 close $env;
@@ -28181,32 +28276,21 @@ for my $script_dir ( $activate ? (qw/ bin sbin script /) : () ) {
       }
       my $bin_path = File::Spec->catfile( $perl5_baselib, $bin );
       unlink $bin_path;
+      # dist-shipped scripts live in the generation dir; point the shim at the
+      # stable generic path so it follows generation swaps/rollbacks like the
+      # wrapper does. Project scripts (collected from $Bin) are left untouched.
+      ( my $exec_target = $binaries{$bin} ) =~ s{^\Q$local_lib\E/}{$generic_libdir/};
       open my $bin_wrapper, '>', $bin_path
         or die "Failed to create shell wrapper for $bin_path";
       print $bin_wrapper <<"BIN_WRAPPER";
 #!/bin/bash
-exec "$mist_run_fn" "$binaries{$bin}" "\${\@}"
+exec "$mist_run_fn" "$exec_target" "\${\@}"
 BIN_WRAPPER
 
       my $perm = ( stat $bin_wrapper )[2] & 07777;
       chmod( $perm | 0755, $bin_wrapper );
       close $bin_wrapper;
     }
-  }
-}
-
-# point the branch-less generic lib dir at this branch. The target is the branch
-# dir's bare basename (both are siblings under perl5/), so it resolves natively -
-# for the wrapper and local::lib, not only for mist's own readlink.
-if ( $branch ) {
-  if ( -l $generic_libdir or not -e $generic_libdir ) {
-    my ( $branch_dir_name ) = ( File::Spec->splitdir( $LOCAL_LIB_DIR ) )[-1];
-    print "Re-linking $generic_libdir to current branch\n";
-    unlink $generic_libdir;
-    symlink $branch_dir_name, $generic_libdir
-      or die "Failed to create symlink for $generic_libdir";
-  } else {
-    warn "$generic_libdir exists but isn't a symlink, leaving it alone.\n";
   }
 }
 
@@ -28290,11 +28374,16 @@ package Mist::Script::usage;
    --perlbrew VERSION  use this perlbrew-managed perl version
    --build-only        build (or rebuild) the target perl's environment but
                        do not activate it; the current selector is untouched
+   --no-resume         discard a resumable build left by a failed install and
+                       reseed the generation from its parent (the default resumes)
+   --rebuild           build the whole closure into a fresh, un-seeded generation,
+                       shedding cruft accumulated across copy-on-write generations
 
    --branch [BRANCH]
-       work on a named local::lib branch (defaults to git branch)
+       build into a named generation instead of an auto-numbered one
+       (defaults to the git branch name)
    --parent BRANCH
-       use another named branch as basis for branch to work on
+       seed the new generation from another named generation
 
    --prove
        after install, run `prove -l t` against this env

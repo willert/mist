@@ -18,11 +18,16 @@ package Mist::Script::usage;
    --perlbrew VERSION  use this perlbrew-managed perl version
    --build-only        build (or rebuild) the target perl's environment but
                        do not activate it; the current selector is untouched
+   --no-resume         discard a resumable build left by a failed install and
+                       reseed the generation from its parent (the default resumes)
+   --rebuild           build the whole closure into a fresh, un-seeded generation,
+                       shedding cruft accumulated across copy-on-write generations
 
    --branch [BRANCH]
-       work on a named local::lib branch (defaults to git branch)
+       build into a named generation instead of an auto-numbered one
+       (defaults to the git branch name)
    --parent BRANCH
-       use another named branch as basis for branch to work on
+       seed the new generation from another named generation
 
    --prove
        after install, run `prove -l t` against this env

@@ -57,12 +57,31 @@ ARTIFACT_CARRIES_SWITCH_GUARD: {
     'committed mpan-install carries the interactive switch prompt';
 }
 
-ARTIFACT_CARRIES_BRANCH_COW_FIX: {
-  # Step-2 CoW fixes; reach the committed installer only via `mist compile`.
-  like $src, qr/branch_dir_name/,
-    'committed mpan-install links the generic lib dir by bare basename (native)';
+ARTIFACT_CARRIES_GENERATION_INSTALL: {
+  # Step-3 default-path CoW generations; reach the committed installer only via
+  # `mist compile`, so they double as this changeset's drift guard.
+  like $src, qr/sub _activate_generation/,
+    'committed mpan-install carries the generation-activation helper';
+  like $src, qr/generations/,
+    'committed mpan-install installs into a perl5/generations/ container';
+  like $src, qr/\$\{gen_name\}-build/,
+    'committed mpan-install builds under a -build suffix (promoted on success)';
+  like $src, qr/\.mist-built-/,
+    'committed mpan-install stamps a .mist-built-<ts> completion marker';
+  like $src, qr/defined \$resume and not \$resume/,
+    'committed mpan-install carries the --no-resume clean-rebuild discard';
+  like $src, qr/\$rebuild or -d \$LOCAL_LIB_DIR/,
+    'committed mpan-install carries the --rebuild un-seeded clean room';
+  like $src, qr/Failed to seed generation from/,
+    'committed mpan-install falls back to a copy where hard links are unsupported';
+  like $src, qr/%04d%02d%02dT%02d%02d%02dZ/,
+    'committed mpan-install timestamps the completion marker';
   like $src, qr/unlink \$_ if \$_ eq 'perllocal\.pod'/,
-    'committed mpan-install breaks the perllocal.pod hard-link on --parent';
+    'committed mpan-install breaks the perllocal.pod hard-link when seeding';
+
+  # the same-perl loud stub retired once installs stopped mutating the active env
+  unlike $src, qr/Mist environment not fully installed/,
+    'committed mpan-install no longer writes the loud same-perl build stub';
 }
 
 HEAD_READABLE_VERSION_MARKER: {

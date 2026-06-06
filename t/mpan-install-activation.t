@@ -30,6 +30,12 @@ my @built_perl = glob File::Spec->catdir( $repo, 'perl5', 'perl-5.20.3-*' );
 plan skip_all => 'no built 5.20.3 env in this repo (need perlbrew 5.20.3)'
   unless @built_perl;
 
+# the version-arch dir name this host builds, e.g. perl-5.20.3-x86_64-linux
+# (filtering out a manual perl-5.20.3-*.bak sitting alongside it)
+my ( $arch_name ) =
+  grep { /perl-5\.20\.3-[^.]+$/ }
+  map  { ( File::Spec->splitdir( $_ ) )[-1] } @built_perl;
+
 my $mpan_dist = File::Spec->catdir( $repo, 'mpan-dist' );
 plan skip_all => 'repo mpan-dist mirror missing' unless -d $mpan_dist;
 
@@ -115,6 +121,10 @@ sub plant_selector {
 sub selector  { File::Spec->catfile( shift, qw/ perl5 bin mist-run / ) }
 sub rc_alias  { File::Spec->catfile( shift, qw/ perl5 etc mist.mistrc / ) }
 
+# the per-perl generation selector perl5/<arch_name> and the dir it resolves to
+sub gen_link  { File::Spec->catdir( shift, 'perl5', $arch_name ) }
+sub gen_dir   { my $b = shift; File::Spec->catdir( $b, 'perl5', readlink gen_link( $b ) ) }
+
 my $FOREIGN = 'mist-run-perl-9.9.9-fakearch';   # a plausibly-other active perl
 
 # --- compile the two installers the scenarios share -----------------------
@@ -145,6 +155,15 @@ CLEAN_INSTALL_ACTIVATES: {
 
   ok -e File::Spec->catfile( $box, 'mist-run' ), 'root ./mist-run created';
 
+  ok -l gen_link( $box ), 'the per-perl generation selector is a symlink';
+  like readlink( gen_link( $box ) ) // '', qr{^generations/perl-5\.20\.3-},
+    'it points at a generation under generations/';
+  like readlink( gen_link( $box ) ) // '', qr{-\d+$},
+    'the auto generation is numbered by a counter, not a -build dir';
+  ok -d gen_dir( $box ), 'the generation it points at is a real directory';
+  ok scalar( glob File::Spec->catfile( gen_dir( $box ), '.mist-built-*' ) ),
+    'the generation carries a .mist-built-<ts> completion marker';
+
   is clean_run( "$sel perl -e 'exit 0'" ), 0,
     'the activated wrapper runs a command under its own env';
 }
@@ -162,20 +181,107 @@ BUILD_ONLY_DOES_NOT_ACTIVATE: {
   ok ! -e rc_alias( $box ), '--build-only does not create the rc alias';
   ok ! -e File::Spec->catfile( $box, 'mist-run' ),
     '--build-only does not create root ./mist-run';
+
+  ok -l gen_link( $box ),
+    '--build-only still makes its generation current for this perl (no perl switch)';
 }
 
-FAILED_INSTALL_LEAVES_LOUD_STUB: {
-  # Same-perl / fresh install: the selector is stubbed up front, so a mid-build
-  # failure leaves an honest loud stub, never a wrapper over half-built libs.
-  my $box = make_sandbox( $installer_assert );
+FAILED_INSTALL_KEEPS_PRIOR_GENERATION: {
+  # Step 3: a same-perl re-install builds an isolated generation and only swaps
+  # the lib symlink on success. A mid-build failure must leave the prior
+  # generation active and intact - and never a loud stub (that retired with the
+  # in-place mutation it used to cover).
+  my $box = make_sandbox( $installer_ok );
+  is( ( run_install( $box ) )[0], 0, 'first install succeeds' );
+  my $gen_a = readlink gen_link( $box );
+  ok $gen_a, 'first install left an active generation';
+
+  # swap in the failure-injecting installer and re-run (same perl)
+  my $copy = File::Spec->catfile( $box, 'mpan-install' );
+  _spew( $copy, _slurp( $installer_assert ) );
+  chmod 0755, $copy;
   my ( $exit, $out ) = run_install( $box );
-  isnt $exit, 0, 'an install that fails its assert exits non-zero';
+  isnt $exit, 0, 'the failing re-install exits non-zero';
+
+  is readlink( gen_link( $box ) ), $gen_a,
+    'the generation symlink still points at the prior generation';
+  ok -d gen_dir( $box ), 'the prior generation is intact';
+
+  ok scalar( glob "$box/perl5/generations/*-build" ),
+    'the failed build leaves a self-labelling ...-build dir';
+  ok ! -e File::Spec->catdir( $box, qw/ perl5 generations /, "${arch_name}-2" ),
+    'and never a completed (promoted) generation from the failed build';
 
   my $sel = selector( $box );
-  ok( -e $sel && ! -l $sel,
-    'selector is left a regular file (the stub), not a body symlink' );
-  like _slurp( $sel ), qr/FATAL: Mist environment not fully installed/,
-    'selector holds the loud FATAL stub after a mid-build failure';
+  ok -l $sel, 'the selector is still a body symlink, not a regular-file stub';
+  is clean_run( "$sel perl -e 'exit 0'" ), 0,
+    'the prior environment still runs after the failed re-install';
+}
+
+RESUME_REUSES_FAILED_BUILD_DIR: {
+  # A failed build leaves its ...-build dir; the next run resumes it (cpanm
+  # continues where it stopped) instead of discarding the partial work - matching
+  # a plain cpanm re-run and the pre-generation in-place build.
+  my $box = make_sandbox( $installer_ok );
+  is( ( run_install( $box ) )[0], 0, 'first install ok (generation 1 active)' );
+
+  # a build that fails partway, leaving a -build dir
+  my $copy = File::Spec->catfile( $box, 'mpan-install' );
+  _spew( $copy, _slurp( $installer_assert ) );
+  chmod 0755, $copy;
+  isnt( ( run_install( $box ) )[0], 0, 'second build fails, leaving a -build dir' );
+  my ( $build ) = glob "$box/perl5/generations/*-build";
+  ok $build, 'the failed build dir is present';
+  _spew( File::Spec->catfile( $build, 'RESUME_TOKEN' ), "r\n" );
+
+  # retry with a succeeding installer: it must build into the same -build dir
+  _spew( $copy, _slurp( $installer_ok ) );
+  chmod 0755, $copy;
+  is( ( run_install( $box ) )[0], 0, 'the retry succeeds' );
+  ok ! -e $build, 'the -build dir was promoted (renamed), not left behind';
+  ok -e File::Spec->catfile( gen_dir( $box ), 'RESUME_TOKEN' ),
+    'the retry resumed the failed -build dir (its token carried into the generation)';
+}
+
+NO_RESUME_DISCARDS_FAILED_BUILD_DIR: {
+  # --no-resume is the opt-in clean-room rebuild: discard a leftover -build and
+  # reseed from the parent instead of resuming the partial work (the inverse of
+  # the resume default above).
+  my $box = make_sandbox( $installer_ok );
+  is( ( run_install( $box ) )[0], 0, 'first install ok' );
+
+  my $copy = File::Spec->catfile( $box, 'mpan-install' );
+  _spew( $copy, _slurp( $installer_assert ) );
+  chmod 0755, $copy;
+  isnt( ( run_install( $box ) )[0], 0, 'second build fails, leaving a -build dir' );
+  my ( $build ) = glob "$box/perl5/generations/*-build";
+  ok $build, 'the failed build dir is present';
+  _spew( File::Spec->catfile( $build, 'STALE_TOKEN' ), "x\n" );
+
+  _spew( $copy, _slurp( $installer_ok ) );
+  chmod 0755, $copy;
+  is( ( run_install( $box, '--no-resume' ) )[0], 0, 'the --no-resume retry succeeds' );
+  ok ! -e File::Spec->catfile( gen_dir( $box ), 'STALE_TOKEN' ),
+    '--no-resume discarded the leftover -build and reseeded (stale token gone)';
+}
+
+REBUILD_SHEDS_CRUFT: {
+  # --rebuild starts a fresh generation with no CoW seed: cpanm builds the whole
+  # closure into an empty dir, so files orphaned across generations (a dropped dep
+  # an additive seed would carry forward forever) do not survive. Atomicity keeps
+  # the live env intact throughout - the clean slate has no exposure window.
+  my $box = make_sandbox( $installer_ok );
+  is( ( run_install( $box ) )[0], 0, 'first install ok' );
+  my $gen1 = gen_dir( $box );
+  _spew( File::Spec->catfile( $gen1, 'CRUFT' ), "old\n" );
+
+  is( ( run_install( $box, '--rebuild' ) )[0], 0, '--rebuild succeeds' );
+  my $gen2 = gen_dir( $box );
+  isnt $gen2, $gen1, '--rebuild made a new generation';
+  ok ! -e File::Spec->catfile( $gen2, 'CRUFT' ),
+    '--rebuild did not CoW-seed, so the parent cruft did not carry forward';
+  ok -e File::Spec->catfile( $gen1, 'CRUFT' ),
+    'the prior generation is untouched (the live env was safe during the rebuild)';
 }
 
 CROSS_PERL_LEAVES_ACTIVE_SELECTOR_UNTOUCHED: {
@@ -208,48 +314,121 @@ IMPLICIT_SWITCH_REFUSED_WITHOUT_TTY: {
 }
 
 BRANCH_ACTIVATES_NATIVELY: {
-  # --branch builds a named variant lib dir and points the generic per-perl dir
-  # at it via a symlink. That symlink must be a real, natively-resolving link
-  # (bare basename target) so the wrapper and local::lib follow it without help.
+  # --branch names a generation; the generic per-perl dir points at it under
+  # generations/. The target is relative to perl5/ (no perl5/ prefix), so it
+  # resolves natively for the wrapper and local::lib, not only for readlink.
   my $box = make_sandbox( $installer_ok );
   my ( $exit, $out ) = run_install( $box, '--branch=base' );
   is $exit, 0, '--branch=base install exits 0' or diag $out;
 
-  my ( $generic ) = grep { -l } glob "$box/perl5/perl-5.20.3-*";
-  ok $generic, 'the generic per-perl lib dir is now a symlink (the selector)';
+  my $generic = gen_link( $box );
+  ok -l $generic, 'the generic per-perl lib dir is a symlink (the generation selector)';
   my $target = readlink( $generic ) // '';
-  unlike $target, qr{/},
-    'branch symlink target is a bare basename, so it resolves natively';
-  like $target, qr/^perl-5\.20\.3-.*-base$/, 'it targets the -base branch dir';
+  like $target, qr{^generations/perl-5\.20\.3-.*-base$},
+    'it targets the -base generation under generations/';
+  unlike $target, qr{^/|^perl5/},
+    'the target is relative and not perl5/-prefixed, so it resolves natively';
   ok -d $generic,
     'the generic symlink resolves to a real directory (not a dangling link)';
 }
 
 PARENT_BREAKS_PERLLOCAL_LINK: {
-  # --parent seeds the new branch by hard-linking the parent's tree. perllocal.pod
-  # is appended to in place, so a shared inode would let a child install mutate
-  # the parent. The seed must break the link for that file.
+  # --parent seeds the new generation by hard-linking the parent's tree.
+  # perllocal.pod is appended to in place, so a shared inode would let the child
+  # install mutate the parent. The seed must break the link for that file.
   my $box = make_sandbox( $installer_ok );
-  is( ( run_install( $box, '--branch=base' ) )[0], 0, 'base branch builds' );
+  is( ( run_install( $box, '--branch=base' ) )[0], 0, 'base generation builds' );
 
-  my ( $base ) = glob "$box/perl5/perl-5.20.3-*-base";
-  ok $base, 'base branch dir exists';
+  my ( $base ) = glob "$box/perl5/generations/perl-5.20.3-*-base";
+  ok $base, 'base generation dir exists';
   my $pod_subdir = File::Spec->catdir( $base, qw/ lib perl5 / );
   mkpath $pod_subdir;
   my $base_pod = File::Spec->catfile( $pod_subdir, 'perllocal.pod' );
   _spew( $base_pod, "=head2 seeded by base\n" );
+  my $base_shared = File::Spec->catfile( $pod_subdir, 'SHARED' );
+  _spew( $base_shared, "shared\n" );
 
   is( ( run_install( $box, '--branch=child', '--parent=base' ) )[0], 0,
-    'child branch builds from parent' );
+    'child generation builds from parent' );
 
-  my ( $child ) = glob "$box/perl5/perl-5.20.3-*-child";
-  ok $child, 'child branch dir exists';
+  my ( $child ) = glob "$box/perl5/generations/perl-5.20.3-*-child";
+  ok $child, 'child generation dir exists';
   my $child_pod = File::Spec->catfile( $child, qw/ lib perl5 perllocal.pod / );
 
   my $base_ino  = ( stat $base_pod )[1];
   my $child_ino = -e $child_pod ? ( stat $child_pod )[1] : 0;
   isnt $child_ino, $base_ino,
     'child perllocal.pod does not share the parent inode (append-leak broken)';
+
+  # a normal file IS shared by the seed - that hard-link sharing is the CoW win,
+  # and this guards against a silent regression to a full copy
+  ok( ( stat File::Spec->catfile( $child, qw/ lib perl5 SHARED / ) )[3] >= 2,
+    'a normal seeded file is hard-linked (shared inode) with the parent' );
+}
+
+NAMED_BRANCH_REINSTALL_SEEDS_FROM_ITSELF: {
+  # A named generation is a stable, separately-named env. Re-installing it must
+  # update *it* (seed from itself) and carry its accumulated state forward - even
+  # when a different generation is currently active - not reseed it from whatever
+  # happens to be active.
+  my $box = make_sandbox( $installer_ok );
+  is( ( run_install( $box, '--branch=spike' ) )[0], 0, 'spike builds' );
+  is( ( run_install( $box ) )[0], 0, 'a default install makes a counter gen active' );
+
+  # state that lives only in spike, planted after the counter gen was built (so it
+  # cannot have leaked into the active gen via the seed)
+  my $spike = File::Spec->catdir( $box, qw/ perl5 generations /, "${arch_name}-spike" );
+  _spew( File::Spec->catfile( $spike, 'SPIKE_STATE' ), "s\n" );
+
+  is( ( run_install( $box, '--branch=spike' ) )[0], 0, 'spike re-install ok' );
+  ok -e File::Spec->catfile( $spike, 'SPIKE_STATE' ),
+    'the re-install seeds spike from itself, not from the active counter gen';
+}
+
+TWO_GENERATIONS_SWAP_AND_ROLLBACK: {
+  # The default path is implicitly CoW: each install builds a new generation
+  # seeded from the active one and swaps the symlink. Old generations are kept,
+  # so rollback is a single symlink repoint.
+  my $box = make_sandbox( $installer_ok );
+  is( ( run_install( $box ) )[0], 0, 'first install ok' );
+  my $gen_a = readlink gen_link( $box );
+  like $gen_a, qr{^generations/}, 'generation A lives under generations/';
+  my $gen_a_dir = File::Spec->catdir( $box, 'perl5', $gen_a );
+
+  is( ( run_install( $box ) )[0], 0, 'second install ok' );
+  my $gen_b = readlink gen_link( $box );
+  isnt $gen_b, $gen_a, 'the second install swapped to a new generation';
+  ok -d $gen_a_dir, 'generation A is kept (rollback target survives)';
+
+  # a marker planted in A *after* B was built cannot have leaked into B via the seed
+  _spew( File::Spec->catfile( $gen_a_dir, 'MARKER_A' ), "a\n" );
+  ok ! -e File::Spec->catfile( $box, 'perl5', $arch_name, 'MARKER_A' ),
+    'the active generic path resolves to B, which has no MARKER_A';
+
+  # rollback = repoint the generation selector at A
+  { my $g = gen_link( $box ); unlink $g; symlink $gen_a, $g or die "rollback: $!" }
+  is readlink( gen_link( $box ) ), $gen_a, 'rolled back to generation A';
+  ok -e File::Spec->catfile( $box, 'perl5', $arch_name, 'MARKER_A' ),
+    'the generic path now resolves to A again (rollback took effect)';
+}
+
+MIGRATION_FROM_LEGACY_REALDIR: {
+  # A project installed before generations has perl5/<arch> as a real directory.
+  # The first generation-aware install seeds a generation from it (hard-link),
+  # then converts the real dir into the generation symlink without losing data.
+  my $box = make_sandbox( $installer_ok );
+  my $legacy = File::Spec->catdir( $box, 'perl5', $arch_name );
+  mkpath( File::Spec->catdir( $legacy, qw/ lib perl5 / ) );
+  _spew( File::Spec->catfile( $legacy, 'LEGACY_MARKER' ), "legacy\n" );
+  ok( -d $legacy && ! -l $legacy, 'legacy lib dir starts as a real directory' );
+
+  my ( $exit, $out ) = run_install( $box );
+  is $exit, 0, 'install over a legacy real dir succeeds' or diag $out;
+
+  ok -l gen_link( $box ), 'the legacy real dir is now the generation symlink';
+  like readlink( gen_link( $box ) ), qr{^generations/}, 'it points into generations/';
+  ok -e File::Spec->catfile( $box, 'perl5', $arch_name, 'LEGACY_MARKER' ),
+    'the migrated content survives via the new generation';
 }
 
 done_testing;
