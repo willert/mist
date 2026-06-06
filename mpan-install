@@ -27815,6 +27815,13 @@ if ( $parent ) {
     unless -d $parent_lib_dir;
   print "Hard-linking contents of $parent branch to $branch\n";
   system cp => ( '--link', '--no-clobber', '--archive', $parent_lib_dir => $LOCAL_LIB_DIR );
+
+  # perllocal.pod is appended to in place; left hard-linked, an install into the
+  # branch would write through the shared inode and mutate the parent too. Break
+  # the link so the branch gets its own file - it is an install log, not
+  # load-bearing, so letting it regenerate fresh is harmless.
+  require File::Find;
+  File::Find::find( sub { unlink $_ if $_ eq 'perllocal.pod' }, $LOCAL_LIB_DIR );
 }
 
 our $PREPEND_DISTS ||= eval {[ DISTRIBUTION->distinfo->get_prepended_modules ]};
@@ -28188,12 +28195,15 @@ BIN_WRAPPER
   }
 }
 
-# try to relink branch-less local lib to branch
+# point the branch-less generic lib dir at this branch. The target is the branch
+# dir's bare basename (both are siblings under perl5/), so it resolves natively -
+# for the wrapper and local::lib, not only for mist's own readlink.
 if ( $branch ) {
   if ( -l $generic_libdir or not -e $generic_libdir ) {
+    my ( $branch_dir_name ) = ( File::Spec->splitdir( $LOCAL_LIB_DIR ) )[-1];
     print "Re-linking $generic_libdir to current branch\n";
     unlink $generic_libdir;
-    symlink $LOCAL_LIB_DIR, $generic_libdir
+    symlink $branch_dir_name, $generic_libdir
       or die "Failed to create symlink for $generic_libdir";
   } else {
     warn "$generic_libdir exists but isn't a symlink, leaving it alone.\n";

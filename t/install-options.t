@@ -57,6 +57,14 @@ ARTIFACT_CARRIES_SWITCH_GUARD: {
     'committed mpan-install carries the interactive switch prompt';
 }
 
+ARTIFACT_CARRIES_BRANCH_COW_FIX: {
+  # Step-2 CoW fixes; reach the committed installer only via `mist compile`.
+  like $src, qr/branch_dir_name/,
+    'committed mpan-install links the generic lib dir by bare basename (native)';
+  like $src, qr/unlink \$_ if \$_ eq 'perllocal\.pod'/,
+    'committed mpan-install breaks the perllocal.pod hard-link on --parent';
+}
+
 HEAD_READABLE_VERSION_MARKER: {
   # Not a drift check (those are the greps above) - this guards the nudge-infra
   # invariant that compile stamps a parseable version marker near the top of

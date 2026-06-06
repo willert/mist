@@ -172,7 +172,7 @@ sub _build_local_lib {
 
   my $version = join( q{-}, 'perl', $Config{version}, $Config{archname} );
   my $lib_dir = $self->perl5_base_lib->subdir( $version );
-  $lib_dir = dir( readlink $lib_dir->stringify ) if -l $lib_dir;
+  $lib_dir = $lib_dir->resolve if -l $lib_dir;   # follow a branch/generation link
   return $lib_dir;
 }
 

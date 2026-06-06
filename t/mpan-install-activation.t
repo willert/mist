@@ -90,13 +90,14 @@ sub make_sandbox {
   return $dir;
 }
 
-# Run ./mpan-install in a sandbox; STDIN is severed so the switch-guard sees a
-# non-tty. Returns ( exit_code, combined_output ).
+# Run ./mpan-install in a sandbox, from inside it (real installs always run from
+# the project root, and some paths - e.g. the --parent copy - are cwd-relative).
+# STDIN is severed so the switch-guard sees a non-tty. Returns ( exit, output ).
 sub run_install {
   my ( $dir, @args ) = @_;
   my $log = File::Spec->catfile( $dir, 'install.log' );
-  my $exe = File::Spec->catfile( $dir, 'mpan-install' );
-  my $exit = clean_run( "@{[ $exe, @args ]} >$log 2>&1 </dev/null" );
+  my $exit = clean_run(
+    "cd $dir && ./mpan-install @args >install.log 2>&1 </dev/null" );
   return ( $exit, _slurp( $log ) );
 }
 
@@ -204,6 +205,51 @@ IMPLICIT_SWITCH_REFUSED_WITHOUT_TTY: {
     'the refusal names the implicit-switch guard';
   is readlink( selector( $box ) ) // '', $FOREIGN,
     'the refused install leaves the live selector untouched';
+}
+
+BRANCH_ACTIVATES_NATIVELY: {
+  # --branch builds a named variant lib dir and points the generic per-perl dir
+  # at it via a symlink. That symlink must be a real, natively-resolving link
+  # (bare basename target) so the wrapper and local::lib follow it without help.
+  my $box = make_sandbox( $installer_ok );
+  my ( $exit, $out ) = run_install( $box, '--branch=base' );
+  is $exit, 0, '--branch=base install exits 0' or diag $out;
+
+  my ( $generic ) = grep { -l } glob "$box/perl5/perl-5.20.3-*";
+  ok $generic, 'the generic per-perl lib dir is now a symlink (the selector)';
+  my $target = readlink( $generic ) // '';
+  unlike $target, qr{/},
+    'branch symlink target is a bare basename, so it resolves natively';
+  like $target, qr/^perl-5\.20\.3-.*-base$/, 'it targets the -base branch dir';
+  ok -d $generic,
+    'the generic symlink resolves to a real directory (not a dangling link)';
+}
+
+PARENT_BREAKS_PERLLOCAL_LINK: {
+  # --parent seeds the new branch by hard-linking the parent's tree. perllocal.pod
+  # is appended to in place, so a shared inode would let a child install mutate
+  # the parent. The seed must break the link for that file.
+  my $box = make_sandbox( $installer_ok );
+  is( ( run_install( $box, '--branch=base' ) )[0], 0, 'base branch builds' );
+
+  my ( $base ) = glob "$box/perl5/perl-5.20.3-*-base";
+  ok $base, 'base branch dir exists';
+  my $pod_subdir = File::Spec->catdir( $base, qw/ lib perl5 / );
+  mkpath $pod_subdir;
+  my $base_pod = File::Spec->catfile( $pod_subdir, 'perllocal.pod' );
+  _spew( $base_pod, "=head2 seeded by base\n" );
+
+  is( ( run_install( $box, '--branch=child', '--parent=base' ) )[0], 0,
+    'child branch builds from parent' );
+
+  my ( $child ) = glob "$box/perl5/perl-5.20.3-*-child";
+  ok $child, 'child branch dir exists';
+  my $child_pod = File::Spec->catfile( $child, qw/ lib perl5 perllocal.pod / );
+
+  my $base_ino  = ( stat $base_pod )[1];
+  my $child_ino = -e $child_pod ? ( stat $child_pod )[1] : 0;
+  isnt $child_ino, $base_ino,
+    'child perllocal.pod does not share the parent inode (append-leak broken)';
 }
 
 done_testing;
