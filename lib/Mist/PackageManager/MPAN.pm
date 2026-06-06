@@ -106,24 +106,30 @@ sub cpanm_mirror_options {
   return ( map {( '--mirror' => $_ )} $self->mirror_list );
 }
 
-sub install {
-  my ( $self, @cmd_args ) = @_;
-
-  my $mpan      = $self->mpan_dist;
-  my $local_lib = $self->local_lib;
-
-  my @install_options = (
+# In the mirror_only (merge) path, --cascade-search lets cpanm fall through to a
+# later file-mirror when an earlier one answers a module at an UNsatisfying
+# version, so a sibling's declared version pin resolves from the sibling's
+# mpan-dist instead of erroring on the consumer's stale copy. It is coupled to
+# --mirror-only deliberately: without mirror_only the mirror list includes
+# cpan.org (see _build_mirror_list), and cascade-search would then pull
+# newer-than-vendored releases from live CPAN, defeating reproducibility. Pairing
+# the two in one conditional makes that unsafe combination unrepresentable.
+sub cpanm_install_options {
+  my $self = shift;
+  return (
     '--quiet',
     '--local-lib-contained' => $self->local_lib,
     '--save-dists'          => $self->mpan_dist,
 
     $self->cpanm_mirror_options,
 
-    ( $self->mirror_only ? '--mirror-only' : () ),
-    # '--cascade-search'
+    ( $self->mirror_only ? ( '--mirror-only', '--cascade-search' ) : () ),
   );
+}
 
-  $self->run_bundled_cpanm_script( @install_options, @cmd_args );
+sub install {
+  my ( $self, @cmd_args ) = @_;
+  $self->run_bundled_cpanm_script( $self->cpanm_install_options, @cmd_args );
 }
 
 sub commit {
