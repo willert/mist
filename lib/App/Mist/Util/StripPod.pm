@@ -6,7 +6,7 @@ use strict;
 
 use base ('Pod::Simple');
 
-our $VERSION = "0.40";
+our $VERSION = "0.41";
 
 sub new {
   my $new = shift->SUPER::new(@_);
