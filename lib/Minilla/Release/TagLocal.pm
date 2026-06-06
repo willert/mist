@@ -11,7 +11,9 @@ sub run {
 
   my $ver = $project->version;
   if ( $opts->{dry_run} ) {
-    infof("DRY-RUN.  Would have tagged version $ver.\n");
+    # See TagPublish: $ver is the un-bumped current version on a dry run, not
+    # what a real release would tag, so naming it misleads. Stay version-free.
+    infof("DRY-RUN.  No tag created; the release version is decided and tagged only on a real release.\n");
     return;
   }
 
