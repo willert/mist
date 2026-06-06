@@ -17,6 +17,11 @@ my $repo = File::Spec->rel2abs(
   File::Spec->catdir( $FindBin::Bin, File::Spec->updir ) );
 my $installer = File::Spec->catfile( $repo, 'mpan-install' );
 
+# mpan-install is a committed build artifact in the source repo, not shipped in
+# the dist tarball, so this drift guard only runs from the real checkout.
+plan skip_all => 'no committed mpan-install here (a dist/clean-room build)'
+  unless -f $installer;
+
 my $src = do {
   open my $fh, '<', $installer or die "open mpan-install: $!";
   local $/; <$fh>;
