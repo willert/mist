@@ -2,6 +2,10 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+  - merge: scope cpanm's --cascade-search to the mirror_only path so a sibling's
+    declared version pin resolves from its mirror instead of failing on the
+    consumer's stale copy; stays off live CPAN. Covered by t/merge-cascade.t.
+
 0.41 2026-06-06T10:49:27Z
 
   - mpan-install: each install builds into its own copy-on-write generation
