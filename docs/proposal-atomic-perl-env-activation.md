@@ -189,6 +189,18 @@ Outcome: a CoW-generation primitive proven in isolation, not yet on the default 
 
 ### Step 3 - promote generations to the default install path
 
+**Status: done and tested.** Commit 3a1b607. Generations live under
+`perl5/generations/<arch>-<counter>`; each install builds a `-build` dir
+(hard-link seeded from the active generation), promoted by an atomic rename on
+success and activated by repointing the `perl5/<arch>` symlink. A
+`.mist-built-<UTC>` marker filename records build time (the dir mtime is
+unreliable under `cp --archive`). Retry resumes the leftover `-build` by default;
+`--no-resume` reseeds from the parent; `--rebuild` skips the seed for a
+cruft-shedding clean room. A named `--branch` re-install seeds from itself; a
+legacy real lib dir migrates into a generation; the hard-link seed falls back to
+a full copy where hard links are unsupported. Coverage lives in
+`t/mpan-install-activation.t` (real installs) and `t/install-options.t` (drift).
+
 - The active lib dir becomes a symlink: `perl5/perl-X-arch` -> generation dir
   `perl5/perl-X-arch--<id>`. `_build_local_lib` already resolves it.
 - Every install is implicitly `--branch=<new generation> --parent=<current active>`:
@@ -314,15 +326,30 @@ Step 3:
   is ever wanted, introduce a separate `MIST_PERL` deriving the internal one rather
   than overloading the guard.
 
-## Open sub-decisions
+## Sub-decisions, resolved in step 3
 
-- The generation `<id>` scheme (counter, timestamp, content hash) and how the
-  Build/Activate split threads the build-target dir vs the active symlink through the
-  installer.
-- Whether `--branch` is retired once generations exist, or reimplemented on top of the
-  generation primitive (it should not survive as a second unproven CoW path).
-- Whether to expose a no-rebuild re-activate (`--activate=X`, or a documented hand `ln
-  -sf`) for switching back to an already-built perl on a deployed host without `mist`.
+- **Generation `<id>`:** a monotonic counter (`<arch>-<counter>`), assigned at promote
+  so only completed generations are numbered. Build time is recorded in a
+  `.mist-built-<UTC>` marker filename rather than the dir name (the dir mtime is
+  unreliable under `cp --archive`). The build target is the `-build` dir; the active
+  symlink is repointed at the promoted name.
+- **`--branch`:** kept as a named generation over the *same* seed+swap code (one CoW
+  path, not two). A re-install of a named generation seeds from itself, so its state
+  carries forward.
+- **No-rebuild re-activate:** not exposed as a flag. Rollback / re-activation is a
+  single `perl5/<arch>` symlink repoint (documented), which needs no `mist`. A
+  dedicated `--activate=X` can come later if the hand repoint proves insufficient.
+
+## Beyond the ladder
+
+- **Resume vs clean rebuild.** The default resumes a failed build's `-build` dir,
+  matching a plain `cpanm` re-run; `--no-resume` reseeds from the parent and `--rebuild`
+  skips the seed for a true clean room. CoW seeding is additive (cpanm never removes a
+  dropped dependency), so `--rebuild` is the way to shed accumulated cruft - cheap to
+  offer now that it builds beside the live env rather than wiping it.
+- **Hard links, not reflinks.** The seed is `cp --link` (hard links), so it needs only
+  hard-link support, not filesystem CoW. Where hard links are unavailable (FAT, some
+  network mounts) it falls back to a full copy, and dies loudly if even that fails.
 
 ## Code map
 
