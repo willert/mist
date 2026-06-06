@@ -157,6 +157,13 @@ in-place re-install of the active perl can, and it fails loudly when it does."
 
 ### Step 2 - harden the CoW primitive + test harness
 
+**Status: done and tested.** Commit cc7ef9c. Both CoW bugs are fixed and proven
+red->green in `t/mpan-install-activation.t`: the `perllocal.pod` append-leak
+(`--parent` no longer mutates its parent) and the dead branch symlink (the
+generic lib dir now links to the branch dir's bare basename, resolving natively
+for the wrapper and `local::lib`; Context.pm follows it via realpath). The proven
+CoW seed + native activation link are what step 3 promotes to the default path.
+
 The `--branch`/`--parent` copy-on-write machinery (install.pm:80-92, `cp --link
 --no-clobber --archive` from a parent dir) is the feasibility sketch for generations,
 but it is extremely underused and virtually untested - treat it as a sketch in the
