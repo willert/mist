@@ -138,7 +138,7 @@ unless ( $rebuild or $continue_last_build or -d $LOCAL_LIB_DIR ) {
     # fails; fall back to a full copy so the generation is still correct, just
     # without the disk sharing. A seed that cannot even be copied dies here,
     # before any activation, so the live environment is left untouched.
-    if ( system( cp => '--link', '--no-clobber', '--archive', $seed_from, $LOCAL_LIB_DIR ) != 0 ) {
+    if ( system( cp => '--link', '--archive', $seed_from, $LOCAL_LIB_DIR ) != 0 ) {
       File::Path::rmtree( $LOCAL_LIB_DIR );
       if ( system( cp => '--archive', $seed_from, $LOCAL_LIB_DIR ) != 0 ) {
         File::Path::rmtree( $LOCAL_LIB_DIR );
