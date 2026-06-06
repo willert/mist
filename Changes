@@ -2,6 +2,8 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+0.43 2026-06-06T23:51:37Z
+
   - mpan-install: the per-perl mist-run wrapper and its rc are staged and renamed
     into place only on a successful build, so a failed or interrupted --rebuild no
     longer truncates the live wrapper mid-build. Covered by
