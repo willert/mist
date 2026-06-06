@@ -2,6 +2,26 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+  - mpan-install: the per-perl mist-run wrapper and its rc are staged and renamed
+    into place only on a successful build, so a failed or interrupted --rebuild no
+    longer truncates the live wrapper mid-build. Covered by
+    t/mpan-install-activation.t.
+
+  - mpan-install: add --continue-last-build to resume a failed build's ...-build dir
+    in place - the strict, named form of the default resume, and the partner to
+    --rebuild for iterating on a broken closure build without rebuilding from
+    scratch. Runs after the perlbrew re-exec, under the target perl.
+
+  - mpan-install: drop cp --no-clobber from the copy-on-write seed; it warned under
+    coreutils 9 and was redundant (the seed only ever runs into a not-yet-existing
+    generation dir). The warning's suggested --update=none would have broken older
+    coreutils.
+
+  - release: the --dry-run tag step no longer prints "Would have tagged version X"
+    with the un-bumped current version (a dry run skips the bump, so X is never what
+    a real release would tag); it now states the version is decided only on a real
+    release. Covered by t/release-dry-run-no-version.t.
+
 0.42 2026-06-06T11:22:11Z
 
   - merge: scope cpanm's --cascade-search to the mirror_only path so a sibling's
