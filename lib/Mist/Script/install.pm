@@ -19,7 +19,7 @@ BEGIN {
 }
 
 
-my ( $branch, $parent, $prove, $resume, $rebuild );
+my ( $branch, $parent, $prove, $resume, $rebuild, $continue_last_build );
 our $build_only;
 my %dist_options;
 BEGIN {
@@ -37,6 +37,7 @@ BEGIN {
     'build-only' => \$build_only,
     'resume!'    => \$resume,
     'rebuild'    => \$rebuild,
+    'continue-last-build' => \$continue_last_build,
 
     # the following are accessible via %dist_options
     'force-tests',
@@ -95,9 +96,17 @@ our $LOCAL_LIB_DIR = File::Spec->catdir( $gen_container, "${gen_name}-build" );
 #                whole closure into an empty generation - a true clean room that
 #                sheds files orphaned across generations (an additive CoW seed
 #                never removes a dependency dropped from the closure).
-my $discard_leftover = ( defined $resume and not $resume ) || $rebuild;
+#   --continue-last-build
+#                resume the existing ...-build as-is: never discard, never seed, so
+#                an iterative debug loop on a broken closure build keeps every dist
+#                that already built. Overrides the discard --no-resume / --rebuild
+#                would do. (The strict "nothing to continue" check is below, after
+#                the perlbrew re-exec, so it tests the target perl's arch and not
+#                the arch of the throwaway pre-re-exec pass.)
+my $discard_leftover = !$continue_last_build
+  && ( ( defined $resume and not $resume ) || $rebuild );
 File::Path::rmtree( $LOCAL_LIB_DIR ) if $discard_leftover and -e $LOCAL_LIB_DIR;
-unless ( $rebuild or -d $LOCAL_LIB_DIR ) {
+unless ( $rebuild or $continue_last_build or -d $LOCAL_LIB_DIR ) {
 
   # Seed the new generation copy-on-write from its parent: hard-link the parent's
   # tree so unchanged files share inodes and only what cpanm replaces costs disk.
@@ -190,6 +199,13 @@ chmod( $perm | 0755, $cmd_wrapper );
 
 Mist::Script::perl->init
   if eval{ Mist::Script::perl->can( 'init' ) };
+
+# --continue-last-build is strict: with no in-progress ...-build to resume it
+# errors instead of starting fresh. Checked here, after init's perlbrew re-exec,
+# so $LOCAL_LIB_DIR carries the target perl's arch - a pre-re-exec check would
+# test the system perl's arch and wrongly fire (or pass).
+die "No in-progress build to continue at $LOCAL_LIB_DIR\n"
+  if $continue_last_build and not -d $LOCAL_LIB_DIR;
 
 {
   # Fail fast if the target perl's Module::CoreList doesn't know about $].
@@ -301,6 +317,13 @@ my $body_fn   = File::Spec->catfile( $bin_dir, $body_name );
 my $rc_name   = "mist.mistrc-$arch_path";
 my $rc_fn     = File::Spec->catfile( $rc_dir, $rc_name );
 
+# Stage body and rc beside their live names; rename(2) them into place only after
+# the build succeeds (below). A failed or interrupted build then never truncates
+# the live mist-run wrapper / rc the active env is reading - the bin layer gets
+# the same build-beside-then-swap atomicity the lib generation already has.
+my $body_new = "$body_fn.new";
+my $rc_new   = "$rc_fn.new";
+
 my $mist_run_fn = File::Spec->catfile( $bin_dir, 'mist-run' );    # selector symlink
 my $mist_rc     = File::Spec->catfile( $rc_dir, 'mist.mistrc' );  # convenience alias
 
@@ -314,14 +337,14 @@ my $active_body     = readlink $mist_run_fn;
 my $is_active_perl  = defined( $active_body ) && $active_body eq $body_name;
 my $repoint_generic = !( $build_only && $is_active_perl );
 
-open my $env, '>', $rc_fn        # open early to catch write errors
-  or die "Creating $rc_fn failed: $!";
+open my $env, '>', $rc_new        # stage early to catch write errors; never the live rc
+  or die "Creating $rc_new failed: $!";
 
-open my $body, '>', $body_fn
-  or die "Creating $body_fn failed: $!";
+open my $body, '>', $body_new
+  or die "Creating $body_new failed: $!";
 {
-  my $perm = ( stat $body_fn )[2] & 07777;
-  chmod( $perm | 0755, $body_fn );
+  my $perm = ( stat $body_new )[2] & 07777;
+  chmod( $perm | 0755, $body_new );
 }
 
 local $ENV{HOME} = $workspace;
@@ -426,6 +449,7 @@ require local::lib;
 }
 
 close $env;
+rename( $rc_new, $rc_fn ) or die "Failed to install rc $rc_fn: $!";
 
 # The per-perl body sources its own per-perl rc by baked path, so a single
 # repoint of the perl5/bin/mist-run selector switches the whole executed env.
@@ -463,6 +487,7 @@ mist_exec "${@}"
 WRAPPER
 
 close $body;
+rename( $body_new, $body_fn ) or die "Failed to install wrapper $body_fn: $!";
 
 if ( $activate ) {
   # Activate: repoint the stable selectors at this perl's freshly-built body

@@ -75,8 +75,8 @@ ARTIFACT_CARRIES_GENERATION_INSTALL: {
     'committed mpan-install stamps a .mist-built-<ts> completion marker';
   like $src, qr/defined \$resume and not \$resume/,
     'committed mpan-install carries the --no-resume clean-rebuild discard';
-  like $src, qr/\$rebuild or -d \$LOCAL_LIB_DIR/,
-    'committed mpan-install carries the --rebuild un-seeded clean room';
+  like $src, qr/\$rebuild or \$continue_last_build or -d \$LOCAL_LIB_DIR/,
+    'committed mpan-install carries the --rebuild / --continue-last-build seed-skip';
   like $src, qr/Failed to seed generation from/,
     'committed mpan-install falls back to a copy where hard links are unsupported';
   like $src, qr/%04d%02d%02dT%02d%02d%02dZ/,
@@ -87,6 +87,21 @@ ARTIFACT_CARRIES_GENERATION_INSTALL: {
   # the same-perl loud stub retired once installs stopped mutating the active env
   unlike $src, qr/Mist environment not fully installed/,
     'committed mpan-install no longer writes the loud same-perl build stub';
+}
+
+ARTIFACT_CARRIES_CONTINUE_LAST_BUILD_AND_ATOMIC_WRAPPER: {
+  # --continue-last-build (resume a broken closure build) and the body/rc
+  # staged-rename fix (a failed build never truncates the live mist-run wrapper)
+  # reach the committed installer only via `mist compile`, so they double as the
+  # drift guard for this changeset.
+  like $src, qr/continue-last-build/,
+    'committed mpan-install carries the --continue-last-build option';
+  like $src, qr/No in-progress build to continue/,
+    'committed mpan-install carries the strict no-partial guard for it';
+  like $src, qr/rename\( \$body_new, \$body_fn \)/,
+    'committed mpan-install renames the staged body into place (atomic, not truncate-in-place)';
+  like $src, qr/rename\( \$rc_new, \$rc_fn \)/,
+    'committed mpan-install renames the staged rc into place';
 }
 
 HEAD_READABLE_VERSION_MARKER: {

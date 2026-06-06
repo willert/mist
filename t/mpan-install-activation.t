@@ -284,6 +284,67 @@ REBUILD_SHEDS_CRUFT: {
     'the prior generation is untouched (the live env was safe during the rebuild)';
 }
 
+ATOMIC_FAILED_REBUILD_KEEPS_LIVE_WRAPPER: {
+  # The body and rc are staged under *.new and renamed into place only on success,
+  # so a failed --rebuild must leave the live perl5/bin/mist-run wrapper intact,
+  # never truncated mid-build. NB a bare `$sel perl -e 0` check is too weak to
+  # catch this - an emptied body is still a valid no-op bash script that exits 0 -
+  # so assert the body file's contents survived.
+  my $box = make_sandbox( $installer_ok );
+  is( ( run_install( $box ) )[0], 0, 'first install ok' );
+
+  my $body = File::Spec->catfile( $box, qw/ perl5 bin /, "mist-run-$arch_name" );
+  ok -s $body, 'the active install left a populated mist-run body';
+
+  my $copy = File::Spec->catfile( $box, 'mpan-install' );
+  _spew( $copy, _slurp( $installer_assert ) );
+  chmod 0755, $copy;
+  isnt( ( run_install( $box, '--rebuild' ) )[0], 0,
+    'the --rebuild fails before promotion' );
+
+  ok -s $body,
+    'the live mist-run body survives the failed --rebuild (not truncated mid-build)';
+  like _slurp( $body ), qr/mist_exec/,
+    'and it is still the real wrapper, not an emptied file';
+}
+
+CONTINUE_LAST_BUILD_RESUMES_THE_PARTIAL: {
+  # --continue-last-build resumes the existing -build in place (like the default
+  # resume) - the explicit, named op for iterating on a broken closure build
+  # without discarding what already built.
+  my $box = make_sandbox( $installer_ok );
+  is( ( run_install( $box ) )[0], 0, 'first install ok' );
+
+  my $copy = File::Spec->catfile( $box, 'mpan-install' );
+  _spew( $copy, _slurp( $installer_assert ) );
+  chmod 0755, $copy;
+  isnt( ( run_install( $box, '--rebuild' ) )[0], 0,
+    'a --rebuild fails, leaving a -build dir' );
+  my ( $build ) = glob "$box/perl5/generations/*-build";
+  ok $build, 'the failed build dir is present';
+  _spew( File::Spec->catfile( $build, 'CONTINUE_TOKEN' ), "c\n" );
+
+  _spew( $copy, _slurp( $installer_ok ) );
+  chmod 0755, $copy;
+  is( ( run_install( $box, '--continue-last-build' ) )[0], 0,
+    '--continue-last-build succeeds' );
+  ok -e File::Spec->catfile( gen_dir( $box ), 'CONTINUE_TOKEN' ),
+    'it resumed the partial (the -build token carried into the promoted generation)';
+}
+
+CONTINUE_LAST_BUILD_REFUSES_WITHOUT_PARTIAL: {
+  # Strict: with no in-progress -build to continue, it errors rather than silently
+  # starting a fresh build.
+  my $box = make_sandbox( $installer_ok );
+  is( ( run_install( $box ) )[0], 0, 'first install ok (promoted; no -build left)' );
+  ok ! scalar( glob "$box/perl5/generations/*-build" ),
+    'a successful install leaves no -build dir';
+
+  my ( $exit, $out ) = run_install( $box, '--continue-last-build' );
+  isnt $exit, 0, '--continue-last-build with nothing to continue exits non-zero';
+  like $out, qr/No in-progress build to continue/, 'and says why';
+}
+
 CROSS_PERL_LEAVES_ACTIVE_SELECTOR_UNTOUCHED: {
   # A build for a perl other than the active one is isolated: it never stubs or
   # moves the live selector, so a failure leaves the active env exactly as it
