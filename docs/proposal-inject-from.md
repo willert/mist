@@ -167,18 +167,16 @@ floors)` across the dependency tree - raise-only, never downgrade. Exact reprodu
 A's set is explicitly a non-goal, not a deferred feature: A's resolution is
 knowledge to raise *toward*, not a cage to lock into.
 
-This is a *rebaseline*, in the same weight class as `--rebuild`: a deliberate
-"bring my foundation up to a peer's vetted baseline," proven out by B's own test
-suite, reached for rarely - the everyday move is the surgical single-target
-`inject --from`. The long, fully-spelled flag name is intentional: a once-a-year
-operation should read unmistakably at the call site and never fire by reflex.
+It is a deliberate, rarely-reached-for rebaseline, which is why the flag name is
+long and fully spelled: it should read unmistakably at the call site and never fire
+by reflex. The everyday move is the surgical single-target `inject --from`.
 
-Mechanically it is a small superset of `inject --from`: resolve the target's
-dependency tree to enumerate the nodes, read each node's version from the peer's
-`02packages`, pin each to `>=` that version, then run the same mirror-only resolve;
-`--save-dists` and reindex are unchanged. mist computes the per-node floors itself
-rather than trusting a cpanm "upgrade everything" flag - the same
-enforce-in-mist's-own-code posture the no-downgrade guarantee already takes.
+`--full-dependency-tree` does not apply the raise to the live environment itself; it
+is the first **bundle** producer. Its clean-room vendor pass resolves the tree at
+the peer's floors, vendors the tarballs into `mpan-dist`, and emits the floor set as
+an ephemeral bundle. Producing, publishing and applying that bundle - including the
+incremental, atomic `./mpan-install --bundle <id>` apply that avoids a full
+rebuild - are described in proposal-bundles.md.
 
 ## Notes
 
