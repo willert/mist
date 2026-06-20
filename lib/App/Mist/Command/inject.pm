@@ -8,6 +8,7 @@ use App::Mist -command;
 use Path::Class qw/ dir /;
 use File::Temp qw/ tempdir /;
 use JSON::PP ();
+use CPAN::PackageDetails;
 use Mist::PackageManager::MPAN;
 use Mist::Bundle;
 
@@ -30,11 +31,13 @@ sub execute {
   # Each --from is a peer project root; we source from its mpan-dist. Validate
   # before the perlbrew re-exec so a wrong path fails fast and loud.
   my @peer_mirrors;
+  my @peer_dists;
   for my $peer ( @{ $opt->from || [] } ) {
     my $mpan = dir( $peer )->absolute->subdir( 'mpan-dist' );
     die "$0: --from '$peer' has no mpan-dist (looked in $mpan)\n"
       unless -d "$mpan";
     push @peer_mirrors, sprintf 'file://%s/', $mpan->resolve;
+    push @peer_dists, $mpan;
   }
 
   die "$0: --full-dependency-tree needs at least one --from peer\n"
@@ -44,6 +47,14 @@ sub execute {
 
   return $self->_produce_bundle( $ctx, $args, \@peer_mirrors )
     if $opt->full_dependency_tree;
+
+  # A bare module target under --from would resolve to this project's own
+  # (possibly stale) copy: the project mirror is consulted first and any version
+  # satisfies a bare name, so the peer's release is never reached - a silent
+  # no-op. Pin each bare target to the peer's version as a >= floor, so it pulls
+  # the peer's release when we are behind and stays put (no downgrade) when we
+  # are already ahead. An explicit version/range/tarball target is left alone.
+  @$args = map { _peer_floor( $_, \@peer_dists ) } @$args if @peer_dists;
 
   my $package_manager = Mist::PackageManager::MPAN->new({
     project_root => $ctx->project_root,
@@ -123,6 +134,46 @@ sub _resolved_floors {
     $floor{ $module } = $version;
   }
   return %floor;
+}
+
+# Rewrite a bare module-name target into a >= floor at the peer's version, so a
+# --from pull defaults to the peer's release without an explicit pin. Anything
+# already carrying a version/range, or a tarball/path/URL, passes through.
+sub _peer_floor {
+  my ( $target, $peer_dists ) = @_;
+  return $target unless $target =~ /\A[\w:]+\z/;   # bare Module::Name only
+
+  my $version = _peer_module_version( $target, $peer_dists );
+  die "$0: --from: '$target' is not in any peer mpan-dist - nothing to pull "
+    . "(check the peer, or give an explicit version)\n"
+    unless defined $version;
+
+  return "$target~$version";
+}
+
+# Highest version of $module across the peers' 02packages indexes, or undef.
+sub _peer_module_version {
+  my ( $module, $peer_dists ) = @_;
+  my $best;
+  for my $mpan ( @$peer_dists ) {
+    my $index = $mpan->file( 'modules', '02packages.details.txt.gz' );
+    next unless -e "$index";
+
+    my $details = do {
+      local $SIG{__WARN__} = sub {
+        print STDERR "@_\n" unless $_[0] =~ m{ \b uninitialized \b }x;
+      };
+      CPAN::PackageDetails->read( "$index" );
+    };
+
+    my $by_version = $details->entries->get_hash->{ $module } or next;
+    for my $version ( keys %$by_version ) {
+      $best = $version
+        if not defined $best
+        or Mist::Role::CPAN::PackageIndex::_version_cmp( $version, $best ) > 0;
+    }
+  }
+  return $best;
 }
 
 1;
@@ -218,11 +269,16 @@ serves today.
 It is strictly mirror-only: the sources are this project's F<mpan-dist> and the
 peer's, with B<no> live-CPAN fallback. A dependency present in neither mirror is
 a loud failure, not a silent fetch from CPAN, so what lands is the peer's vetted
-set or nothing. C<--from> is repeatable to layer several peers; this project's
-own mirror is always consulted first, so it never downgrades a version you
-already vendor. Pin the version you want (C<Module@2.0> or
-C<< 'Module~>= 2.0' >>) -- a bare name resolves to your own copy whenever you
-already have a satisfying one.
+set or nothing. C<--from> is repeatable to layer several peers.
+
+A bare module target pulls the peer's version by default: C<--from> looks the
+target up in the peer's index and pins it to that version as a C<< >= >> floor.
+So C<mist inject --from ../core Foo::Bar> raises C<Foo::Bar> to the peer's
+release when you are behind it, and leaves it alone when you are already ahead
+(the floor is satisfied) -- never a downgrade, and no need to know the version.
+If the target is not in any peer's mirror, that is a loud failure rather than a
+silent fall-back to your own copy. Pass an explicit C<Module@2.0> or
+C<< 'Module~>= 2.0' >> to force a specific version instead.
 
 C<--from> takes a peer I<project root> (its F<mpan-dist/> is what gets used).
 Like a plain C<inject> it records nothing about the peer: it touches neither
