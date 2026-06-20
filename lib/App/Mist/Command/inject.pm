@@ -5,9 +5,16 @@ use 5.010;
 
 use App::Mist -command;
 
+use Path::Class qw/ dir /;
 use Mist::PackageManager::MPAN;
 
 sub usage_desc { '%c inject %o <module-spec>...' }
+
+sub opt_spec {
+  return (
+    [ 'from=s@' => "resolve from this peer project's mpan-dist instead of CPAN (mirror-only; repeatable)" ],
+  );
+}
 
 sub execute {
   my ( $self, $opt, $args ) = @_;
@@ -16,13 +23,29 @@ sub execute {
   die "$0: No module to install"
     unless $args and ref $args eq 'ARRAY' and @$args;
 
+  # Each --from is a peer project root; we source from its mpan-dist. Validate
+  # before the perlbrew re-exec so a wrong path fails fast and loud.
+  my @peer_mirrors;
+  for my $peer ( @{ $opt->from || [] } ) {
+    my $mpan = dir( $peer )->absolute->subdir( 'mpan-dist' );
+    die "$0: --from '$peer' has no mpan-dist (looked in $mpan)\n"
+      unless -d "$mpan";
+    push @peer_mirrors, sprintf 'file://%s/', $mpan->resolve;
+  }
+
   $ctx->ensure_correct_perlbrew_context;
 
   my $package_manager = Mist::PackageManager::MPAN->new({
     project_root => $ctx->project_root,
     local_lib    => $ctx->local_lib,
     workspace    => $ctx->workspace_lib,
+
+    # --from sources strictly from the file:// mirrors, never live CPAN: you get
+    # the peer's vetted version or a loud failure, not a silent CPAN tip.
+    ( @peer_mirrors ? ( mirror_only => 1 ) : () ),
   });
+
+  $package_manager->add_mirror( $_ ) for @peer_mirrors;
 
   $package_manager->begin_work;
   eval { $package_manager->install( @$args ) };
@@ -49,6 +72,7 @@ App::Mist::Command::inject - stage distributions into the project's mpan-dist
   mist inject ./Some-Dist-1.00.tar.gz
   mist inject --reinstall JSON::PP             # force a core module in
   mist inject Foo::Bar Baz::Qux                # several in one go
+  mist inject --from ../core Foo::Bar@2.0      # pull a peer's vetted version
 
 =head1 DESCRIPTION
 
@@ -111,6 +135,28 @@ counteracts the C<--quiet> that C<inject> otherwise runs C<cpanm> with --
 handy when an inject misbehaves.
 
 =back
+
+=head2 Sourcing from a peer project with C<--from>
+
+C<--from> I<PATH> resolves the requested dist and its dependencies against
+another mist project's F<mpan-dist/> instead of CPAN. Reach for it to pull a
+version a peer project has already vetted -- a CVE fix whose set of
+working dependency versions that peer worked out -- rather than whatever CPAN
+serves today.
+
+It is strictly mirror-only: the sources are this project's F<mpan-dist> and the
+peer's, with B<no> live-CPAN fallback. A dependency present in neither mirror is
+a loud failure, not a silent fetch from CPAN, so what lands is the peer's vetted
+set or nothing. C<--from> is repeatable to layer several peers; this project's
+own mirror is always consulted first, so it never downgrades a version you
+already vendor. Pin the version you want (C<Module@2.0> or
+C<< 'Module~>= 2.0' >>) -- a bare name resolves to your own copy whenever you
+already have a satisfying one.
+
+C<--from> takes a peer I<project root> (its F<mpan-dist/> is what gets used).
+Like a plain C<inject> it records nothing about the peer: it touches neither
+F<cpanfile> nor F<mistfile>. To instead fold a peer's whole declared set and
+record the relationship, that is L<mist merge|App::Mist::Command::merge>.
 
 C<inject> changes three things:
 
