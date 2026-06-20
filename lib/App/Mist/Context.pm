@@ -294,8 +294,15 @@ MSG
 
     ( my $cmd_name = $0 ) =~ s/[\n\r\s]+$//;
     printf STDERR "Restarting $cmd_name under %s [%s]\n", $pb_version, $pb_archname;
+    # share/perlbrew-wrapper.bash requires MIST_APP_ROOT; the sourced mist env
+    # normally exports it, but a re-execing command run in a shell that has not
+    # sourced the env would otherwise die in the wrapper. Default it to the
+    # project root - the value that env would export anyway.
+    my $app_root = $self->project_root->stringify;
+
     $ENV{PERLBREW_ROOT} = $pb_root;
     $ENV{MIST_PERLBREW_VERSION} = $pb_version;
+    $ENV{MIST_APP_ROOT} //= $app_root;
 
     { local $SIG{__WARN__} = sub{}; local::lib->import('--deactivate-all') }
 
