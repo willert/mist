@@ -2,6 +2,23 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+  - Dependency bundles: a portable, named set of pinned dependency versions.
+    `mist inject --full-dependency-tree` produces one from a peer's vetted set,
+    `mist bundle publish` names and commits it, and `./mpan-install --bundle`
+    applies it.
+
+  - mist inject: add --from <peer> to resolve a distribution and its dependencies
+    from another project's mpan-dist instead of CPAN (mirror-only), reusing a
+    peer's vetted versions without recording any relationship.
+
+  - mist purge / mpan-install --purge: reclaim disk by removing superseded build
+    generations, keeping each perl's active generation and any named branches.
+
+  - mist: re-execing commands no longer fail when run in a shell that has not
+    sourced the project's mist environment.
+
+  - compile: warn when a .claude/ directory is not excluded from packaging.
+
 0.43 2026-06-06T23:51:37Z
 
   - mpan-install: the per-perl mist-run wrapper and its rc are staged and renamed
