@@ -22,6 +22,9 @@ package Mist::Script::usage;
                        reseed the generation from its parent (the default resumes)
    --rebuild           build the whole closure into a fresh, un-seeded generation,
                        shedding cruft accumulated across copy-on-write generations
+   --purge             after a successful install, remove this perl's other
+                       auto-numbered generations (and stale ...-build dirs),
+                       keeping the active one; named generations are left untouched
 
    --branch [BRANCH]
        build into a named generation instead of an auto-numbered one

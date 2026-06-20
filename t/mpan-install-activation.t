@@ -492,4 +492,60 @@ MIGRATION_FROM_LEGACY_REALDIR: {
     'the migrated content survives via the new generation';
 }
 
+PURGE_REMOVES_SUPERSEDED_GENERATIONS: {
+  # --purge cleans this perl's superseded generations after a successful install,
+  # keeping the just-activated one. Three installs, the last with --purge.
+  my $box = make_sandbox( $installer_ok );
+  is( ( run_install( $box ) )[0], 0, 'gen 1 ok' );
+  is( ( run_install( $box ) )[0], 0, 'gen 2 ok' );
+
+  my ( $exit, $out ) = run_install( $box, '--purge' );
+  is $exit, 0, 'gen 3 install --purge exits 0' or diag $out;
+
+  like readlink( gen_link( $box ) ), qr{-3\z}, 'the newest generation is active';
+  ok -d gen_dir( $box ), 'the active generation is intact';
+
+  my @left = glob File::Spec->catdir(
+    $box, qw/ perl5 generations /, "${arch_name}-*" );
+  is scalar( @left ), 1, '--purge left only the active generation' or diag "@left";
+  like $left[0], qr{-3\z}, 'and it is the one just built';
+}
+
+PURGE_KEEPS_NAMED_BRANCHES: {
+  # named generations are deliberate environments; --purge leaves them alone and
+  # only sweeps the auto-numbered ones.
+  my $box = make_sandbox( $installer_ok );
+  is( ( run_install( $box, '--branch=stable' ) )[0], 0, 'stable branch built' );
+  is( ( run_install( $box ) )[0], 0, 'a numbered generation built and active' );
+  is( ( run_install( $box, '--purge' ) )[0], 0, 'next install --purge ok' );
+
+  ok -d File::Spec->catdir( $box, qw/ perl5 generations /, "${arch_name}-stable" ),
+    'the named branch survives --purge';
+  ok ! -e File::Spec->catdir( $box, qw/ perl5 generations /, "${arch_name}-1" ),
+    'the superseded numbered generation is purged';
+}
+
+PURGE_WITH_BUILD_ONLY_KEEPS_LIVE_AND_BUILT: {
+  # --build-only --purge: the freshly built generation is not activated, so both
+  # the live generation (still the previous one) and the just-built one must
+  # survive, while an older superseded generation is still reclaimed.
+  my $box = make_sandbox( $installer_ok );
+  is( ( run_install( $box ) )[0], 0, 'gen 1 ok' );
+  is( ( run_install( $box ) )[0], 0, 'gen 2 ok (live)' );
+  my $live = readlink gen_link( $box );
+  like $live, qr{-2\z}, 'generation 2 is the live one';
+
+  my ( $exit, $out ) = run_install( $box, '--build-only', '--purge' );
+  is $exit, 0, '--build-only --purge exits 0' or diag $out;
+
+  is readlink( gen_link( $box ) ), $live,
+    '--build-only leaves the live selector pointing at generation 2';
+  ok -d File::Spec->catdir( $box, qw/ perl5 generations /, "${arch_name}-2" ),
+    'the live generation survives the purge';
+  ok -d File::Spec->catdir( $box, qw/ perl5 generations /, "${arch_name}-3" ),
+    'the just-built (un-activated) generation survives the purge';
+  ok ! -e File::Spec->catdir( $box, qw/ perl5 generations /, "${arch_name}-1" ),
+    'the superseded generation 1 is reclaimed';
+}
+
 done_testing;

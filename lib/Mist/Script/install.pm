@@ -19,7 +19,7 @@ BEGIN {
 }
 
 
-my ( $branch, $parent, $prove, $resume, $rebuild, $continue_last_build );
+my ( $branch, $parent, $prove, $resume, $rebuild, $continue_last_build, $purge );
 our $build_only;
 my %dist_options;
 BEGIN {
@@ -38,6 +38,7 @@ BEGIN {
     'resume!'    => \$resume,
     'rebuild'    => \$rebuild,
     'continue-last-build' => \$continue_last_build,
+    'purge'      => \$purge,
 
     # the following are accessible via %dist_options
     'force-tests',
@@ -601,4 +602,26 @@ or enable it in a shell with:
 source $rc_fn
 
 SUCCESS
+}
+
+# --purge: the new generation is built (and, unless --build-only, current), so
+# reclaim disk by dropping this perl's other auto-numbered generations and any
+# leftover ...-build dirs. Protect both the generation just built ($gen_name) and
+# whatever the selector currently points at - the two differ under --build-only,
+# where the live generation is not the one just built. Named generations and other
+# perls' generations are left untouched.
+if ( $purge ) {
+  my $abs_gen_container = File::Spec->catdir( $perl5_baselib, 'generations' );
+  my %keep = ( $gen_name => 1 );
+  if ( -l $generic_libdir ) {
+    my $active = readlink $generic_libdir;
+    $keep{ $1 } = 1 if defined $active and $active =~ m{(?:\A|/)([^/]+)/?\z};
+  }
+  for my $dir ( glob File::Spec->catdir( $abs_gen_container, "${arch_path}-*" ) ) {
+    my $base = ( File::Spec->splitdir( $dir ) )[-1];
+    next if $keep{ $base };
+    next unless $base =~ /-\d+\z/ or $base =~ /-build\z/;
+    print "Purging old generation $base\n";
+    File::Path::rmtree( $dir );
+  }
 }
