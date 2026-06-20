@@ -2,6 +2,8 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+0.44 2026-06-20T13:55:24Z
+
   - Dependency bundles: a portable, named set of pinned dependency versions.
     `mist inject --full-dependency-tree` produces one from a peer's vetted set,
     `mist bundle publish` names and commits it, and `./mpan-install --bundle`
