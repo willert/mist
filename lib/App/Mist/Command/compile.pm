@@ -29,6 +29,17 @@ sub execute {
   print "Checking sanity of project files\n";
   if ( -r -f $home->file('MANIFEST.SKIP')->stringify ) {
     my $skipchk = ExtUtils::Manifest::maniskip();
+
+    # .claude/ holds Claude Code session state, including full-repo worktrees.
+    # Unexcluded it bloats a regenerated MANIFEST and gets walked by the shebang
+    # scan below. Flag it like a bad shebang so the build-master adds the rule.
+    if ( -d $home->subdir('.claude')->stringify
+         and not $skipchk->( '.claude/x' ) ) {
+      print STDERR
+        "WARNING: .claude/ is present but not excluded by MANIFEST.SKIP\n",
+        "         add '^\\.claude/' so its session/worktree state is not packaged\n";
+    }
+
     my @invalid_shebang;
     $home->traverse(sub {
       my ($child, $cont) = @_;
@@ -156,7 +167,10 @@ F<./perl5/> on any host. Run C<compile> after every change to either file.
 Before generating, C<compile> sanity-checks the project: when a
 F<MANIFEST.SKIP> is present it scans the non-skipped files for hard-coded
 C<#!.../bin/perl> shebang lines and warns about them (portable scripts
-should use C<#!/usr/bin/env perl>).
+should use C<#!/usr/bin/env perl>). It also warns when a F<.claude/>
+directory is present but not excluded by F<MANIFEST.SKIP> -- left unexcluded
+its session state and full-repo worktrees bloat a regenerated F<MANIFEST>;
+add C<^\.claude/> to silence it.
 
 Together with the generated F<./mpan-install>, C<compile> is one of the two
 commands you run routinely. See also L<mist init|App::Mist::Command::init>,

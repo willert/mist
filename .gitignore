@@ -23,6 +23,7 @@ _build_params
 /perl5/
 /*.org/
 /.build/
+/.claude/
 
 *#*
 *_flymake.*

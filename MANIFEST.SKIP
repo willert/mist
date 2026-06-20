@@ -9,6 +9,9 @@
 \B\.git\b
 \B\.gitignore$
 
+# Avoid Claude Code session state and full-repo worktrees
+^\.claude/
+
 # Avoid Module::Release stuff
 \B\.releaserc$
 \bDebian_CPANTS.txt$
