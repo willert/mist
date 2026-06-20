@@ -8,6 +8,7 @@ use FindBin ();
 use File::Temp qw/ tempdir /;
 use File::Spec;
 use File::Path qw/ mkpath /;
+use Cwd ();
 
 # Exercises a real ./mpan-install end to end in throwaway sandboxes, fast and
 # hermetic. Two off-switches keep it cheap without weakening it: a bare mistfile
@@ -546,6 +547,59 @@ PURGE_WITH_BUILD_ONLY_KEEPS_LIVE_AND_BUILT: {
     'the just-built (un-activated) generation survives the purge';
   ok ! -e File::Spec->catdir( $box, qw/ perl5 generations /, "${arch_name}-1" ),
     'the superseded generation 1 is reclaimed';
+}
+
+# The per-project workspace where ephemeral bundles live, derived the way the host
+# (and App::Mist::Context) derive it: lc the realpath'd project root, \W -> _,
+# trimmed, under <home>/.mist/<...>/bundles.
+sub workspace_bundles {
+  my ( $home, $project ) = @_;
+  ( my $base = lc Cwd::realpath( $project ) ) =~ s/\W/_/g;
+  $base =~ s/\A_+//;
+  $base =~ s/_+\z//;
+  return File::Spec->catdir( $home, '.mist', $base, 'bundles' );
+}
+
+BUNDLE_APPLIES_AS_A_GENERATION: {
+  # --bundle resolves an ephemeral uuid bundle from the workspace, folds its floor
+  # specs into a targeted install, and builds+activates a fresh generation. The
+  # floor is a core module so no real build is needed; the resolution, workspace
+  # derivation and generation activation are what this exercises.
+  my $box  = make_sandbox( $installer_ok );
+  my $home = File::Spec->catdir( $box, 'home' );
+  my $uuid = 'aaaaaaaa-bbbb-cccc-dddd-000000000001';
+
+  my $bundles = workspace_bundles( $home, $box );
+  mkpath $bundles;
+  _spew( File::Spec->catfile( $bundles, "$uuid.bundle" ), "Carp~0\n" );
+
+  local $ENV{HOME} = $home;
+  my ( $exit, $out ) = run_install( $box, '--bundle', $uuid );
+  is $exit, 0, '--bundle apply exits 0' or diag $out;
+  like $out, qr/Applying bundle \Q$uuid\E \(1 floors\)/,
+    'the installer resolved the ephemeral bundle from the workspace';
+
+  ok -l gen_link( $box ), 'a generation was activated';
+  like readlink( gen_link( $box ) ) // '', qr{^generations/perl-5\.20\.3-.*-\d+$},
+    'the bundle apply landed in a numbered generation';
+}
+
+BUNDLE_RESOLUTION_IS_GUARDED_AND_LOUD: {
+  # A traversal id is rejected outright; a well-formed but unknown id fails loud
+  # rather than silently installing nothing. Both abort before any generation is
+  # promoted or activated.
+  my $box = make_sandbox( $installer_ok );
+
+  my ( $bad_exit, $bad_out ) = run_install( $box, '--bundle', '../escape' );
+  isnt $bad_exit, 0, 'a traversal bundle id is rejected';
+  like $bad_out, qr/Invalid bundle id/, 'and says why';
+
+  my ( $miss_exit, $miss_out ) = run_install( $box, '--bundle', 'no-such-bundle' );
+  isnt $miss_exit, 0, 'an unknown bundle id fails loud';
+  like $miss_out, qr/No bundle 'no-such-bundle'/, 'and names the missing bundle';
+
+  ok ! -e gen_link( $box ),
+    'a failed bundle resolution activates no generation';
 }
 
 done_testing;

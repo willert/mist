@@ -1,5 +1,14 @@
 # Proposal: bundles - portable, named dependency errata
 
+> **Status: implemented.** The produce / publish / apply lifecycle is built:
+> `mist inject --full-dependency-tree` produces ephemeral bundles, `mist bundle
+> publish` promotes them into `mpan-dist/bundles/`, and `./mpan-install --bundle`
+> applies them. The on-disk format is a split `<id>.bundle` (floor specs) plus
+> `<id>.meta` sidecar; see `Mist::Bundle`. The "File format" open question below was
+> resolved in favour of the spec-file-plus-sidecar variant. The live reference is the
+> `Mist::Bundle` / `App::Mist::Command::bundle` POD and the mist skill; this document
+> is kept as the design rationale.
+
 ## TL;DR
 
 A *bundle* is a small set of pinned dist specs - "these versions, applied as a

@@ -26,8 +26,9 @@ has mirror_list => (
   traits     => [qw/ Array /],
   lazy_build => 1,
   handles    => {
-    mirror_list  => 'elements',
-    add_mirror   => 'push',
+    mirror_list    => 'elements',
+    add_mirror     => 'push',
+    prepend_mirror => 'unshift',
   },
 );
 
@@ -93,6 +94,13 @@ sub begin_work {
   });
 }
 
+# This project's own mpan-dist is always built in first. add_mirror then appends
+# peers after it (peer-last): with --cascade-search the local copy answers first,
+# so a peer can only fill gaps, never downgrade what we already vendor - the
+# `inject --from` contract. prepend_mirror unshifts a peer ahead of the local
+# mirror (peer-first): cascade-search then takes the peer's higher version where
+# it has one, raising the local set toward the peer's - what `--full-dependency-tree`
+# wants from its clean-room resolve.
 around _build_mirror_list => sub {
   my ( $orig, $self, @args ) = @_;
   return [

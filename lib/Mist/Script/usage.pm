@@ -25,6 +25,10 @@ package Mist::Script::usage;
    --purge             after a successful install, remove this perl's other
                        auto-numbered generations (and stale ...-build dirs),
                        keeping the active one; named generations are left untouched
+   --bundle ID         apply a dependency bundle: install its Module~VERSION
+                       floors into a fresh generation (incremental and atomic,
+                       never a downgrade). ID is a published name found in
+                       mpan-dist/bundles/, else an ephemeral uuid in the workspace
 
    --branch [BRANCH]
        build into a named generation instead of an auto-numbered one

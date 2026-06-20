@@ -27762,7 +27762,7 @@ BEGIN {
 }
 
 
-my ( $branch, $parent, $prove, $resume, $rebuild, $continue_last_build, $purge );
+my ( $branch, $parent, $prove, $resume, $rebuild, $continue_last_build, $purge, $bundle );
 our $build_only;
 my %dist_options;
 BEGIN {
@@ -27782,6 +27782,7 @@ BEGIN {
     'rebuild'    => \$rebuild,
     'continue-last-build' => \$continue_last_build,
     'purge'      => \$purge,
+    'bundle=s'   => \$bundle,
 
     # the following are accessible via %dist_options
     'force-tests',
@@ -27919,6 +27920,12 @@ use Cwd qw/ realpath getcwd /;
 
 my $mist_home = $ENV{MIST_APP_ROOT} ? $ENV{MIST_APP_ROOT} : $Bin;
 
+# The real user home, captured before the build's HOME isolation (a tempdir, set
+# below) takes over. Ephemeral bundle resolution needs the real home, and pinning
+# it here makes that lookup independent of where the bundle read lands relative to
+# the override.
+my $real_home = $ENV{HOME};
+
 my $perl5_baselib = File::Spec->catdir( $mist_home, $PERL5_BASE_LIB );
 mkpath( $perl5_baselib );
 
@@ -27984,6 +27991,13 @@ for my $arg ( @CMD_OPTS ) {
   push @CPAN_ARGS, $arg unless grep{ $arg eq $_ } @CUSTOM_MODULES;
 }
 
+# --bundle: fold a dependency erratum's floor specs into the targeted install.
+# Each line is a Module~VERSION floor; appending them to @CUSTOM_MODULES routes
+# them through the same CoW-seeded, mirror-only generation build a custom-module
+# install uses - so applying a bundle is incremental (only its dists rebuild) and
+# atomic, and the >= floors make it max(local, bundle), never a downgrade.
+push @CUSTOM_MODULES, _bundle_specs( $bundle ) if defined $bundle;
+
 sub run_cpanm {
   my $app = App::cpanminus::script->new;
   my @options = (
@@ -27998,6 +28012,54 @@ sub run_cpanm {
   my $result = $app->_doit;
   exit 1 unless $result and $result == 1;
   return $result;
+}
+
+# The ephemeral half of bundle resolution: ~/.mist/<project>/bundles, where the
+# producer drops UUID bundles. Derive the per-project workspace exactly as
+# App::Mist::Context does (lc the realpath'd project root, \W -> _, trimmed) so a
+# uuid written by `mist inject --full-dependency-tree` is found here. Uses
+# $real_home (captured before the build's HOME isolation), not live $ENV{HOME}.
+sub _workspace_bundles {
+  my $home = $real_home
+    or die "Cannot determine HOME to resolve an ephemeral bundle\n";
+  ( my $base = lc realpath( $mist_home ) ) =~ s/\W/_/g;
+  $base =~ s/\A_+//;
+  $base =~ s/_+\z//;
+  return File::Spec->catdir( $home, '.mist', $base, 'bundles' );
+}
+
+# Resolve a bundle id to its floor specs. A published name lives in the committed
+# mirror (mpan-dist/bundles/<id>.bundle); an ephemeral uuid in the workspace, with
+# the published name winning. The id is a filename stem, never a path - guarded
+# against traversal like release's candidate ids.
+sub _bundle_specs {
+  my ( $id ) = @_;
+  die "Invalid bundle id '" . ( defined $id ? $id : '' ) . "'\n"
+    unless defined $id
+    and    $id =~ /\A[A-Za-z0-9][\w.-]*\z/
+    and    $id !~ /\.\./;
+
+  my @candidates = (
+    File::Spec->catfile( $mpan, 'bundles', "$id.bundle" ),
+    File::Spec->catfile( _workspace_bundles(), "$id.bundle" ),
+  );
+  my ( $file ) = grep { -e $_ } @candidates;
+  die "No bundle '$id' (looked in: @candidates)\n" unless defined $file;
+
+  my @specs;
+  open my $fh, '<', $file or die "Cannot read bundle $file: $!\n";
+  while ( defined( my $line = <$fh> ) ) {
+    $line =~ s/\A\s+//;
+    $line =~ s/\s+\z//;
+    next unless length $line;
+    next if $line =~ /\A#/;
+    push @specs, $line;
+  }
+  close $fh;
+  die "Bundle '$id' lists no dists\n" unless @specs;
+
+  printf "Applying bundle %s (%d floors) from %s\n", $id, scalar @specs, $file;
+  return @specs;
 }
 
 # Atomic activation: stage the symlink under a temp name, then rename it over
@@ -28429,6 +28491,10 @@ package Mist::Script::usage;
    --purge             after a successful install, remove this perl's other
                        auto-numbered generations (and stale ...-build dirs),
                        keeping the active one; named generations are left untouched
+   --bundle ID         apply a dependency bundle: install its Module~VERSION
+                       floors into a fresh generation (incremental and atomic,
+                       never a downgrade). ID is a published name found in
+                       mpan-dist/bundles/, else an ephemeral uuid in the workspace
 
    --branch [BRANCH]
        build into a named generation instead of an auto-numbered one

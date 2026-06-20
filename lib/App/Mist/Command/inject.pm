@@ -6,13 +6,17 @@ use 5.010;
 use App::Mist -command;
 
 use Path::Class qw/ dir /;
+use File::Temp qw/ tempdir /;
+use JSON::PP ();
 use Mist::PackageManager::MPAN;
+use Mist::Bundle;
 
 sub usage_desc { '%c inject %o <module-spec>...' }
 
 sub opt_spec {
   return (
     [ 'from=s@' => "resolve from this peer project's mpan-dist instead of CPAN (mirror-only; repeatable)" ],
+    [ 'full-dependency-tree' => "raise the target's whole dependency tree to the peer's versions and write a bundle, without touching the live env (requires --from)" ],
   );
 }
 
@@ -33,7 +37,13 @@ sub execute {
     push @peer_mirrors, sprintf 'file://%s/', $mpan->resolve;
   }
 
+  die "$0: --full-dependency-tree needs at least one --from peer\n"
+    if $opt->full_dependency_tree and not @peer_mirrors;
+
   $ctx->ensure_correct_perlbrew_context;
+
+  return $self->_produce_bundle( $ctx, $args, \@peer_mirrors )
+    if $opt->full_dependency_tree;
 
   my $package_manager = Mist::PackageManager::MPAN->new({
     project_root => $ctx->project_root,
@@ -52,6 +62,67 @@ sub execute {
   my $install_error = $@;
   $package_manager->commit;
   die $install_error if $install_error;
+}
+
+# --full-dependency-tree: resolve the target's whole tree at the peer's floors and
+# emit a bundle, without touching the live ./perl5. The resolve runs in a clean
+# room - an empty lib forces cpanm to walk every non-core dependency, not just the
+# unsatisfied ones, and a peer-first mirror list makes --cascade-search take the
+# peer's higher version wherever it has one. --save-dists still vendors the
+# resolved tarballs into this project's real mpan-dist, so producing the bundle and
+# the mirror state that makes it reproducible is one pass.
+sub _produce_bundle {
+  my ( $self, $ctx, $args, $peer_mirrors ) = @_;
+
+  my $clean_room = dir( tempdir( 'mist-fdt-XXXXXX', TMPDIR => 1, CLEANUP => 1 ) );
+
+  my $package_manager = Mist::PackageManager::MPAN->new({
+    project_root => $ctx->project_root,
+    local_lib    => $clean_room,
+    workspace    => $ctx->workspace_lib,
+    mirror_only  => 1,
+  });
+
+  # Peer-first: prepend in reverse so multiple --from peers keep their given
+  # order ahead of this project's own mirror.
+  $package_manager->prepend_mirror( $_ ) for reverse @$peer_mirrors;
+
+  $package_manager->begin_work;
+  eval { $package_manager->install( @$args ) };
+  my $install_error = $@;
+  $package_manager->commit;
+  die $install_error if $install_error;
+
+  my %floor = _resolved_floors( $clean_room );
+  die "$0: --full-dependency-tree resolved nothing to vendor\n" unless %floor;
+
+  my @specs = map { Mist::Bundle->spec_for( $_, $floor{ $_ } ) } sort keys %floor;
+
+  my $id  = Mist::Bundle->new_id;
+  my $dir = $ctx->workspace->subdir( 'bundles' );
+  Mist::Bundle->new({ specs => \@specs })->save( $dir, $id );
+
+  printf STDERR "Wrote bundle %s (%d floors) under %s\n", $id, scalar @specs, $dir;
+  print "Apply with: ./mpan-install --bundle $id\n";
+  return;
+}
+
+# Read back what a clean-room resolve installed into $lib: one floor per dist,
+# keyed by the dist's main module, from cpanm's install.json receipts.
+sub _resolved_floors {
+  my ( $lib ) = @_;
+  my %floor;
+  for my $receipt ( glob "$lib/lib/perl5/*/.meta/*/install.json" ) {
+    open my $fh, '<', $receipt or next;
+    my $json = do { local $/; <$fh> };
+    close $fh;
+    my $data = eval { JSON::PP::decode_json( $json ) } or next;
+    my $module  = $data->{name} // $data->{target} // next;
+    my $version = $data->{version};
+    next unless defined $version and length $version;
+    $floor{ $module } = $version;
+  }
+  return %floor;
 }
 
 1;
@@ -158,7 +229,29 @@ Like a plain C<inject> it records nothing about the peer: it touches neither
 F<cpanfile> nor F<mistfile>. To instead fold a peer's whole declared set and
 record the relationship, that is L<mist merge|App::Mist::Command::merge>.
 
-C<inject> changes three things:
+=head2 Raising the whole dependency tree with C<--full-dependency-tree>
+
+Plain C<--from> respects declared requirements: it raises a dependency only when
+the target's metadata forces it, so a dep you already satisfy at an older version
+stays put. C<--full-dependency-tree> instead trusts the peer's empirically-resolved
+set over the loose C<< >= >> declarations and raises I<every> module in the
+target's dependency tree to at least the peer's version. Reach for it when the
+peer's mirror is the record of a solved problem - a CVE fix whose working version
+set lives nowhere in the dependency metadata - and you want that whole set, not
+just what the declarations admit. It requires at least one C<--from> and the long
+name is deliberate: it is a rare rebaseline, not a reflex.
+
+It does B<not> touch the live F<./perl5> and does B<not> install anything. It
+resolves the tree in a clean room (so cpanm walks the whole tree, not just the
+unsatisfied parts) with the peer's mirror consulted first, vendors the resolved
+tarballs into this project's F<mpan-dist/>, and writes the resolved versions as a
+B<bundle> - a floor-spec set you apply later, incrementally and atomically, with
+C<< ./mpan-install --bundle <id> >>. The versions are inherited as floors, never a
+clone: B's own graph still wins wherever it needs something newer, so the result
+is C<max(your needs, the peer's floors)>, raise-only. The bundle id is printed on
+completion. See L<Mist::Bundle> and L<mist bundle|App::Mist::Command::bundle>.
+
+C<inject> (without C<--full-dependency-tree>) changes three things:
 
 =over
 

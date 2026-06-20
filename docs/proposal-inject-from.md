@@ -1,5 +1,11 @@
 # Proposal: `mist inject --from <peer>` - source a target and its dependencies from a peer's golden mirror
 
+> **Status: implemented.** Both `mist inject --from` and its `--full-dependency-tree`
+> extension are built. The producer side of `--full-dependency-tree` writes a bundle;
+> the bundle lifecycle it feeds is in `proposal-bundles.md` (also implemented). The
+> live reference is the `App::Mist::Command::inject` / `Mist::Bundle` POD and the mist
+> skill; this document is kept as the design rationale.
+
 ## TL;DR
 
 Two independent projects, A and B, are pure peers - no dependency relationship.
