@@ -13,6 +13,10 @@ Revision history for App::Mist
   - mistfile: a distribution prepended both bare and with a version keeps the
     version pin instead of silently dropping it.
 
+  - mistfile: an operator-pinned prepend (`==`, `>=`, `@`, ...) is no longer
+    silently dropped; the constraint passes to cpanm verbatim and any notest/ccflags
+    on the dist still applies.
+
   - mpan-install: drop the internal-only `--skip-prepended` and `--skip-notest`
     flags; `--force-tests` is unchanged.
 
