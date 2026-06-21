@@ -1,7 +1,10 @@
 # Proposal: per-dist build directives - a composition, ordering and build-flag model
 
-> **Status: proposed** (0.45 candidate). Supersedes the parked `ccflags` sketch;
-> ccflags lands here as the first new directive on the model, not as a flat add.
+> **Status: implemented** (0.45). Supersedes the parked `ccflags` sketch; ccflags
+> lands here as the first new directive on the model, not as a flat add. The host
+> mechanism for ccflags differs from the original sketch below: setting
+> `PERL_MM_OPT` around the call does not survive cpanm's own local::lib setup, so
+> the verified mechanism is env-mode (see "ccflags" and "Threading and host change").
 
 ## TL;DR
 
@@ -64,7 +67,12 @@ together:
   overrides a merged dist's. In practice the merged dist's own `ccflags` applies
   unless the build-master deliberately overrides it (the rare "compile this merge's
   dist under different flags" case, which is the author's to write). No string
-  union; one winner.
+  union; one winner. When *two merged* dists set the same valued directive on the
+  same module and the build-master sets none, neither is the outermost layer, so
+  this rule does not pick between them; the later-declared merge wins (FIFO
+  last-write), which - unlike own-vs-merged - is order-dependent. An empty-string
+  value is inert and reads as "no value", so a build-master empty overrides a merged
+  value back to none.
 - **No-negation booleans - on if found anywhere (OR).** `notest` has no
   `no-notest`, so it cannot be overridden off; if any level sets it, it is on.
   prepend-membership is the same: prepended if any level prepends it, or `ccflags`
@@ -136,22 +144,33 @@ orders a notest-dep-of-a-*prepend* correctly, which the phase split does not.
   unflagged as someone's dependency, and its own flagged build would never fire
   (already satisfied) - a silent no-op. So setting `ccflags` adds the dist to the
   prepend set at its declared position.
-- **Both builders, no detection.** Around the dist's own cpanm call, set both:
-  - `PERL_MM_OPT="CCFLAGS=$Config{ccflags} <flags>"` - ExtUtils::MakeMaker.
+- **Both builders, no detection.** The flag reaches the dist's own build through
+  two env vars, each read only by its builder, so there is nothing to detect; a
+  dual-life dist (ships both Makefile.PL and Build.PL, where cpanm runs Build.PL)
+  correctly takes the MB one. No experimental cpanm flag is involved, which suits
+  mist's distrust of cpanm flags for anything load-bearing.
+  - `PERL_MM_OPT` gets `CCFLAGS="$Config{ccflags} <flags>"` - ExtUtils::MakeMaker.
     `$Config{ccflags}` is prepended because a `CCFLAGS=` override *replaces* perl's
-    default flags rather than appending; `build_cpanm_call_stack` runs under the
-    target perl, so `$Config{ccflags}` is in hand.
-  - `PERL_MB_OPT="--extra_compiler_flags=<flags>"` - Module::Build, which appends
-    natively, so no compose is needed there.
-
-  Each builder reads only its own var, so there is nothing to detect; a dual-life
-  dist (ships both Makefile.PL and Build.PL, where cpanm runs Build.PL) correctly
-  takes the MB one. No experimental cpanm flag is involved, which suits mist's
-  distrust of cpanm flags for anything load-bearing.
+    default flags rather than appending; the value is quoted so MakeMaker's
+    shellwords parse keeps it one token. `run_cpanm` runs under the target perl, so
+    `$Config{ccflags}` is in hand.
+  - `PERL_MB_OPT` gets `--extra_compiler_flags="<flags>"` - Module::Build, which
+    appends natively, so no compose is needed there.
+- **Env-mode, because cpanm clobbers PERL_MM_OPT.** Setting those vars around an
+  ordinary `cpanm --local-lib-contained=X <dist>` call does *not* work: cpanm's own
+  `local::lib` setup overwrites `PERL_MM_OPT` (to `INSTALL_BASE=...`) partway
+  through the build, dropping the CCFLAGS - verified empirically, and it is why the
+  long-assumed `PERL_MM_OPT=... ./mpan-install` interim workaround silently never
+  reached the compiler. The working mechanism reconstructs local::lib's install env
+  itself (`local::lib->build_environment_vars_for($local_lib)`), appends the two
+  flag vars, and runs the dist call with `--self-contained` instead of
+  `--local-lib-contained`: that path keys install location off the env
+  (`PERL_LOCAL_LIB_ROOT`) and leaves `PERL_MM_OPT` untouched, so the flags survive
+  to the configure step.
 - **No leak.** Split the build the way `notest` already does -
-  `cpanm --installdeps X` (no flag env) then `cpanm X` (flag env) - so X's deps
-  build clean and only X gets the flag. A dep that *also* needs a flag gets its own
-  `ccflags`; the model composes.
+  `cpanm --installdeps X` (ordinary call, no flag env) then `cpanm X` (env-mode with
+  the flags) - so X's deps build clean and only X gets the flag. A dep that *also*
+  needs a flag gets its own `ccflags`; the model composes.
 
 `ccflags` is EUMM/MB-relevant only because it sets compiler flags; a scan of
 exparo-frontend, erb and sig-cms confirms real Build.PL XS dists (Params::Validate,
@@ -166,7 +185,8 @@ ordered, deduped records and, per record, emits its cpanm call(s):
 
 - plain `prepend`: `[ $spec ]`;
 - any decorator present (notest and/or ccflags): the split `[ '--installdeps',
-  $spec ]` then `[ $spec ]` decorated with `--notest` and/or a per-call env marker;
+  $spec ]` then `[ $spec ]` decorated with `--notest` and/or a leading
+  `{ ccflags => <flags> }` marker hashref;
 - then the bulk prereqs, unchanged.
 
 One call-group per dist, no duplicates.
@@ -177,9 +197,13 @@ One call-group per dist, no duplicates.
   composition rule and the compiler all live there.
 - This is fatpacked into `mpan-install` (the call stack is built on the host), so
   the change needs `mist compile` + re-vendor.
-- The one host-side addition: `Mist::Script::install::run_cpanm` honors a per-call
-  env marker carried on the call entry (for the ccflags env), applied via
-  `local %ENV` for that call only.
+- The host-side addition: `Mist::Script::install::run_cpanm` peels a leading
+  `{ ccflags => <flags> }` marker off the call entry and, under a `local %ENV` for
+  that call only, builds the env-mode described under "ccflags" (reconstruct
+  local::lib's env, append the two flag vars, switch the call to
+  `--self-contained`). The marker carries only the raw flags string, so the call
+  stack stays platform-independent; the `$Config{ccflags}` compose and the
+  local::lib reconstruction both happen host-side in `run_cpanm`.
 
 ## Rejected alternatives
 
@@ -199,6 +223,12 @@ One call-group per dist, no duplicates.
   verb would refuse dists in use and rot on a bump.
 - **A global `CFLAGS`/`-std` for the whole install.** Fixes one dist but changes
   every other build; directives are deliberately per-dist.
+- **Naive `PERL_MM_OPT` injection under `--local-lib-contained`.** The obvious
+  approach - export `PERL_MM_OPT="CCFLAGS=..."` and run cpanm as usual - was
+  empirically disproven: cpanm's own `local::lib` setup overwrites `PERL_MM_OPT`
+  mid-build, so the flag never reaches the compiler (this is also why the assumed
+  `PERL_MM_OPT=... ./mpan-install` interim workaround was a silent no-op). Hence the
+  env-mode (`build_environment_vars_for` + `--self-contained`) above.
 
 ## Tests
 
@@ -208,11 +238,15 @@ One call-group per dist, no duplicates.
   (`['F1','S1','P']`, `['M1','M2','M3']`) - rewriting the two pinned assertions in
   `t/distribution-verbs.t`.
 - **Hierarchy:** a dist with both `notest` and `ccflags` produces a single
-  `--installdeps` + one decorated call (both `--notest` and the env), not two
-  splits.
-- **ccflags:** both env vars on the module call, `$Config{ccflags}` prepended in
-  the MM one; the installdeps-split present; the dist in the prepend set. Extends
-  `t/build-cpanm-call-stack.t`.
+  `--installdeps` + one decorated call (carrying both `--notest` and the
+  `{ ccflags => ... }` marker), not two splits.
+- **ccflags call stack:** the marker on the dist call, the installdeps-split
+  present, the dist scheduled ahead of bulk prereqs, and the targeted-install
+  gating (skipped unless the dist is named). Extends `t/build-cpanm-call-stack.t`.
+- **ccflags end-to-end:** a real cpanm build (`t/ccflags-build.t`) of a flagged
+  dist with a dependency, asserting the flag reaches the dist's `Makefile.PL` with
+  `$Config{ccflags}` preserved, and that the dependency built by the `--installdeps`
+  call never sees it - the regression guard for the env-mode host mechanism.
 
 ## Migration
 
