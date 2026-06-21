@@ -92,6 +92,48 @@ BPL
   $tar->write( File::Spec->catfile( $authors, "$base.tar.gz" ), COMPRESS_GZIP() );
 }
 
+# A real-XS dist. With $guarded, its C source carries `#ifndef MIST_CCTEST #error`,
+# so it compiles ONLY if -DMIST_CCTEST reaches the actual C compiler - the
+# load-bearing proof that ccflags hits cc, not merely that EUMM resolved it into
+# its CCFLAGS hash. Needs a working C toolchain (gated below).
+sub make_xs_dist {
+  my ( $authors, $module, $version, $guarded ) = @_;
+  ( my $dist    = $module ) =~ s/::/-/g;
+  ( my $xs_base = $module ) =~ s/.*:://;
+  ( my $pm_rel  = $module ) =~ s{::}{/}g; $pm_rel = "lib/$pm_rel.pm";
+  my $base = "$dist-$version";
+
+  my $guard = $guarded
+    ? qq{#ifndef MIST_CCTEST\n#error "ccflags -DMIST_CCTEST did not reach the C compiler"\n#endif\n}
+    : '';
+  my $xs = <<"XS";
+#define PERL_NO_GET_CONTEXT
+#include "EXTERN.h"
+#include "perl.h"
+#include "XSUB.h"
+
+$guard
+MODULE = $module   PACKAGE = $module
+
+int
+cctest_ok()
+  CODE:
+    RETVAL = 1;
+  OUTPUT:
+    RETVAL
+XS
+
+  my $tar = Archive::Tar->new;
+  $tar->add_data( "$base/$pm_rel",
+    "package $module;\nour \$VERSION='$version';\n"
+    . "require XSLoader; XSLoader::load('$module', \$VERSION);\n1;\n" );
+  $tar->add_data( "$base/$xs_base.xs", $xs );
+  $tar->add_data( "$base/Makefile.PL",
+    "use ExtUtils::MakeMaker;\n"
+    . "WriteMakefile( NAME => '$module', VERSION_FROM => '$pm_rel' );\n" );
+  $tar->write( File::Spec->catfile( $authors, "$base.tar.gz" ), COMPRESS_GZIP() );
+}
+
 my $have_mb = eval { require Module::Build; Module::Build->VERSION; 1 };
 
 my $mirror  = File::Spec->catdir( $root, 'mpan' );
@@ -100,6 +142,8 @@ make_path( $authors );
 make_dist( $authors, 'Acme::CcDep',  '0.01' );
 make_dist( $authors, 'Acme::CcMain', '0.01', 'Acme::CcDep' );
 make_mb_dist( $authors, 'Acme::CcMb', '0.01' ) if $have_mb;
+make_xs_dist( $authors, 'Acme::CcPlainXs', '0.01', 0 );   # unguarded: toolchain probe
+make_xs_dist( $authors, 'Acme::CcXs',      '0.01', 1 );   # guarded by -DMIST_CCTEST
 {
   local *STDOUT; open STDOUT, '>', File::Spec->devnull;
   Mist::CPAN::PackageIndex->new( cpan_dist_root => Path::Class::dir($mirror) )
@@ -195,6 +239,31 @@ SKIP: {
   };
   like $mb_flags, qr/\Q$FLAG\E/,
     'Module::Build resolves the ccflags flag into extra_compiler_flags (PERL_MB_OPT path)';
+}
+
+# Real C-compile proof. The scenarios above prove EUMM/MB *resolve* the flag; this
+# proves it reaches the actual compiler. Acme::CcXs's XS guards on
+# `#ifndef MIST_CCTEST #error`, so it compiles only if ccflags delivers
+# -DMIST_CCTEST to cc.
+SKIP: {
+  # Gate on a usable XS toolchain by building the unguarded probe dist. If even
+  # that cannot compile, there is no working compiler/headers here - skip, so a
+  # genuine flag-delivery failure is never masked as a toolchain problem.
+  skip "no usable XS toolchain", 2 unless run_cpanm_like( 'Acme::CcPlainXs' );
+
+  # Control (runs first; installs nothing on failure): without the flag the guard
+  # fires and the build must fail - proving the success below is the flag's doing.
+  ok ! run_cpanm_like( 'Acme::CcXs' ),
+    'without the flag, the guarded XS fails to compile (#error fires)';
+
+  # With ccflags, -DMIST_CCTEST must reach cc and suppress the #error.
+  my @xs_stack = Mist::Environment->new
+    ->parse( source => "ccflags q{Acme::CcXs} => q{-DMIST_CCTEST};" )
+    ->build_cpanm_call_stack( { 'skip-core-satisfied' => 1 }, 'Acme::CcXs' );
+  my $xs_built = 1;
+  $xs_built &&= run_cpanm_like( @$_ ) for @xs_stack;
+  ok $xs_built,
+    'ccflags delivers -DMIST_CCTEST to the C compiler: the guarded XS compiles and installs';
 }
 
 done_testing;
