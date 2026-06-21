@@ -39,7 +39,7 @@ There is no separate lint step. Build/release is via Minilla (`minil`), but rele
 
 ### The mistfile DSL
 
-`mistfile` is a Perl DSL (not data) parsed by **`Mist::Environment`** in a fresh package with the verbs `perl`, `assert`, `prepend`, `notest`, `merge`, `script`, `dist_path` injected via `_bind`. Each verb is a method on **`Mist::Distribution`** (the immutable parse result). `Mist::Environment::as_code` is what `compile` uses to embed the parsed mistfile into `mpan-install` — note the package name is overridden to `DISTRIBUTION` there so the host script can find it.
+`mistfile` is a Perl DSL (not data) parsed by **`Mist::Environment`** in a fresh package with the verbs `perl`, `assert`, `prepend`, `notest`, `ccflags`, `merge`, `script`, `dist_path` injected via `_bind`. Each verb is a method on **`Mist::Distribution`** (the immutable parse result). `Mist::Environment::as_code` is what `compile` uses to embed the parsed mistfile into `mpan-install` — note the package name is overridden to `DISTRIBUTION` there so the host script can find it.
 
 `merge { … }` blocks share a global `$Mist::Distribution::merging_dist` while their body runs; `store_dist_info` checks that variable to route entries into the merged sub-dist as well as the parent. This is how dependency sets from sibling projects get folded together (e.g. the `mistfile` here is small precisely because downstream projects' mistfiles merge each other).
 
