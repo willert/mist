@@ -62,6 +62,10 @@ sub run {
   local %ENV = %ENV;
   delete @ENV{ @PINNING };
   $ENV{HOME} = $home;
+  # Point TMPDIR into the sandbox too, so ./mpan-install's deterministic build
+  # workspace (File::Spec->tmpdir/mist-build-...) lands under $root and is cleaned
+  # with it, rather than leaking into the real /tmp.
+  $ENV{TMPDIR} = $home;
   my $out = `$cmd </dev/null 2>&1`;
   return ( $? >> 8, $out );
 }

@@ -103,6 +103,10 @@ sub make_sandbox {
 sub run_install {
   my ( $dir, @args ) = @_;
   my $log = File::Spec->catfile( $dir, 'install.log' );
+  # Point the subprocess TMPDIR at the sandbox so ./mpan-install's deterministic
+  # build workspace lands under $dir (cleaned with the sandbox) instead of leaking
+  # into the real /tmp.
+  local $ENV{TMPDIR} = $dir;
   my $exit = clean_run(
     "cd $dir && ./mpan-install @args >install.log 2>&1 </dev/null" );
   return ( $exit, _slurp( $log ) );
@@ -190,13 +194,13 @@ BUILD_ONLY_DOES_NOT_ACTIVATE: {
 BUILD_WORKSPACE_DETERMINISTIC_REBUILD_RESETS: {
   # cpanm's build HOME is a deterministic path (per project + perl + user) so it is
   # reused across runs rather than leaked fresh each time. A plain run reuses it; a
-  # --rebuild resets it. Derive the same path install.pm computes (run_install
-  # strips MIST_APP_ROOT, so the installer's $mist_home is the sandbox dir).
+  # --rebuild resets it. run_install points the subprocess TMPDIR at $box, so the
+  # workspace lands under $box (cleaned with the sandbox); derive the same path
+  # (run_install strips MIST_APP_ROOT, so the installer's $mist_home is $box).
   my $box = make_sandbox( $installer_ok );
   ( my $key = lc Cwd::realpath( $box ) ) =~ s/\W/_/g;
   $key =~ s/\A_+//; $key =~ s/_+\z//;
-  my $workspace = File::Spec->catdir(
-    File::Spec->tmpdir, "mist-build-$<-$key-$arch_name" );
+  my $workspace = File::Spec->catdir( $box, "mist-build-$<-$key-$arch_name" );
 
   my ( $e1, $o1 ) = run_install( $box );
   is $e1, 0, 'first install exits 0' or diag $o1;
@@ -211,8 +215,6 @@ BUILD_WORKSPACE_DETERMINISTIC_REBUILD_RESETS: {
   run_install( $box, '--rebuild' );
   ok ! -e $sentinel, '--rebuild resets the workspace (sentinel gone)';
   ok -d $workspace, 'and the workspace is recreated';
-
-  File::Path::rmtree( $workspace );   # deterministic dir is not auto-cleaned
 }
 
 FAILED_INSTALL_KEEPS_PRIOR_GENERATION: {

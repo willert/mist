@@ -29,6 +29,9 @@ my $cpanm = File::Which::which( 'cpanm' )
   or plan skip_all => 'cpanm not on PATH';
 
 my $tmp  = tempdir( 'mist-cascade-XXXXXX', TMPDIR => 1, CLEANUP => 1 );
+# Keep cpanm's work tree (HOME/.cpanm/work) inside the cleaned $tmp instead of
+# polluting the real ~/.cpanm.
+local $ENV{HOME} = $tmp;
 my $high = MistTest::Mirror::make_mirror(
   File::Spec->catdir( $tmp, 'high' ), [ 'Acme::MistCascade' => '0.02' ] );
 my $low  = MistTest::Mirror::make_mirror(
