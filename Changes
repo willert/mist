@@ -2,6 +2,20 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+  - mistfile: new `ccflags 'Dist' => '-flags'` directive sets compiler flags for a
+    single distribution's own build (ExtUtils::MakeMaker and Module::Build), scoped
+    so the dist's dependencies build unflagged.
+
+  - mistfile: prepend and notest declared inside `merge` blocks now fold into the
+    parent in declaration order (previously reversed); merged-before-outer ordering
+    is unchanged.
+
+  - mistfile: a distribution prepended both bare and with a version keeps the
+    version pin instead of silently dropping it.
+
+  - mpan-install: drop the internal-only `--skip-prepended` and `--skip-notest`
+    flags; `--force-tests` is unchanged.
+
 0.44 2026-06-20T13:55:24Z
 
   - Dependency bundles: a portable, named set of pinned dependency versions.
