@@ -392,6 +392,27 @@ OPERATOR_VERSION_PREPEND_DECORATES: {
     'an undecorated operator-version prepend still emits the spec verbatim, ahead of prereqs';
 }
 
+OPERATOR_VERSION_PREPEND_NOT_CORE_DROPPED: {
+  # mist's ~-based core check cannot evaluate an operator constraint, so it must
+  # not let a core-satisfied verdict reached on a different ~-version of the same
+  # module silently drop the prepend. strict is core and satisfies the ~1.0 prereq,
+  # but the ==999 pin is opaque, so it is scheduled (cpanm resolves it or fails
+  # loudly), not dropped.
+  is_deeply
+    [ dist_from( 'perl q{5.20.3}; prepend q{strict} => q{==999};' )
+        ->build_cpanm_call_stack( { 'skip-core-satisfied' => 1 }, 'strict~1.0' ) ],
+    [ [ 'strict==999' ] ],
+    'an operator-pinned prepend mist cannot evaluate is scheduled, not core-skipped';
+
+  # Control: the guard is operator-only - a ~-version prepend mist *can* evaluate is
+  # still core-skipped when core meets it.
+  is_deeply
+    [ dist_from( 'perl q{5.20.3}; prepend q{strict} => q{1.0};' )
+        ->build_cpanm_call_stack( { 'skip-core-satisfied' => 1 } ) ],
+    [],
+    'a ~-version prepend mist can evaluate is still core-skipped (guard is operator-only)';
+}
+
 NOTEST_BEFORE_PREPEND: {
   # The one ordering case where the unified declaration-order pass deliberately
   # diverges from the old two-phase (all-prepends-then-all-notests) scheduler: a

@@ -313,9 +313,12 @@ sub build_cpanm_call_stack {
   # undecorated) then `X` carrying both --notest and a { ccflags => ... } marker,
   # so the flag/skip-test scopes to X alone and never leaks onto its deps.
   my $push_module_on_stack = sub{
-    my ( $module, $explicit_spec ) = @_;
+    my ( $module, $explicit_spec, $force ) = @_;
     return if $scheduled{ $module };
-    return if $core_satisfies{ $module };
+    # $force schedules a module mist cannot core-evaluate (an opaque operator
+    # constraint), so a core-satisfied decision made on a different version of it
+    # never silently drops it.
+    return if $core_satisfies{ $module } && !$force;
 
     # $module is always the bare name - the key shared by every map below. The
     # emitted spec is an explicit prepend spec when one carries a version
@@ -406,7 +409,13 @@ sub build_cpanm_call_stack {
       # spec and falls back to %version, still picking up a version pinned on a prereq.
       my $spec = ( defined $rec->{prepend} && $rec->{prepend} ne $name )
         ? $rec->{prepend} : undef;
-      $push_module_on_stack->( $name, $spec );
+      # A constraint whose first character after the bare name is not `~` (an
+      # operator prefix: ==, >=, @, ...) is opaque to the ~-based version machinery,
+      # so any core-satisfied verdict for this module was reached on a different
+      # ~-version of it. Force it onto the stack and let cpanm resolve the
+      # constraint (or fail loudly) rather than silently dropping the prepend.
+      my $force = defined $spec && substr( $spec, length $name, 1 ) ne q{~};
+      $push_module_on_stack->( $name, $spec, $force );
     }
   }
 
