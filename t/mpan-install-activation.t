@@ -187,6 +187,34 @@ BUILD_ONLY_DOES_NOT_ACTIVATE: {
     '--build-only still makes its generation current for this perl (no perl switch)';
 }
 
+BUILD_WORKSPACE_DETERMINISTIC_REBUILD_RESETS: {
+  # cpanm's build HOME is a deterministic path (per project + perl + user) so it is
+  # reused across runs rather than leaked fresh each time. A plain run reuses it; a
+  # --rebuild resets it. Derive the same path install.pm computes (run_install
+  # strips MIST_APP_ROOT, so the installer's $mist_home is the sandbox dir).
+  my $box = make_sandbox( $installer_ok );
+  ( my $key = lc Cwd::realpath( $box ) ) =~ s/\W/_/g;
+  $key =~ s/\A_+//; $key =~ s/_+\z//;
+  my $workspace = File::Spec->catdir(
+    File::Spec->tmpdir, "mist-build-$<-$key-$arch_name" );
+
+  my ( $e1, $o1 ) = run_install( $box );
+  is $e1, 0, 'first install exits 0' or diag $o1;
+  ok -d $workspace, 'build workspace created at the deterministic path';
+
+  my $sentinel = File::Spec->catfile( $workspace, 'SENTINEL' );
+  _spew( $sentinel, "keep\n" );
+
+  run_install( $box );
+  ok -e $sentinel, 'a plain re-run reuses the same workspace (sentinel survives)';
+
+  run_install( $box, '--rebuild' );
+  ok ! -e $sentinel, '--rebuild resets the workspace (sentinel gone)';
+  ok -d $workspace, 'and the workspace is recreated';
+
+  File::Path::rmtree( $workspace );   # deterministic dir is not auto-cleaned
+}
+
 FAILED_INSTALL_KEEPS_PRIOR_GENERATION: {
   # Step 3: a same-perl re-install builds an isolated generation and only swaps
   # the lib symlink on success. A mid-build failure must leave the prior

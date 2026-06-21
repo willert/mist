@@ -3,6 +3,7 @@ use strict;
 use warnings;
 
 use Config;
+use English qw( -no_match_vars );
 use Getopt::Long 2.42;
 use Pod::Usage;
 use File::Temp ();
@@ -379,7 +380,19 @@ sub _activate_generation {
 
 die "mpan-install can not run as root\n" if $> == 0;
 
-my $workspace = tempdir();
+# cpanm's HOME for the build (its ~/.cpanm/work/<time>.<pid>/ build trees live
+# here, isolated from the real home). Deterministic per project + perl + user so
+# it is reused across runs rather than leaked fresh every time - which is what lets
+# cpanm's own work-dir GC actually fire (a random HOME per run abandons each tree
+# forever). A clean-room --rebuild resets it, bounding the one path that
+# materialises the whole closure; an ordinary run reuses it, keeping the last
+# build.log around for post-mortem.
+( my $ws_key = lc realpath( $mist_home ) ) =~ s/\W/_/g;
+$ws_key =~ s/\A_+//; $ws_key =~ s/_+\z//;
+my $workspace = File::Spec->catdir(
+  File::Spec->tmpdir, "mist-build-$UID-$ws_key-$arch_path" );
+File::Path::rmtree( $workspace ) if $rebuild and length $ws_key and -d $workspace;
+mkpath( $workspace );
 
 mkpath( $local_lib );
 

@@ -20,6 +20,10 @@ Revision history for App::Mist
   - mpan-install: drop the internal-only `--skip-prepended` and `--skip-notest`
     flags; `--force-tests` is unchanged.
 
+  - mpan-install: the cpanm build home is now a stable per-project/per-perl dir
+    under TMPDIR, reused across runs (so cpanm's own work-dir GC applies) instead
+    of a throwaway leaked fresh every run; --rebuild resets it.
+
 0.44 2026-06-20T13:55:24Z
 
   - Dependency bundles: a portable, named set of pinned dependency versions.
