@@ -2,6 +2,8 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+0.45 2026-06-21T09:59:26Z
+
   - mistfile: new `ccflags 'Dist' => '-flags'` directive sets compiler flags for a
     single distribution's own build (ExtUtils::MakeMaker and Module::Build), scoped
     so the dist's dependencies build unflagged.
