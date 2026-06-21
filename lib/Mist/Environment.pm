@@ -5,7 +5,7 @@ use warnings;
 use Carp ();
 
 our @bindings;
-BEGIN { @bindings = qw( perl assert prepend notest merge script dist_path ) };
+BEGIN { @bindings = qw( perl assert prepend notest ccflags merge script dist_path ) };
 
 my $file_id = 1;
 

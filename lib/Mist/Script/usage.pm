@@ -13,8 +13,6 @@ package Mist::Script::usage;
    --help            display this help message
 
    --force-tests       ignore notest from mistfile, but still install dists
-   --skip-prepended    don't prepend those modules requested in mistfile
-   --skip-notest       don't prepend modules marked as 'notest' in mistfile
    --perlbrew VERSION  use this perlbrew-managed perl version
    --build-only        build (or rebuild) the target perl's environment but
                        do not activate it; the current selector is untouched

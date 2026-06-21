@@ -85,29 +85,21 @@ VERSION_PREPEND_SUPERSEDES_PREREQ: {
       'conflict warning emitted when prepend and prereq versions differ' );
 }
 
-SKIP_PREPENDED: {
+SKIP_DEFAULT_MODLIST: {
+  # A targeted install (skip-default-modlist, as the host sets for --bundle /
+  # inject) skips the mistfile's whole standing module list - prepend, notest and
+  # ccflags dists alike - and installs only the named modules. A named module that
+  # is itself a notest dist still two-steps via the bulk pass (its decoration is
+  # preserved); an unnamed directive'd dist (Pre::One) is not pulled in.
   my $dist = dist_from(
     'perl q{5.20.3}; prepend q{Pre::One}; notest q{No::Test};' );
   is_deeply
     [ $dist->build_cpanm_call_stack(
-        { 'skip-prepended' => 1 }, 'Plain::Prereq' ) ],
-    [ [ '--installdeps', 'No::Test' ],
-      [ '--notest',      'No::Test' ],
-      [ 'Plain::Prereq' ] ],
-    'skip-prepended omits prepended modules from the pre-schedule pass';
-}
-
-SKIP_NOTEST_PASS_ONLY: {
-  my $dist = dist_from(
-    'perl q{5.20.3}; prepend q{Pre::One}; notest q{No::Test};' );
-  is_deeply
-    [ $dist->build_cpanm_call_stack(
-        { 'skip-notest' => 1 }, 'Plain::Prereq', 'No::Test' ) ],
-    [ [ 'Pre::One' ],
-      [ 'Plain::Prereq' ],
+        { 'skip-default-modlist' => 1 }, 'Plain::Prereq', 'No::Test' ) ],
+    [ [ 'Plain::Prereq' ],
       [ '--installdeps', 'No::Test' ],
       [ '--notest',      'No::Test' ] ],
-    'skip-notest skips only the early notest pass; notest prereq still two-steps, ordered after plain prereqs';
+    'skip-default-modlist drops the directive set; a named notest dist still two-steps, an unnamed prepend is not pulled in';
 }
 
 FORCE_TESTS: {
@@ -170,10 +162,10 @@ OPTS_PLUS_ARRAYREF_PREREQS: {
     'perl q{5.20.3}; prepend q{Pre::One}; notest q{No::Test};' );
   is_deeply
     [ $dist->build_cpanm_call_stack(
-        { 'skip-prepended' => 1 }, [ 'Plain::Prereq', 'No::Test' ] ) ],
-    [ [ '--installdeps', 'No::Test' ],
-      [ '--notest',      'No::Test' ],
-      [ 'Plain::Prereq' ] ],
+        { 'skip-default-modlist' => 1 }, [ 'Plain::Prereq', 'No::Test' ] ) ],
+    [ [ 'Plain::Prereq' ],
+      [ '--installdeps', 'No::Test' ],
+      [ '--notest',      'No::Test' ] ],
     'an opts hashref combines with an arrayref prereq list';
 }
 
@@ -288,6 +280,132 @@ FORCE_TESTS_VERSIONED_NOTEST: {
         { 'force-tests' => 1 }, 'Forced::Notest~3.0' ) ],
     [ [ 'Forced::Notest~3.0' ] ],
     'force-tests on a versioned notest module yields a single versioned entry';
+}
+
+# --- ccflags --------------------------------------------------------------
+
+CCFLAGS_IMPLIES_PREPEND_SPLIT: {
+  # ccflags scopes a compiler flag to a named build, so it implies prepend: the
+  # dist gets its own installdeps-split (deps build undecorated) and its own
+  # call carries a { ccflags => ... } marker, scheduled ahead of the prereqs.
+  my $dist = dist_from( 'perl q{5.20.3}; ccflags q{Bit::Vector} => q{-std=gnu17};' );
+  is_deeply
+    [ $dist->build_cpanm_call_stack( 'Other' ) ],
+    [ [ '--installdeps', 'Bit::Vector' ],
+      [ { ccflags => '-std=gnu17' }, 'Bit::Vector' ],
+      [ 'Other' ] ],
+    'ccflags implies prepend: installdeps-split + marker on the dist call, ahead of prereqs';
+}
+
+CCFLAGS_AND_NOTEST_ONE_SPLIT: {
+  # A dist with BOTH notest and ccflags gets a single installdeps-split; the
+  # dist call carries both --notest and the ccflags marker, not two splits.
+  my $dist = dist_from( 'perl q{5.20.3}; ccflags q{X} => q{-std=gnu17}; notest q{X};' );
+  is_deeply
+    [ $dist->build_cpanm_call_stack() ],
+    [ [ '--installdeps', 'X' ],
+      [ { ccflags => '-std=gnu17' }, '--notest', 'X' ] ],
+    'notest + ccflags on one dist share a single installdeps-split carrying both decorators';
+}
+
+CCFLAGS_DECLARATION_ORDER: {
+  # prepend / ccflags / notest schedule in mistfile declaration order, each
+  # ahead of the bulk prereqs. The notest dist (Y) is scheduled by the directive
+  # pass, so the later bulk prereq Y is already satisfied.
+  my $dist = dist_from(
+    'perl q{5.20.3}; prepend q{P}; ccflags q{X} => q{-O0}; notest q{Y};' );
+  is_deeply
+    [ $dist->build_cpanm_call_stack( 'Q', 'Y' ) ],
+    [ [ 'P' ],
+      [ '--installdeps', 'X' ],
+      [ { ccflags => '-O0' }, 'X' ],
+      [ '--installdeps', 'Y' ],
+      [ '--notest', 'Y' ],
+      [ 'Q' ] ],
+    'prepend, ccflags and notest schedule in declaration order ahead of bulk prereqs';
+}
+
+CCFLAGS_TARGETED_NAMED: {
+  # On a targeted install (skip-default-modlist, as the host sets for --bundle /
+  # inject), the directive pass is skipped, but a ccflags dist named as a custom
+  # module is still decorated by the bulk pass.
+  my $dist = dist_from( 'perl q{5.20.3}; ccflags q{X} => q{-std=gnu17};' );
+  is_deeply
+    [ $dist->build_cpanm_call_stack(
+        { 'skip-default-modlist' => 1 }, 'X' ) ],
+    [ [ '--installdeps', 'X' ],
+      [ { ccflags => '-std=gnu17' }, 'X' ] ],
+    'a ccflags dist named on a targeted install is still decorated via the bulk pass';
+}
+
+CCFLAGS_TARGETED_UNRELATED_NOT_PULLED: {
+  # The flip side: an unrelated ccflags dist is not dragged into a targeted install.
+  my $dist = dist_from( 'perl q{5.20.3}; ccflags q{X} => q{-std=gnu17};' );
+  is_deeply
+    [ $dist->build_cpanm_call_stack(
+        { 'skip-default-modlist' => 1 }, 'Other' ) ],
+    [ [ 'Other' ] ],
+    'an unrelated ccflags dist is not pulled into a targeted install';
+}
+
+CCFLAGS_FORCE_TESTS_KEEPS_SPLIT: {
+  # force-tests drops --notest, but the ccflags split must stay so the flag can
+  # still scope to the dist's own build.
+  my $dist = dist_from( 'perl q{5.20.3}; ccflags q{X} => q{-g}; notest q{X};' );
+  is_deeply
+    [ $dist->build_cpanm_call_stack( { 'force-tests' => 1 } ) ],
+    [ [ '--installdeps', 'X' ],
+      [ { ccflags => '-g' }, 'X' ] ],
+    'force-tests removes --notest but keeps the ccflags split (no --notest, marker stays)';
+}
+
+CCFLAGS_VERSION_PIN_TWO_STEP: {
+  # ccflags() takes only (module, flags); a version pin arrives via the prereq
+  # spec and must survive into BOTH the installdeps call and the marked call.
+  my $dist = dist_from( 'perl q{5.20.3}; ccflags q{Bit::Vector} => q{-std=gnu17};' );
+  is_deeply
+    [ $dist->build_cpanm_call_stack( 'Bit::Vector~7.4' ) ],
+    [ [ '--installdeps', 'Bit::Vector~7.4' ],
+      [ { ccflags => '-std=gnu17' }, 'Bit::Vector~7.4' ] ],
+    'a versioned ccflags dist two-steps with the version pin in both entries';
+}
+
+OPERATOR_VERSION_PREPEND_DECORATES: {
+  # An operator-prefixed version constraint (==, >=, @, ...) on a prepend has no
+  # ~, so a ~-split scheduling token would not match the bare decoration key and
+  # would silently drop --notest / ccflags. Scheduling by bare name + emitting the
+  # spec verbatim keeps both the constraint and the decoration.
+  is_deeply
+    [ dist_from( 'perl q{5.20.3}; prepend q{B} => q{==2.0}; notest q{B};' )
+        ->build_cpanm_call_stack() ],
+    [ [ '--installdeps', 'B==2.0' ], [ '--notest', 'B==2.0' ] ],
+    'operator-version (==) prepend keeps its --notest decoration';
+  is_deeply
+    [ dist_from( 'perl q{5.20.3}; prepend q{C} => q{>=3.0}; ccflags q{C} => q{-g};' )
+        ->build_cpanm_call_stack() ],
+    [ [ '--installdeps', 'C>=3.0' ], [ { ccflags => '-g' }, 'C>=3.0' ] ],
+    'operator-version (>=) prepend keeps its ccflags decoration';
+  is_deeply
+    [ dist_from( 'perl q{5.20.3}; prepend q{B} => q{==2.0};' )
+        ->build_cpanm_call_stack( 'Other' ) ],
+    [ [ 'B==2.0' ], [ 'Other' ] ],
+    'an undecorated operator-version prepend still emits the spec verbatim, ahead of prereqs';
+}
+
+NOTEST_BEFORE_PREPEND: {
+  # The one ordering case where the unified declaration-order pass deliberately
+  # diverges from the old two-phase (all-prepends-then-all-notests) scheduler: a
+  # notest dist declared BEFORE a distinct prepend dist now schedules first, in
+  # declaration order. The old scheduler would have emitted the prepend first.
+  my $dist = dist_from(
+    'perl q{5.20.3}; notest q{A::Notest}; prepend q{B::Prepend};' );
+  is_deeply
+    [ $dist->build_cpanm_call_stack( 'C::Prereq' ) ],
+    [ [ '--installdeps', 'A::Notest' ],
+      [ '--notest', 'A::Notest' ],
+      [ 'B::Prepend' ],
+      [ 'C::Prereq' ] ],
+    'notest declared before a distinct prepend schedules first (declaration order)';
 }
 
 done_testing;

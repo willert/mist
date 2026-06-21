@@ -100,6 +100,22 @@ PREPEND_DEDUP: {
     'duplicate prepend uniq-ed, first occurrence kept';
 }
 
+PREPEND_VERSION_SURVIVES_BARE: {
+  # One record per dist must not let a bare prepend drop a version pin declared
+  # on the same module. The versioned spec wins regardless of declaration order
+  # (and a later version supersedes an earlier one) - the merge-triggerable case
+  # is a parent bare prepend + a merged sub-dist version pin, or vice versa.
+  is_deeply [ parse_source('prepend q{Foo}; prepend q{Foo} => q{1.0};')
+              ->get_prepended_modules ], [ 'Foo~1.0' ],
+    'bare-then-versioned keeps the version (~1.0), not the bare spec';
+  is_deeply [ parse_source('prepend q{Foo} => q{1.0}; prepend q{Foo};')
+              ->get_prepended_modules ], [ 'Foo~1.0' ],
+    'versioned-then-bare keeps the version (order-independent)';
+  is_deeply [ parse_source('prepend q{M} => q{9.9}; prepend q{M} => q{1.1};')
+              ->get_prepended_modules ], [ 'M~1.1' ],
+    'two versioned prepends of one module: the later declaration wins';
+}
+
 # --- notest verb -----------------------------------------------------------
 
 NOTEST: {
@@ -112,6 +128,82 @@ NOTEST_DEDUP_ORDER: {
   my $dist = parse_source('notest q{X}; notest q{X}; notest q{Y};');
   is_deeply [ $dist->get_modules_not_to_test ], [ 'X', 'Y' ],
     'notest dedups and keeps declaration order';
+}
+
+# --- ccflags verb ----------------------------------------------------------
+
+CCFLAGS_BASIC: {
+  my $dist = parse_source('ccflags q{Bit::Vector} => q{-std=gnu17};');
+  is_deeply [ $dist->get_ccflags ], [ [ 'Bit::Vector', '-std=gnu17' ] ],
+    'ccflags stored as [ module => flags ] in get_ccflags';
+  # ccflags implies prepend *membership* (own call at declared position via the
+  # call stack) but is not an explicit prepend spec, so get_prepended_modules
+  # stays empty - the spec/version list is unaffected.
+  is_deeply [ $dist->get_prepended_modules ], [],
+    'ccflags does not add a prepend spec (membership is realised by the call stack)';
+}
+
+CCFLAGS_LAST_VALUE_AT_ONE_LEVEL: {
+  # No merge: a second ccflags for the same dist at the same level wins (last
+  # write at a level is the author's latest intent); dedup keeps one record.
+  my $dist = parse_source('ccflags q{M} => q{-a}; ccflags q{M} => q{-b};');
+  is_deeply [ $dist->get_ccflags ], [ [ 'M', '-b' ] ],
+    'a later ccflags at the same level overrides an earlier one for the same dist';
+}
+
+CCFLAGS_OUTERMOST_WINS: {
+  # Composition: a build-master (outermost) ccflags overrides a merged dist's.
+  my $dist = parse_source(
+    'ccflags q{M} => q{-OUTER}; merge D => sub { ccflags q{M} => q{-INNER}; };' );
+  is_deeply [ $dist->get_ccflags ], [ [ 'M', '-OUTER' ] ],
+    'build-master ccflags overrides a merged dist (outermost wins)';
+
+  # ...and order-independent: outermost wins even when declared after the merge.
+  my $after = parse_source(
+    'merge D => sub { ccflags q{M} => q{-INNER}; }; ccflags q{M} => q{-OUTER};' );
+  is_deeply [ $after->get_ccflags ], [ [ 'M', '-OUTER' ] ],
+    'outermost ccflags wins regardless of declaration order vs the merge';
+}
+
+CCFLAGS_MERGED_ONLY_APPLIES: {
+  # A merged dist's ccflags applies when the build-master sets none.
+  my $dist = parse_source('merge D => sub { ccflags q{M} => q{-INNER}; };');
+  is_deeply [ $dist->get_ccflags ], [ [ 'M', '-INNER' ] ],
+    'a merged dist ccflags applies when the build-master is silent';
+
+  my $sub = $dist->get_merged_dist_info('D');
+  is_deeply [ $sub->get_ccflags ], [ [ 'M', '-INNER' ] ],
+    'sub-dist holds its own ccflags in isolation';
+}
+
+CCFLAGS_MERGED_VS_MERGED: {
+  # When two merge blocks set ccflags for the same module and the build-master
+  # sets none, neither is the outermost layer, so "outermost wins" does not
+  # apply: the later-declared merge wins (FIFO last-write), and it is therefore
+  # order-dependent - unlike own-vs-merged. Pinned so the merged-vs-merged path
+  # is an explicit decision, not emergent behaviour.
+  is_deeply [ parse_source(
+      'merge A => sub { ccflags q{M} => q{-AAA}; };'
+    . 'merge B => sub { ccflags q{M} => q{-BBB}; };' )->get_ccflags ],
+    [ [ 'M', '-BBB' ] ],
+    'two merged dists on one module: the later-declared merge wins';
+  is_deeply [ parse_source(
+      'merge B => sub { ccflags q{M} => q{-BBB}; };'
+    . 'merge A => sub { ccflags q{M} => q{-AAA}; };' )->get_ccflags ],
+    [ [ 'M', '-AAA' ] ],
+    'merged-vs-merged is order-dependent (reversed declaration flips the winner)';
+}
+
+CCFLAGS_EMPTY_IS_INERT: {
+  # An empty-string ccflags carries no flag: get_ccflags filters it out, so it
+  # neither decorates a build nor forces an own call (and a build-master empty
+  # can override a merged value back to none).
+  is_deeply [ parse_source('ccflags q{X} => q{};')->get_ccflags ], [],
+    'empty ccflags is filtered from get_ccflags';
+  is_deeply [ parse_source(
+      'merge D => sub { ccflags q{M} => q{-INNER}; }; ccflags q{M} => q{};' )
+      ->get_ccflags ], [],
+    'a build-master empty ccflags overrides a merged value back to none';
 }
 
 # --- assert verb -----------------------------------------------------------
@@ -259,8 +351,8 @@ merge 'Sub' => sub {
 };
 MIST
   is_deeply [ $dist->get_prepended_modules ],
-    [ 'M3', 'M2', 'M1', 'P1' ],
-    'unshift: merge-body prepends reversed and ahead of parent entries';
+    [ 'M1', 'M2', 'M3', 'P1' ],
+    'merge-body prepends fold ahead of parent in declaration order (merged-before-outer, FIFO)';
   my $sub = $dist->get_merged_dist_info('Sub');
   is_deeply [ $sub->get_prepended_modules ], [ 'M1', 'M2', 'M3' ],
     'sub-dist keeps declaration order';
@@ -276,8 +368,8 @@ merge 'Sub' => sub {
 };
 MIST
   is_deeply [ $dist->get_prepended_modules ],
-    [ 'ChildOnly', 'Shared', 'ParentOnly' ],
-    'module shared by parent and merge dedups to first (front) position';
+    [ 'Shared', 'ChildOnly', 'ParentOnly' ],
+    'a module shared by parent and merge folds to its merged position, declaration order';
 }
 
 MERGE_UNKNOWN_DIST_INFO: {
@@ -318,10 +410,11 @@ MIST
   is_deeply [ $inner->get_prepended_modules ], [ 'I1' ],
     'inner sub-dist holds only its own prepend';
 
-  # Parent receives every prepend, inner-most folded furthest to the front.
+  # Parent receives every prepend in declaration order (O1, then the nested I1,
+  # then O2), ahead of its own P. Merged-before-outer, FIFO within the merged set.
   is_deeply [ $dist->get_prepended_modules ],
-    [ 'O2', 'I1', 'O1', 'P' ],
-    'nested merge: all prepends fold into parent (unshift order)';
+    [ 'O1', 'I1', 'O2', 'P' ],
+    'nested merge: all prepends fold into parent in declaration order';
 }
 
 MERGE_NESTED_REORDER_LOOP: {
@@ -361,11 +454,11 @@ MIST
   is_deeply [ $second->get_prepended_modules ], [ 'S1' ], 'Second sub-dist isolated prepend';
   is_deeply [ $second->get_modules_not_to_test ],[ 'St' ],'Second sub-dist isolated notest';
 
-  # Parent receives both sets (each merge unshifts its own).
-  is_deeply [ $dist->get_prepended_modules ], [ 'S1', 'F1', 'P' ],
-    'parent receives both sibling prepends, latest merge furthest front';
-  is_deeply [ $dist->get_modules_not_to_test ], [ 'St', 'Ft' ],
-    'parent receives both sibling notests';
+  # Parent receives both sets in merge declaration order, ahead of its own.
+  is_deeply [ $dist->get_prepended_modules ], [ 'F1', 'S1', 'P' ],
+    'parent receives both sibling prepends in merge declaration order, ahead of its own';
+  is_deeply [ $dist->get_modules_not_to_test ], [ 'Ft', 'St' ],
+    'parent receives both sibling notests in merge declaration order';
 }
 
 # --- merge path accessors --------------------------------------------------
@@ -456,12 +549,12 @@ MIST
   ], 'call stack: prepends, then notest installdeps+notest pair, then prereqs';
 }
 
-CALLSTACK_SKIP_PREPENDED: {
+CALLSTACK_SKIP_DEFAULT_MODLIST: {
   my $dist = parse_source('prepend q{Pre1};');
   my @stack = $dist->build_cpanm_call_stack(
-    { 'skip-prepended' => 1 }, ['RealPrereq'] );
+    { 'skip-default-modlist' => 1 }, ['RealPrereq'] );
   is_deeply \@stack, [ ['RealPrereq'] ],
-    'skip-prepended opt omits prepended modules';
+    'skip-default-modlist omits the mistfile module list (a targeted install)';
 }
 
 done_testing;

@@ -43,8 +43,6 @@ BEGIN {
 
     # the following are accessible via %dist_options
     'force-tests',
-    'skip-prepended',
-    'skip-notest',
   );
 }
 
@@ -256,14 +254,44 @@ for my $arg ( @CMD_OPTS ) {
 push @CUSTOM_MODULES, _bundle_specs( $bundle ) if defined $bundle;
 
 sub run_cpanm {
+  # A call may lead with a { ccflags => ... } marker (emitted by
+  # build_cpanm_call_stack for a ccflags dist's own build); the rest are cpanm
+  # args. local %ENV keeps any per-call env scoped to this build.
+  my %marker;
+  %marker = %{ shift @_ } if @_ and ref $_[0] eq 'HASH';
+  local %ENV = %ENV;
+
   my $app = App::cpanminus::script->new;
   my @options = (
     "--quiet",
-    "--local-lib-contained=${local_lib}",
     "--mirror=file://${mpan}",
     '--mirror-only',
     @CPAN_ARGS,
   );
+
+  if ( defined $marker{ccflags} and length $marker{ccflags} ) {
+    # Scope compiler flags to this one dist's build. cpanm's own local::lib
+    # setup (triggered by --local-lib-contained) overwrites PERL_MM_OPT
+    # mid-build, so the flags would be lost. Instead reconstruct local::lib's
+    # install env via the public build_environment_vars_for, append the flags,
+    # and run --self-contained: that path keys off PERL_LOCAL_LIB_ROOT and
+    # leaves PERL_MM_OPT alone, so the flags reach Makefile.PL / Build.PL. A
+    # CCFLAGS= override replaces perl's default $Config{ccflags}, so it is
+    # prepended; Module::Build's --extra_compiler_flags appends natively.
+    require local::lib;
+    my %ll = local::lib->build_environment_vars_for( $local_lib );
+    $ENV{$_} = $ll{$_} for grep { defined $ll{$_} } keys %ll;
+    my $flags = $marker{ccflags};
+    $ENV{PERL_MM_OPT} = join q{ },
+      ( defined $ENV{PERL_MM_OPT} && length $ENV{PERL_MM_OPT} ? $ENV{PERL_MM_OPT} : () ),
+      qq{CCFLAGS="$Config{ccflags} $flags"};
+    $ENV{PERL_MB_OPT} = join q{ },
+      ( defined $ENV{PERL_MB_OPT} && length $ENV{PERL_MB_OPT} ? $ENV{PERL_MB_OPT} : () ),
+      qq{--extra_compiler_flags="$flags"};
+    push @options, '--self-contained';
+  } else {
+    push @options, "--local-lib-contained=${local_lib}";
+  }
 
   $app->parse_options( @options, @_ );
   my $result = $app->_doit;
@@ -443,10 +471,11 @@ if ( eval { $dist->can( 'get_assertions' ) }) {
 
 my @callstack;
 if ( @CUSTOM_MODULES ) {
+  # A targeted install of named modules (a --bundle apply, or an injected dist):
+  # skip the mistfile's standing module list and install just what was named.
   @callstack = $dist->build_cpanm_call_stack(
     { %dist_options,
-      'skip-prepended' => 1,
-      'skip-notest' => 1,
+      'skip-default-modlist' => 1,
       'skip-core-satisfied' => 1,
     },
     @CUSTOM_MODULES

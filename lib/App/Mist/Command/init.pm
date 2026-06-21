@@ -46,13 +46,16 @@ sub execute {
 
   my @prepend = $ctx->dist->get_prepended_modules;
   my @notest  = $ctx->dist->get_modules_not_to_test;
+  my @ccflags = map { $_->[0] } $ctx->dist->get_ccflags;
 
   my @prereqs = grep{
     my $this = $_;
-    # this clever bit of code seems to manipulate @prepend and @notest arrays
+    # this clever bit of code seems to manipulate the directive arrays: a prereq
+    # that names a directive'd dist is dropped from the bulk list and its version
+    # string is folded into the directive entry (so it injects pinned).
     ! grep{
       $this =~ m/^${_}(?:~.*)$/ and $_ = $this # pick up version string
-    } ( @prepend, @notest );
+    } ( @prepend, @notest, @ccflags );
   } $ctx->fetch_prereqs;
 
   my $run_script = sub {
@@ -82,6 +85,11 @@ sub execute {
 
   $do->( 'inject',             @$args, @prepend ) if @prepend;
   $do->( 'inject', '--notest', @$args, @notest  ) if @notest;
+  # ccflags implies prepend membership, so the dist must be vendored even when it
+  # is not otherwise a prepend/notest/prereq, or the host's own scheduled build of
+  # it would fail mirror-only. The flag itself is a host build-time directive, so
+  # the inject is plain.
+  $do->( 'inject',             @$args, @ccflags ) if @ccflags;
   $do->( 'inject',             @$args, @prereqs ) if @prereqs;
 
   $run_script->( $_ ) for $ctx->dist->get_scripts( 'finalize' );
@@ -132,7 +140,8 @@ switch into the project's pinned perlbrew Perl;
 =item *
 
 inject every declared dependency into F<mpan-dist/> -- the C<prepend>ed
-modules first, then the C<notest> modules, then the F<cpanfile> prereqs;
+modules first, then the C<notest> modules, then the C<ccflags> modules, then
+the F<cpanfile> prereqs;
 
 =item *
 

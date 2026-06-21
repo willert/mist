@@ -27005,13 +27005,20 @@ sub new {
 
   bless {
     assert      => [],
-    prepend     => [],
-    notest      => [],
     perl        => undef,
     dist_path   => undef,
     dist_name   => $dist_name,
     merge_dists => [],
     merge_info  => {},
+    # Per-dist build directives. One record per dist keyed by its bare module
+    # name (so prepend/notest/ccflags on the same dist reconcile into a single
+    # record), plus two ordered name lists. The folded view (_ordered_directive_names)
+    # is merged names then own names, deduped first-occurrence: merged-before-outer,
+    # declaration order within each. prepend is the base; notest and ccflags are
+    # decorators that imply membership.
+    directives             => {},
+    directive_order_merged => [],
+    directive_order_own    => [],
     script      => {
       prepare  => [],
       finalize => [],
@@ -27109,13 +27116,82 @@ sub dist_path ($) {
 sub prepend ($;$) {
   my ( $self, $module, $version ) = @_;
   $version = sprintf( q{~%s}, $version ) if $version and $version !~ /^[=@><~]+/;
-  $module  = sprintf( q{%s%s}, $module, $version ) if $version;
-  $self->store_dist_info( prepend => $module );
+  my $spec = $version ? sprintf( q{%s%s}, $module, $version ) : $module;
+  $self->_record_directive( $module, prepend => $spec );
 }
 
 sub notest ($) {
   my ( $self, $module ) = @_;
-  $self->store_dist_info( notest => $module );
+  $self->_record_directive( $module, notest => 1 );
+}
+
+sub ccflags ($$) {
+  my ( $self, $module, $flags ) = @_;
+  $self->_record_directive( $module, ccflags => $flags );
+}
+
+# Route a directive into this dist's records. Mirrors store_dist_info's merge
+# fold: inside a merge block the directive is recorded both in the merged
+# sub-dist's own isolated view (the recursion with $merging_dist cleared) and
+# folded into this (parent) dist's merged-name list; at top level it lands in
+# the own-name list.
+sub _record_directive {
+  my ( $self, $module, $field, $value ) = @_;
+
+  if ( my $dist = $merging_dist ) {
+    my $md_info = $self->get_merged_dist_info( $dist );
+    confess "Internal: no info about merged dist ${dist} found"
+      unless $md_info and $md_info->isa( __PACKAGE__ );
+    {
+      local $merging_dist;      # undef: record in the sub-dist's own view
+      $md_info->_record_directive( $module, $field, $value );
+    }
+    $self->_apply_directive( $module, $field, $value, 1 );
+  } else {
+    $self->_apply_directive( $module, $field, $value, 0 );
+  }
+}
+
+# Update the record for $module and register its declaration position. Composition
+# follows the one rule: a valued directive (ccflags) is outermost-wins - a build-master
+# (own) value overrides a merged dist's; a no-negation directive (prepend membership,
+# notest) is on-if-found-anywhere.
+sub _apply_directive {
+  my ( $self, $module, $field, $value, $merged ) = @_;
+  my $rec = $self->{directives}{ $module } ||= { module => $module };
+
+  if ( $field eq 'ccflags' ) {
+    if ( !$merged ) {
+      $rec->{ccflags}          = $value;
+      $rec->{ccflags_from_own} = 1;
+    } elsif ( !$rec->{ccflags_from_own} ) {
+      $rec->{ccflags} = $value;
+    }
+  } elsif ( $field eq 'prepend' ) {
+    # Keep the versioned spec: a later versioned prepend supersedes an earlier
+    # one (the historical last-version-wins), and a bare prepend never clobbers a
+    # stored version - so the pin survives regardless of declaration order or
+    # which side of a merge carries it.
+    my $has_version = $value ne $module;
+    $rec->{prepend} = $value if $has_version or not defined $rec->{prepend};
+  } elsif ( $field eq 'notest' ) {
+    $rec->{notest} = 1;
+  }
+
+  push @{ $merged
+    ? $self->{directive_order_merged}
+    : $self->{directive_order_own} }, $module;
+}
+
+# The folded directive order: merged names (declaration order) ahead of own names
+# (declaration order), deduped to the first occurrence. A dist named in both folds
+# to its merged position.
+sub _ordered_directive_names {
+  my $self = shift;
+  return _uniq(
+    @{ $self->{directive_order_merged} },
+    @{ $self->{directive_order_own} },
+  );
 }
 
 # ($$@): phase + path, then any number of arguments for the script. The DSL
@@ -27131,8 +27207,33 @@ sub script ($$@) {
 sub get_assertions           { my $self = shift; return @{ $self->{assert}}   }
 sub get_default_perl_version { my $self = shift; return    $self->{perl}      }
 sub get_dist_path            { my $self = shift; return    $self->{dist_path} }
-sub get_prepended_modules    { my $self = shift; return @{ $self->{prepend}}  }
-sub get_modules_not_to_test  { my $self = shift; return @{ $self->{notest}}   }
+sub get_prepended_modules {
+  my $self = shift;
+  return
+    map  { $self->{directives}{$_}{prepend} }
+    grep { defined $self->{directives}{$_}{prepend} }
+    $self->_ordered_directive_names;
+}
+
+sub get_modules_not_to_test {
+  my $self = shift;
+  return
+    grep { $self->{directives}{$_}{notest} }
+    $self->_ordered_directive_names;
+}
+
+# Per-dist compiler flags, as [ module => flags ] pairs in directive order. An
+# empty-string ccflags is inert (it carries no flag, but a build-master empty can
+# still override a merged value back to none), so it is filtered out here - keeping
+# this aligned with run_cpanm's defined-and-length gate and the directive pass.
+sub get_ccflags {
+  my $self = shift;
+  return
+    map  { [ $_ => $self->{directives}{$_}{ccflags} ] }
+    grep { defined $self->{directives}{$_}{ccflags}
+             and length $self->{directives}{$_}{ccflags} }
+    $self->_ordered_directive_names;
+}
 
 
 sub get_scripts {
@@ -27189,23 +27290,38 @@ sub build_cpanm_call_stack {
   my @prepended = $self->get_prepended_modules;
 
   # state variables
-  my ( %version, %scheduled, %dont_test, %core_satisfies, @callstack );
+  my ( %version, %scheduled, %dont_test, %ccflags, %core_satisfies, @callstack );
 
-  # build hash of modules we don't want to test
-  %dont_test = map{ $_ => 1 } $self->get_modules_not_to_test;
+  # decorations keyed by bare module name
+  %dont_test = map { $_      => 1        } $self->get_modules_not_to_test;
+  %ccflags   = map { $_->[0] => $_->[1]  } $self->get_ccflags;
 
-  # push a module on the call stack according to state vars
+  # push a module on the call stack according to state vars. notest and ccflags
+  # are decorators: either one splits the build into `--installdeps X` (deps,
+  # undecorated) then `X` carrying both --notest and a { ccflags => ... } marker,
+  # so the flag/skip-test scopes to X alone and never leaks onto its deps.
   my $push_module_on_stack = sub{
-    my $module = shift;
+    my ( $module, $explicit_spec ) = @_;
     return if $scheduled{ $module };
     return if $core_satisfies{ $module };
 
-    my $mod_spec = $version{ $module } ?
-      join( q{~}, $module, $version{$module} ) : $module;
+    # $module is always the bare name - the key shared by every map below. The
+    # emitted spec is an explicit prepend spec when one carries a version
+    # constraint (the only faithful way to round-trip an operator-prefixed
+    # constraint, which the ~-based %version map cannot represent), otherwise it
+    # is reconstructed from %version (which still picks up a prereq's pin).
+    my $mod_spec = defined $explicit_spec ? $explicit_spec
+      : ( $version{ $module } ? join( q{~}, $module, $version{$module} ) : $module );
 
-    if ( $dont_test{ $module } and not $opts{'force-tests'} ) {
+    my $notest = $dont_test{ $module } && !$opts{'force-tests'};
+    my $flags  = $ccflags{ $module };
+
+    if ( $notest or defined $flags ) {
       push @callstack, [ '--installdeps', $mod_spec ];
-      push @callstack, [ '--notest', $mod_spec ];
+      my @decorated = ( $mod_spec );
+      unshift @decorated, '--notest' if $notest;
+      unshift @decorated, { ccflags => $flags } if defined $flags;
+      push @callstack, \@decorated;
     } else {
       push @callstack, [ $mod_spec ];
     }
@@ -27254,18 +27370,32 @@ sub build_cpanm_call_stack {
     }
   }
 
-  # schedule prepended modules
-  unless ( $opts{'skip-prepended'} ) {
-    $push_module_on_stack->( $_ ) for @prepended;
-  }
+  # Directive pass: schedule the mistfile's standing module list - its prepend /
+  # notest / ccflags dists - ahead of the bulk prereqs, in declaration order
+  # (merged-before-outer), so a notest- or ccflags-decorated dist installs before a
+  # prereq could pull it in undecorated, and a decorated dist that depends on
+  # another can be ordered first by declaring it first.
+  #
+  # A targeted install (skip-default-modlist) skips this whole pass and installs
+  # only the named modules; their per-module decorations still apply through the
+  # bulk pass below, so e.g. injecting a ccflags'd dist by name still flags it.
+  unless ( $opts{'skip-default-modlist'} ) {
+    for my $name ( $self->_ordered_directive_names ) {
+      my $rec = $self->{directives}{ $name };
+      my $has_ccflags = defined $rec->{ccflags} && length $rec->{ccflags};
+      next unless defined $rec->{prepend} || $rec->{notest} || $has_ccflags;
 
-  # schedule remaining modules that are not tested before the remaining
-  # prerequisites to avoid prereqs pulling in this module without --notest.
-  # Iterate in mistfile declaration order (not hash order) so a notest
-  # module that is a dependency of another notest module can be listed
-  # first and thus installed --notest before the dependent pulls it in.
-  unless ( $opts{'skip-notest'} ) {
-    $push_module_on_stack->( $_ ) for $self->get_modules_not_to_test;
+      # Schedule by the bare module name ($name = the record key), so %version,
+      # %dont_test and %ccflags - all keyed by bare name - line up. When the prepend
+      # spec carries a version constraint, pass it explicitly so it is emitted
+      # verbatim; this is what lets an operator-prefixed constraint like B==2.0 keep
+      # its --notest / ccflags decoration (a ~-split token would not match the bare
+      # decoration key and would silently drop it). A bare prepend passes no explicit
+      # spec and falls back to %version, still picking up a version pinned on a prereq.
+      my $spec = ( defined $rec->{prepend} && $rec->{prepend} ne $name )
+        ? $rec->{prepend} : undef;
+      $push_module_on_stack->( $name, $spec );
+    }
   }
 
   # schedule remaining prerequisites
@@ -27284,7 +27414,7 @@ use warnings;
 use Carp ();
 
 our @bindings;
-BEGIN { @bindings = qw( perl assert prepend notest merge script dist_path ) };
+BEGIN { @bindings = qw( perl assert prepend notest ccflags merge script dist_path ) };
 
 my $file_id = 1;
 
@@ -27786,8 +27916,6 @@ BEGIN {
 
     # the following are accessible via %dist_options
     'force-tests',
-    'skip-prepended',
-    'skip-notest',
   );
 }
 
@@ -27999,14 +28127,44 @@ for my $arg ( @CMD_OPTS ) {
 push @CUSTOM_MODULES, _bundle_specs( $bundle ) if defined $bundle;
 
 sub run_cpanm {
+  # A call may lead with a { ccflags => ... } marker (emitted by
+  # build_cpanm_call_stack for a ccflags dist's own build); the rest are cpanm
+  # args. local %ENV keeps any per-call env scoped to this build.
+  my %marker;
+  %marker = %{ shift @_ } if @_ and ref $_[0] eq 'HASH';
+  local %ENV = %ENV;
+
   my $app = App::cpanminus::script->new;
   my @options = (
     "--quiet",
-    "--local-lib-contained=${local_lib}",
     "--mirror=file://${mpan}",
     '--mirror-only',
     @CPAN_ARGS,
   );
+
+  if ( defined $marker{ccflags} and length $marker{ccflags} ) {
+    # Scope compiler flags to this one dist's build. cpanm's own local::lib
+    # setup (triggered by --local-lib-contained) overwrites PERL_MM_OPT
+    # mid-build, so the flags would be lost. Instead reconstruct local::lib's
+    # install env via the public build_environment_vars_for, append the flags,
+    # and run --self-contained: that path keys off PERL_LOCAL_LIB_ROOT and
+    # leaves PERL_MM_OPT alone, so the flags reach Makefile.PL / Build.PL. A
+    # CCFLAGS= override replaces perl's default $Config{ccflags}, so it is
+    # prepended; Module::Build's --extra_compiler_flags appends natively.
+    require local::lib;
+    my %ll = local::lib->build_environment_vars_for( $local_lib );
+    $ENV{$_} = $ll{$_} for grep { defined $ll{$_} } keys %ll;
+    my $flags = $marker{ccflags};
+    $ENV{PERL_MM_OPT} = join q{ },
+      ( defined $ENV{PERL_MM_OPT} && length $ENV{PERL_MM_OPT} ? $ENV{PERL_MM_OPT} : () ),
+      qq{CCFLAGS="$Config{ccflags} $flags"};
+    $ENV{PERL_MB_OPT} = join q{ },
+      ( defined $ENV{PERL_MB_OPT} && length $ENV{PERL_MB_OPT} ? $ENV{PERL_MB_OPT} : () ),
+      qq{--extra_compiler_flags="$flags"};
+    push @options, '--self-contained';
+  } else {
+    push @options, "--local-lib-contained=${local_lib}";
+  }
 
   $app->parse_options( @options, @_ );
   my $result = $app->_doit;
@@ -28186,10 +28344,11 @@ if ( eval { $dist->can( 'get_assertions' ) }) {
 
 my @callstack;
 if ( @CUSTOM_MODULES ) {
+  # A targeted install of named modules (a --bundle apply, or an injected dist):
+  # skip the mistfile's standing module list and install just what was named.
   @callstack = $dist->build_cpanm_call_stack(
     { %dist_options,
-      'skip-prepended' => 1,
-      'skip-notest' => 1,
+      'skip-default-modlist' => 1,
       'skip-core-satisfied' => 1,
     },
     @CUSTOM_MODULES
@@ -28479,8 +28638,6 @@ package Mist::Script::usage;
    --help            display this help message
 
    --force-tests       ignore notest from mistfile, but still install dists
-   --skip-prepended    don't prepend those modules requested in mistfile
-   --skip-notest       don't prepend modules marked as 'notest' in mistfile
    --perlbrew VERSION  use this perlbrew-managed perl version
    --build-only        build (or rebuild) the target perl's environment but
                        do not activate it; the current selector is untouched
