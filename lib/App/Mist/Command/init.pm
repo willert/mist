@@ -44,19 +44,7 @@ sub execute {
 
   $ctx->ensure_correct_perlbrew_context;
 
-  my @prepend = $ctx->dist->get_prepended_modules;
-  my @notest  = $ctx->dist->get_modules_not_to_test;
-  my @ccflags = map { $_->[0] } $ctx->dist->get_ccflags;
-
-  my @prereqs = grep{
-    my $this = $_;
-    # this clever bit of code seems to manipulate the directive arrays: a prereq
-    # that names a directive'd dist is dropped from the bulk list and its version
-    # string is folded into the directive entry (so it injects pinned).
-    ! grep{
-      $this =~ m/^${_}(?:~.*)$/ and $_ = $this # pick up version string
-    } ( @prepend, @notest, @ccflags );
-  } $ctx->fetch_prereqs;
+  my $plan = _injection_plan( $ctx->dist, $ctx->fetch_prereqs );
 
   my $run_script = sub {
     my @cmd = @_ == 1 && ref $_[0] eq 'ARRAY' ? @{$_[0]} : @_;
@@ -83,14 +71,13 @@ sub execute {
     }
   }
 
-  $do->( 'inject',             @$args, @prepend ) if @prepend;
-  $do->( 'inject', '--notest', @$args, @notest  ) if @notest;
-  # ccflags implies prepend membership, so the dist must be vendored even when it
-  # is not otherwise a prepend/notest/prereq, or the host's own scheduled build of
-  # it would fail mirror-only. The flag itself is a host build-time directive, so
-  # the inject is plain.
-  $do->( 'inject',             @$args, @ccflags ) if @ccflags;
-  $do->( 'inject',             @$args, @prereqs ) if @prereqs;
+  $do->( 'inject',             @$args, @{ $plan->{prepend} } ) if @{ $plan->{prepend} };
+  $do->( 'inject', '--notest', @$args, @{ $plan->{notest}  } ) if @{ $plan->{notest}  };
+  # ccflags implies a host build of the dist, so it must be vendored even when it is
+  # not otherwise a prepend/notest/prereq, or the host's mirror-only build of it
+  # would fail. The flag is a host build-time directive, so the inject is plain.
+  $do->( 'inject',             @$args, @{ $plan->{ccflags} } ) if @{ $plan->{ccflags} };
+  $do->( 'inject',             @$args, @{ $plan->{prereqs} } ) if @{ $plan->{prereqs} };
 
   $run_script->( $_ ) for $ctx->dist->get_scripts( 'finalize' );
 
@@ -106,6 +93,30 @@ sub execute {
   }
 
   return;
+}
+
+# Build the four injection lists from the parsed mistfile and the raw cpanfile
+# prereqs: the prepend / notest / ccflags directive dists - each vendored so the
+# host can build it - and the remaining bulk prereqs. A prereq that names a
+# directive dist is dropped from the bulk list and its version folded into the
+# directive entry (so the dist injects pinned). ccflags is included because it
+# implies a host build of that dist; an un-vendored ccflags dist would fail the
+# host's mirror-only install.
+sub _injection_plan {
+  my ( $dist, @raw_prereqs ) = @_;
+  my @prepend = $dist->get_prepended_modules;
+  my @notest  = $dist->get_modules_not_to_test;
+  my @ccflags = map { $_->[0] } $dist->get_ccflags;
+  my @prereqs = grep {
+    my $this = $_;
+    ! grep {
+      $this =~ m/^${_}(?:~.*)$/ and $_ = $this   # fold the version into the directive
+    } ( @prepend, @notest, @ccflags );
+  } @raw_prereqs;
+  return {
+    prepend => \@prepend, notest => \@notest,
+    ccflags => \@ccflags, prereqs => \@prereqs,
+  };
 }
 
 1;
