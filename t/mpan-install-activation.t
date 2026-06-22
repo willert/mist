@@ -521,6 +521,25 @@ MIGRATION_FROM_LEGACY_REALDIR: {
   like readlink( gen_link( $box ) ), qr{^generations/}, 'it points into generations/';
   ok -e File::Spec->catfile( $box, 'perl5', $arch_name, 'LEGACY_MARKER' ),
     'the migrated content survives via the new generation';
+
+  my @leftover = glob File::Spec->catdir( $box, 'perl5', "$arch_name.legacy-*" );
+  ok ! @leftover,
+    'the renamed-aside legacy copy is cleaned up when its content is removable';
+}
+
+PERL5_NOT_WRITABLE_FAILS_FAST: {
+  # A deployment where perl5/ is owned by another user must fail up front with an
+  # actionable message, not a cryptic mkdir/rename failure deep in the build.
+  my $box = make_sandbox( $installer_ok );
+  my $p5  = File::Spec->catdir( $box, 'perl5' );
+  mkpath( $p5 );
+  chmod 0500, $p5;
+  my ( $exit, $out ) = run_install( $box );
+  chmod 0700, $p5;   # restore so the sandbox can be cleaned up
+
+  isnt $exit, 0, 'install fails when perl5/ is not writable';
+  like $out, qr/cannot write to .*perl5.*permission denied/i,
+    'the failure names perl5/ and is actionable, not a cryptic mkdir error';
 }
 
 PURGE_REMOVES_SUPERSEDED_GENERATIONS: {

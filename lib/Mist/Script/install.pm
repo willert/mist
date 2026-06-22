@@ -185,6 +185,18 @@ my $real_home = $ENV{HOME};
 my $perl5_baselib = File::Spec->catdir( $mist_home, $PERL5_BASE_LIB );
 mkpath( $perl5_baselib );
 
+# Fail fast and clearly if perl5/ is not writable. Every install creates and
+# activates generations, the per-perl wrapper/rc, and the selector symlinks *under*
+# perl5/ - all of which need write on this directory, not just on a staging dir. On
+# a deployment where perl5/ is owned by another user this would otherwise surface as
+# a cryptic mkdir/rename failure deep in the build; catch it up front instead.
+if ( -e $perl5_baselib and not -w $perl5_baselib ) {
+  warn "$0: cannot write to $perl5_baselib: permission denied.\n"
+     . "mpan-install builds and activates generations under perl5/; fix the\n"
+     . "ownership or permissions on that directory and re-run.\n";
+  exit 1;
+}
+
 my $mpan           = File::Spec->catdir( $Bin, $MPAN_DIST_DIR );
 my $local_lib      = File::Spec->catdir( $mist_home, $LOCAL_LIB_DIR );
 my $libexec_dir    = File::Spec->catdir( $perl5_baselib, 'libexec' );
@@ -445,9 +457,31 @@ sub _activate_generation {
   if ( -l $generic or not -e $generic ) {
     _activate_symlink( $gen_relpath, $generic );
   } elsif ( -d $generic ) {
-    File::Path::rmtree( $generic );
-    symlink( $gen_relpath, $generic )
-      or die "Failed to link $generic to generation $gen_relpath: $!";
+    # Legacy real lib dir (pre-generation layout): migrate it to a symlink. Its tree
+    # is already hard-linked into the new generation, so only the directory ENTRY
+    # needs to go - rename it aside rather than rmtree it. rename needs write on the
+    # parent perl5/ only (which we have - we just built a generation there), never
+    # permission to delete the contents, which on a deployment may be owned by
+    # another user. rmtree-ing here would delete what it could, stall on the rest,
+    # and leave the env with neither a working dir nor a symlink.
+    my $aside = sprintf '%s.legacy-%d', $generic, $$;
+    rename( $generic, $aside )
+      or die "Failed to move the legacy lib dir aside ($generic): $!\n"
+           . "mpan-install needs write permission on the parent perl5 directory.\n";
+    unless ( symlink( $gen_relpath, $generic ) ) {
+      my $err = $!;
+      rename( $aside, $generic )
+        or warn "Could not restore $generic after a failed symlink: $!\n";
+      die "Failed to link $generic to generation $gen_relpath: $err\n";
+    }
+    # Reclaim the old copy best-effort. Its tree is hard-linked into the generation,
+    # so anything we cannot remove is a shared inode (never unique data), not loss;
+    # error => captures the per-file failures instead of spewing them.
+    File::Path::rmtree( $aside, { safe => 1, error => \my $rm_errors } );
+    warn "Migrated the legacy $generic to a generation symlink. Could not fully\n"
+       . "remove the old copy at $aside (some files are not yours to delete); it\n"
+       . "shares storage with the new generation and is safe to remove by hand.\n"
+      if -e $aside;
   } else {
     die "$generic exists but is neither a symlink nor a directory\n";
   }
@@ -597,10 +631,21 @@ unlink $_ for glob File::Spec->catfile( $local_lib, '.mist-built-*' );
 }
 
 my $final_lib = File::Spec->catdir( $perl5_baselib, 'generations', $gen_name );
-File::Path::rmtree( $final_lib ) if $branch and -e $final_lib;   # named-branch re-install
+# Named-branch re-install replaces an existing named generation. Move the old one
+# aside (atomic, parent-write only) rather than rmtree it in place: a partial rmtree
+# would corrupt the named generation AND leave the new build unpromoted. The old
+# copy is reclaimed best-effort after the promote succeeds.
+my $superseded;
+if ( $branch and -e $final_lib ) {
+  $superseded = sprintf '%s.superseded-%d', $final_lib, $$;
+  rename( $final_lib, $superseded )
+    or die "Failed to move the existing generation $final_lib aside: $!\n";
+}
 rename( $local_lib, $final_lib )
   or die "Failed to promote $local_lib to $final_lib: $!";
 $local_lib = $final_lib;
+File::Path::rmtree( $superseded, { safe => 1, error => \my $sup_errors } )
+  if defined $superseded;
 
 # Lib-level Activate: point this perl's generation selector at the completed
 # generation (atomic rename). The rc and body below bake the stable generic path

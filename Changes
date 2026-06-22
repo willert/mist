@@ -2,6 +2,11 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+  - mpan-install: migrating a legacy `perl5/<arch>` dir to a generation symlink, and
+    re-installing a named branch, now rename the old tree aside instead of deleting
+    it in place - so files the deploying user cannot remove no longer half-delete the
+    live env on a partial failure. An unwritable `perl5/` now fails fast.
+
 0.46 2026-06-22T16:33:26Z
 
   - mistfile: `ccflags` gains a `:wrapper` mode. It applies the flags to the dist's
