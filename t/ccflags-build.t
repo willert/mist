@@ -21,7 +21,10 @@ use File::Path qw/ make_path /;
 # real cpanm build, and asserts:
 #   - the flag reaches the flagged dist's Makefile.PL, with $Config{ccflags} kept;
 #   - its dependency, built by the undecorated --installdeps call, never sees it.
-# It mirrors run_cpanm (lib/Mist/Script/install.pm) and must track it.
+# It also covers the :wrapper channel (a { ccflags_wrapper => ... } marker, turned
+# into a $Config{cc} PATH shim): a build-time $(CC) sub-make the :env channel cannot
+# reach, which the shim does. It mirrors run_cpanm (lib/Mist/Script/install.pm) and
+# must track it.
 
 eval { require Mist::Distribution; require Mist::Environment;
        require Archive::Tar; require Path::Class; require local::lib; 1 }
@@ -134,6 +137,65 @@ XS
   $tar->write( File::Spec->catfile( $authors, "$base.tar.gz" ), COMPRESS_GZIP() );
 }
 
+# A dist that compiles a *separate* C file through a build-time `make` rule invoking
+# $(CC) = $Config{cc} - exactly how Clownfish builds lemon/charmonizer. That rule
+# carries no $(CCFLAGS), so --extra_compiler_flags / PERL_MM_OPT (the :env channel)
+# cannot reach it; only a $Config{cc} PATH shim (the :wrapper channel) can. helper.c
+# is guarded by `#ifndef MIST_CCTEST #error`, so it compiles iff the flag reaches the
+# bare cc. It is written by Makefile.PL *after* WriteMakefile, so EUMM never globs it
+# into the module's XS/object link set (which would fail the build for an unrelated
+# reason - no matching .xs); it is compiled only by the postamble rule, which hangs
+# off pure_all (the build), not configure - so the undecorated --installdeps call,
+# which only configures, is unaffected and the guard fires only on the real build.
+sub make_submake_dist {
+  my ( $authors, $module, $version ) = @_;
+  ( my $dist   = $module ) =~ s/::/-/g;
+  ( my $pm_rel = $module ) =~ s{::}{/}g; $pm_rel = "lib/$pm_rel.pm";
+  my $base = "$dist-$version";
+
+  # The two single-quoted lines keep their \n \t \$ literal in the emitted
+  # Makefile.PL; the dist's own perl interpolates them when it runs (\$ -> $, \t ->
+  # a real tab, which make requires for a recipe line).
+  my $mpl =
+      "use ExtUtils::MakeMaker;\n"
+    . "WriteMakefile( NAME => '$module', VERSION_FROM => '$pm_rel' );\n"
+    . 'open my $h, ">", "helper.c" or die $!;' . "\n"
+    . 'print $h "#ifndef MIST_CCTEST\n#error wrapper flag did not reach the bare cc\n#endif\nint mist_z;\n";' . "\n"
+    . 'close $h;' . "\n"
+    . "package MY;\n"
+    . 'sub postamble { return "helper.o : helper.c\n\t\$(CC) -c helper.c -o helper.o\npure_all :: helper.o\n"; }' . "\n";
+
+  my $tar = Archive::Tar->new;
+  $tar->add_data( "$base/$pm_rel", "package $module;\nour \$VERSION='$version';\n1;\n" );
+  $tar->add_data( "$base/Makefile.PL", $mpl );
+  $tar->write( File::Spec->catfile( $authors, "$base.tar.gz" ), COMPRESS_GZIP() );
+}
+
+# Mirror of install.pm's _make_cc_shim: a $Config{cc} shim that prepends the flags
+# and execs the resolved absolute compiler. Lives under $root so it is cleaned up.
+sub make_test_cc_shim {
+  my ( $flags ) = @_;
+  my ( $cc_word, @cc_rest ) = split q{ }, $Config{cc};
+  my $real_cc = $cc_word;
+  unless ( File::Spec->file_name_is_absolute( $cc_word ) ) {
+    for my $dir ( File::Spec->path ) {
+      my $cand = File::Spec->catfile( $dir, $cc_word );
+      next unless -f $cand and -x _;
+      $real_cc = $cand; last;
+    }
+  }
+  ( my $tag = $flags ) =~ s/\W+/_/g;
+  my $shim_dir = File::Spec->catdir( $root, 'ccshim', $tag );
+  make_path( $shim_dir );
+  my $shim = File::Spec->catfile( $shim_dir, ( File::Spec->splitpath( $cc_word ) )[2] );
+  open my $fh, '>', $shim or die "Creating test cc shim failed: $!";
+  print $fh "#!/bin/sh\n"
+    . join( q{ }, 'exec', $real_cc, @cc_rest, $flags, '"$@"' ) . "\n";
+  close $fh;
+  chmod 0755, $shim;
+  return $shim_dir;
+}
+
 my $have_mb = eval { require Module::Build; Module::Build->VERSION; 1 };
 
 my $mirror  = File::Spec->catdir( $root, 'mpan' );
@@ -144,6 +206,7 @@ make_dist( $authors, 'Acme::CcMain', '0.01', 'Acme::CcDep' );
 make_mb_dist( $authors, 'Acme::CcMb', '0.01' ) if $have_mb;
 make_xs_dist( $authors, 'Acme::CcPlainXs', '0.01', 0 );   # unguarded: toolchain probe
 make_xs_dist( $authors, 'Acme::CcXs',      '0.01', 1 );   # guarded by -DMIST_CCTEST
+make_submake_dist( $authors, 'Acme::CcSubmake', '0.01' ); # bare-$(CC) build rule
 {
   local *STDOUT; open STDOUT, '>', File::Spec->devnull;
   Mist::CPAN::PackageIndex->new( cpan_dist_root => Path::Class::dir($mirror) )
@@ -180,6 +243,12 @@ sub run_cpanm_like {
     push @opts, '--self-contained';
   } else {
     push @opts, "--local-lib-contained=$lib";
+  }
+  # The :wrapper channel layers a $Config{cc} PATH shim onto whichever lib mode
+  # above (orthogonal), exactly as run_cpanm does.
+  if ( defined $marker{ccflags_wrapper} and length $marker{ccflags_wrapper} ) {
+    my $shim_dir = make_test_cc_shim( $marker{ccflags_wrapper} );
+    $ENV{PATH} = join q{:}, $shim_dir, $ENV{PATH};
   }
   return system( $cpanm, @opts, @args ) == 0;
 }
@@ -264,6 +333,45 @@ SKIP: {
   $xs_built &&= run_cpanm_like( @$_ ) for @xs_stack;
   ok $xs_built,
     'ccflags delivers -DMIST_CCTEST to the C compiler: the guarded XS compiles and installs';
+}
+
+# The :wrapper proof. Acme::CcSubmake compiles helper.c via a build-time $(CC) rule
+# with no $(CCFLAGS) - the reach the :env channel CANNOT cover. This asserts the
+# whole point of :wrapper: :env fails to reach it, :wrapper succeeds.
+#
+# The two failing controls are meaningful only because the :wrapper case (built from
+# the SAME dist) must succeed: a build broken for an unrelated reason - a malformed
+# rule, a dead toolchain - would fail all three, so the :wrapper assertion below
+# catches it. Only flag-delivery can make the same dist fail without and pass with.
+SKIP: {
+  my ( $cc_word ) = split q{ }, $Config{cc};
+  skip "no usable XS toolchain", 3 unless run_cpanm_like( 'Acme::CcPlainXs' );
+  skip "\$Config{cc} '$cc_word' is an absolute path; a PATH cc shim cannot intercept it", 3
+    if File::Spec->file_name_is_absolute( $cc_word );
+
+  # Control A: no flag at all -> the bare-$(CC) helper hits #error -> build fails.
+  ok ! run_cpanm_like( 'Acme::CcSubmake' ),
+    'without any flag, the bare-$(CC) sub-make fails to compile (#error fires)';
+
+  # Control B: the :env channel reaches EUMM's own compile but NOT the bare-$(CC)
+  # rule, so the build still fails - the gap :wrapper exists to close.
+  my @env_stack = Mist::Environment->new
+    ->parse( source => 'ccflags q{Acme::CcSubmake} => q{-DMIST_CCTEST};' )
+    ->build_cpanm_call_stack( { 'skip-core-satisfied' => 1 }, 'Acme::CcSubmake' );
+  my $env_built = 1;
+  $env_built &&= run_cpanm_like( @$_ ) for @env_stack;
+  ok ! $env_built,
+    ':env ccflags does NOT reach the bare-$(CC) sub-make (the gap :wrapper closes)';
+
+  # :wrapper: the $Config{cc} shim puts -DMIST_CCTEST on every cc, the bare rule
+  # included, so the guarded helper compiles and the dist builds.
+  my @wrap_stack = Mist::Environment->new
+    ->parse( source => q{ccflags ':wrapper', q{Acme::CcSubmake} => q{-DMIST_CCTEST};} )
+    ->build_cpanm_call_stack( { 'skip-core-satisfied' => 1 }, 'Acme::CcSubmake' );
+  my $wrap_built = 1;
+  $wrap_built &&= run_cpanm_like( @$_ ) for @wrap_stack;
+  ok $wrap_built,
+    ':wrapper delivers -DMIST_CCTEST to the bare-$(CC) sub-make: the guarded helper compiles';
 }
 
 done_testing;

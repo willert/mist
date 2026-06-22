@@ -206,6 +206,78 @@ CCFLAGS_EMPTY_IS_INERT: {
     'a build-master empty ccflags overrides a merged value back to none';
 }
 
+# --- ccflags :wrapper mode -------------------------------------------------
+
+CCFLAGS_WRAPPER_BASIC: {
+  my $dist = parse_source( q{ccflags ':wrapper', q{Clownfish::CFC} => q{-std=gnu11};} );
+  is_deeply [ $dist->get_ccflags_wrapper ],
+    [ [ 'Clownfish::CFC', '-std=gnu11' ] ],
+    ':wrapper flags stored as [ module => flags ] in get_ccflags_wrapper';
+  is_deeply [ $dist->get_ccflags ], [],
+    ':wrapper does not populate the :env channel';
+}
+
+CCFLAGS_ENV_EXPLICIT_EQUALS_DEFAULT: {
+  # ':env' is a real, writable token and the implicit default; both forms land in
+  # the :env channel and neither touches :wrapper.
+  my $explicit = parse_source( q{ccflags ':env', q{M} => q{-O0};} );
+  my $implicit = parse_source( q{ccflags q{M} => q{-O0};} );
+  is_deeply [ $explicit->get_ccflags ], [ [ 'M', '-O0' ] ],
+    'explicit :env stores in the :env channel';
+  is_deeply [ $implicit->get_ccflags ], [ [ 'M', '-O0' ] ],
+    'omitting the mode defaults to :env';
+  is_deeply [ $explicit->get_ccflags_wrapper ], [],
+    'explicit :env leaves the :wrapper channel empty';
+}
+
+CCFLAGS_BOTH_CHANNELS_COEXIST: {
+  # Independent-accumulate: a dist may carry both channels; neither drops the other.
+  my $dist = parse_source(
+    q{ccflags q{D} => q{-DFOO}; ccflags ':wrapper', q{D} => q{-std=gnu11};} );
+  is_deeply [ $dist->get_ccflags ], [ [ 'D', '-DFOO' ] ],
+    'the :env channel keeps its flags when :wrapper is also set on the dist';
+  is_deeply [ $dist->get_ccflags_wrapper ], [ [ 'D', '-std=gnu11' ] ],
+    'the :wrapper channel keeps its flags independently';
+}
+
+CCFLAGS_WRAPPER_OUTERMOST_WINS: {
+  # The :wrapper channel composes by the same outermost-wins rule as :env.
+  my $dist = parse_source(
+      q{ccflags ':wrapper', q{M} => q{-OUTER}; }
+    . q{merge D => sub { ccflags ':wrapper', q{M} => q{-INNER}; };} );
+  is_deeply [ $dist->get_ccflags_wrapper ], [ [ 'M', '-OUTER' ] ],
+    'build-master :wrapper overrides a merged dist (outermost wins)';
+}
+
+CCFLAGS_WRAPPER_MERGED_ONLY_APPLIES: {
+  my $dist = parse_source(
+    q{merge D => sub { ccflags ':wrapper', q{M} => q{-INNER}; };} );
+  is_deeply [ $dist->get_ccflags_wrapper ], [ [ 'M', '-INNER' ] ],
+    'a merged dist :wrapper applies when the build-master is silent';
+  is_deeply [ $dist->get_ccflags ], [],
+    'a merged :wrapper does not leak into the :env channel';
+}
+
+CCFLAGS_WRAPPER_EMPTY_IS_INERT: {
+  is_deeply
+    [ parse_source( q{ccflags ':wrapper', q{X} => q{};} )->get_ccflags_wrapper ], [],
+    'empty :wrapper flags are filtered from get_ccflags_wrapper';
+}
+
+CCFLAGS_UNKNOWN_MODE_CROAKS: {
+  my $err = parse_expect_die( q{ccflags ':bogus', q{M} => q{-x};} );
+  like $err, qr/Unknown ccflags mode/,
+    'an unknown ccflags mode token croaks /Unknown ccflags mode/';
+}
+
+CCFLAGS_REQUIRES_MODULE_AND_FLAGS: {
+  # The no-module form (a would-be global :wrapper) is rejected: after the mode
+  # token only one arg remains, so it croaks rather than being silently misread.
+  my $err = parse_expect_die( q{ccflags ':wrapper', q{-std=gnu11};} );
+  like $err, qr/module name and flags/,
+    'a :wrapper with no module (would-be global) croaks';
+}
+
 # --- assert verb -----------------------------------------------------------
 
 ASSERT: {

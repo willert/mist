@@ -2,6 +2,10 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+  - mistfile: `ccflags` gains a `:wrapper` mode. It applies the flags to the dist's
+    whole build, via a custom cc wrapper, not just its own compile. A last-resort
+    escape hatch - see the mist skill.
+
 0.45 2026-06-21T09:59:26Z
 
   - mistfile: new `ccflags 'Dist' => '-flags'` directive sets compiler flags for a

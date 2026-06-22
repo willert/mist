@@ -44,6 +44,26 @@ CCFLAGS_PREREQ_PICKS_UP_VERSION: {
     'and is removed from the bulk prereq list';
 }
 
+CCFLAGS_WRAPPER_DIST_IS_PLANNED_FOR_INJECTION: {
+  # A :wrapper dist implies a host build, so it must be vendored too - vendoring is
+  # mode-agnostic (the host just needs the tarball; :env vs :wrapper only matters at
+  # build time), so it rides the same ccflags inject list.
+  my $p = plan_for( q{ccflags ':wrapper', q{Clownfish::CFC} => q{-std=gnu11};}, 'Other' );
+  is_deeply $p->{ccflags}, [ 'Clownfish::CFC' ],
+    'a :wrapper dist is planned for injection into mpan-dist';
+  is_deeply $p->{prereqs}, [ 'Other' ],
+    'an unrelated bulk prereq is left in the prereq list';
+}
+
+CCFLAGS_BOTH_CHANNELS_INJECTED_ONCE: {
+  # A dist carrying both channels is vendored exactly once, not duplicated across
+  # the :env and :wrapper lists.
+  my $p = plan_for(
+    q{ccflags q{D} => q{-DFOO}; ccflags ':wrapper', q{D} => q{-std=gnu11};} );
+  is_deeply $p->{ccflags}, [ 'D' ],
+    'a dist with both ccflags channels is planned for injection exactly once';
+}
+
 PREPEND_NOTEST_CCFLAGS_ALL_PLANNED: {
   my $p = plan_for(
     'prepend q{Pre::One}; notest q{No::Test}; ccflags q{Cc::Dist} => q{-g};',

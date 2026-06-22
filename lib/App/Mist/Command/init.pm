@@ -106,7 +106,12 @@ sub _injection_plan {
   my ( $dist, @raw_prereqs ) = @_;
   my @prepend = $dist->get_prepended_modules;
   my @notest  = $dist->get_modules_not_to_test;
-  my @ccflags = map { $_->[0] } $dist->get_ccflags;
+  # Both ccflags channels imply a host build of the dist, so both must be vendored.
+  # Vendoring is mode-agnostic (the host just needs the tarball; the :env/:wrapper
+  # distinction only matters at build time), so dedup the union of the two.
+  my %cc_seen;
+  my @ccflags = grep { !$cc_seen{$_}++ }
+    map { $_->[0] } ( $dist->get_ccflags, $dist->get_ccflags_wrapper );
   my @prereqs = grep {
     my $this = $_;
     ! grep {

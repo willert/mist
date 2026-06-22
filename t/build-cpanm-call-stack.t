@@ -429,4 +429,54 @@ NOTEST_BEFORE_PREPEND: {
     'notest declared before a distinct prepend schedules first (declaration order)';
 }
 
+# --- ccflags :wrapper -----------------------------------------------------
+
+CCFLAGS_WRAPPER_MARKER: {
+  # A :wrapper dist splits like :env but carries a { ccflags_wrapper => ... } marker
+  # (run_cpanm turns that into a $Config{cc} PATH shim instead of --extra_compiler_flags).
+  my $dist = dist_from(
+    q{perl q{5.20.3}; ccflags ':wrapper', q{Clownfish::CFC} => q{-std=gnu11};} );
+  is_deeply
+    [ $dist->build_cpanm_call_stack( 'Other' ) ],
+    [ [ '--installdeps', 'Clownfish::CFC' ],
+      [ { ccflags_wrapper => '-std=gnu11' }, 'Clownfish::CFC' ],
+      [ 'Other' ] ],
+    ':wrapper implies the installdeps-split with a ccflags_wrapper marker, ahead of prereqs';
+}
+
+CCFLAGS_BOTH_CHANNELS_ONE_MARKER: {
+  # A dist with both channels carries both keys in one marker and one split.
+  my $dist = dist_from(
+    q{perl q{5.20.3}; ccflags q{D} => q{-DFOO}; ccflags ':wrapper', q{D} => q{-std=gnu11};} );
+  is_deeply
+    [ $dist->build_cpanm_call_stack() ],
+    [ [ '--installdeps', 'D' ],
+      [ { ccflags => '-DFOO', ccflags_wrapper => '-std=gnu11' }, 'D' ] ],
+    'both channels on one dist share one installdeps-split and one combined marker';
+}
+
+CCFLAGS_WRAPPER_ONLY_SCHEDULED: {
+  # A wrapper-only dist (no prepend/notest/:env) is still scheduled by the directive
+  # pass - the Lucy case, where the wrapped dist is not otherwise a prereq.
+  my $dist = dist_from(
+    q{perl q{5.20.3}; ccflags ':wrapper', q{Solo} => q{-std=gnu11};} );
+  is_deeply
+    [ $dist->build_cpanm_call_stack() ],
+    [ [ '--installdeps', 'Solo' ],
+      [ { ccflags_wrapper => '-std=gnu11' }, 'Solo' ] ],
+    'a wrapper-only dist is scheduled by the directive pass even with no prereqs';
+}
+
+CCFLAGS_WRAPPER_VERSION_PIN_TWO_STEP: {
+  # As with :env, the version pin arrives via the prereq spec and must survive into
+  # both the installdeps call and the marked call.
+  my $dist = dist_from(
+    q{perl q{5.20.3}; ccflags ':wrapper', q{Clownfish::CFC} => q{-std=gnu11};} );
+  is_deeply
+    [ $dist->build_cpanm_call_stack( 'Clownfish::CFC~0.6.1' ) ],
+    [ [ '--installdeps', 'Clownfish::CFC~0.6.1' ],
+      [ { ccflags_wrapper => '-std=gnu11' }, 'Clownfish::CFC~0.6.1' ] ],
+    'a versioned :wrapper dist two-steps with the pin in both entries';
+}
+
 done_testing;

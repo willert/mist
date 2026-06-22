@@ -254,10 +254,17 @@ for my $arg ( @CMD_OPTS ) {
 # atomic, and the >= floors make it max(local, bundle), never a downgrade.
 push @CUSTOM_MODULES, _bundle_specs( $bundle ) if defined $bundle;
 
+# Declared here, assigned below once $arch_path/$mist_home are settled: run_cpanm
+# and _make_cc_shim are named subs, so they capture $workspace at their definition
+# point and would not see a `my` declared after them. The assignment happens before
+# the first run_cpanm call, so the shim build sees the real path.
+my $workspace;
+
 sub run_cpanm {
-  # A call may lead with a { ccflags => ... } marker (emitted by
-  # build_cpanm_call_stack for a ccflags dist's own build); the rest are cpanm
-  # args. local %ENV keeps any per-call env scoped to this build.
+  # A call may lead with a { ccflags => ..., ccflags_wrapper => ... } marker (emitted
+  # by build_cpanm_call_stack for a ccflags dist's own build; either key may be
+  # present). The rest are cpanm args. local %ENV keeps any per-call env scoped to
+  # this build.
   my %marker;
   %marker = %{ shift @_ } if @_ and ref $_[0] eq 'HASH';
   local %ENV = %ENV;
@@ -294,10 +301,79 @@ sub run_cpanm {
     push @options, "--local-lib-contained=${local_lib}";
   }
 
+  # The :wrapper channel is orthogonal to the lib mechanism above: it puts a
+  # $Config{cc} shim first on PATH so the flags reach compiles that --extra_compiler_flags
+  # can't - a dist's internal sub-makes invoking $Config{cc} directly. Scoped to
+  # this one cpanm call (the sub's local %ENV), so it never touches the dist's deps,
+  # which build in their own undecorated --installdeps call.
+  if ( defined $marker{ccflags_wrapper} and length $marker{ccflags_wrapper} ) {
+    my $shim_dir = _make_cc_shim( $marker{ccflags_wrapper} );
+    $ENV{PATH} = join q{:}, $shim_dir,
+      ( defined $ENV{PATH} && length $ENV{PATH} ? $ENV{PATH} : () );
+  }
+
   $app->parse_options( @options, @_ );
   my $result = $app->_doit;
   exit 1 unless $result and $result == 1;
   return $result;
+}
+
+# Pure classification of $Config{cc} for the wrapper shim, factored out so it is
+# inspectable/testable on its own: a PATH shim can only intercept a compiler invoked
+# by bare name through PATH, so an absolute $Config{cc} is bypassed. Returns a
+# warning string for that inert case, else undef.
+sub _cc_shim_warning {
+  my ( $cc ) = @_;
+  my ( $cc_word ) = split q{ }, $cc;
+  return "ccflags :wrapper: \$Config{cc} is the absolute path '$cc_word'; a PATH cc "
+       . "shim cannot intercept it, so the flags may not reach the compiler.\n"
+    if File::Spec->file_name_is_absolute( $cc_word );
+  return undef;
+}
+
+# Build a $Config{cc} shim dir for :wrapper flags and return its path (to prepend on
+# PATH). The shim execs the *resolved absolute* compiler so it never re-enters itself,
+# and the flags go before "$@" so a dist's own later flag (its own -std) still wins.
+# Lives under $workspace, so --rebuild clears it and a corralled TMPDIR contains it.
+sub _make_cc_shim {
+  my ( $flags ) = @_;
+  my ( $cc_word, @cc_rest ) = split q{ }, $Config{cc};
+
+  if ( my $warning = _cc_shim_warning( $Config{cc} ) ) { warn $warning }
+
+  my $real_cc;
+  if ( File::Spec->file_name_is_absolute( $cc_word ) ) {
+    $real_cc = $cc_word;
+  } else {
+    # Resolve against the current (un-shimmed) PATH; $workspace is never on the
+    # inherited PATH, so this can't pick up a shim from an earlier call.
+    for my $dir ( File::Spec->path ) {
+      my $cand = File::Spec->catfile( $dir, $cc_word );
+      next unless -f $cand and -x _;
+      $real_cc = $cand;
+      last;
+    }
+    die "ccflags :wrapper: cannot resolve compiler '$cc_word' on PATH\n"
+      unless defined $real_cc;
+  }
+
+  ( my $tag = $flags ) =~ s/\W+/_/g;
+  $tag =~ s/\A_+//; $tag =~ s/_+\z//;
+  $tag = 'flags' unless length $tag;
+  my $shim_dir = File::Spec->catdir( $workspace, 'ccshim', $tag );
+  mkpath( $shim_dir );
+
+  my $shim_base = ( File::Spec->splitpath( $cc_word ) )[2];
+  my $shim = File::Spec->catfile( $shim_dir, $shim_base );
+  open my $fh, '>', $shim or die "Creating cc shim $shim failed: $!\n";
+  printf $fh "#!/bin/sh\n%s\n",
+    join( q{ }, 'exec', $real_cc, @cc_rest, $flags, '"$@"' );
+  close $fh;
+  my $perm = ( stat $shim )[2] & 07777;
+  chmod( $perm | 0755, $shim );
+
+  print "ccflags :wrapper: wrapping $cc_word -> $real_cc with $flags\n";
+  return $shim_dir;
 }
 
 # The ephemeral half of bundle resolution: ~/.mist/<project>/bundles, where the
@@ -389,7 +465,7 @@ die "mpan-install can not run as root\n" if $> == 0;
 # build.log around for post-mortem.
 ( my $ws_key = lc realpath( $mist_home ) ) =~ s/\W/_/g;
 $ws_key =~ s/\A_+//; $ws_key =~ s/_+\z//;
-my $workspace = File::Spec->catdir(
+$workspace = File::Spec->catdir(
   File::Spec->tmpdir, "mist-build-$UID-$ws_key-$arch_path" );
 File::Path::rmtree( $workspace ) if $rebuild and length $ws_key and -d $workspace;
 mkpath( $workspace );

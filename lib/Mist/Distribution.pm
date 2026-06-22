@@ -26,8 +26,8 @@ sub new {
     # name (so prepend/notest/ccflags on the same dist reconcile into a single
     # record), plus two ordered name lists. The folded view (_ordered_directive_names)
     # is merged names then own names, deduped first-occurrence: merged-before-outer,
-    # declaration order within each. prepend is the base; notest and ccflags are
-    # decorators that imply membership.
+    # declaration order within each. prepend is the base; notest and both ccflags
+    # channels (:env and :wrapper) are decorators that imply membership.
     directives             => {},
     directive_order_merged => [],
     directive_order_own    => [],
@@ -137,9 +137,31 @@ sub notest ($) {
   $self->_record_directive( $module, notest => 1 );
 }
 
-sub ccflags ($$) {
-  my ( $self, $module, $flags ) = @_;
-  $self->_record_directive( $module, ccflags => $flags );
+# ccflags [ ':env' | ':wrapper' ], $module => $flags
+#
+# Two independent per-dist compiler-flag channels, selected by an optional leading
+# mode token (default :env, which is also writable explicitly):
+#   :env     - flags reach the dist's own XS compile via --extra_compiler_flags /
+#              a CCFLAGS= override (the surgical default).
+#   :wrapper - flags are forced onto every compile in the dist's build through a
+#              $Config{cc} PATH shim - the only lever that reaches a dist's internal
+#              sub-makes (lemon, charmonizer, ...), which invoke $Config{cc} directly,
+#              past --extra_compiler_flags. A last-resort tool for abandoned dists
+#              whose pre-C23 C no longer compiles; it forces an older C standard so
+#              the compiler keeps tolerating the code, it does not fix the dist.
+# Both channels compose by the same outermost-wins rule and coexist on one dist, so
+# neither silently drops the other.
+sub ccflags {
+  my ( $self, @args ) = @_;
+  my $mode = ( @args and defined $args[0] and $args[0] =~ /\A:/ )
+    ? shift @args : ':env';
+  croak "Unknown ccflags mode '$mode' (expected ':env' or ':wrapper')"
+    unless $mode eq ':env' or $mode eq ':wrapper';
+  croak "ccflags expects a module name and flags"
+    unless @args == 2 and defined $args[0] and defined $args[1];
+  my ( $module, $flags ) = @args;
+  my $field = $mode eq ':wrapper' ? 'ccflags_wrapper' : 'ccflags';
+  $self->_record_directive( $module, $field => $flags );
 }
 
 # Route a directive into this dist's records. Mirrors store_dist_info's merge
@@ -165,19 +187,25 @@ sub _record_directive {
 }
 
 # Update the record for $module and register its declaration position. Composition
-# follows the one rule: a valued directive (ccflags) is outermost-wins - a build-master
-# (own) value overrides a merged dist's; a no-negation directive (prepend membership,
-# notest) is on-if-found-anywhere.
+# follows the one rule: a valued directive (ccflags / ccflags_wrapper) is
+# outermost-wins - a build-master (own) value overrides a merged dist's; a
+# no-negation directive (prepend membership, notest) is on-if-found-anywhere. The
+# two ccflags channels are independent (each tracks its own from-own guard), so
+# setting one never disturbs the other.
+my %_valued_outermost = (
+  ccflags         => 'ccflags_from_own',
+  ccflags_wrapper => 'ccflags_wrapper_from_own',
+);
 sub _apply_directive {
   my ( $self, $module, $field, $value, $merged ) = @_;
   my $rec = $self->{directives}{ $module } ||= { module => $module };
 
-  if ( $field eq 'ccflags' ) {
+  if ( my $own_guard = $_valued_outermost{ $field } ) {
     if ( !$merged ) {
-      $rec->{ccflags}          = $value;
-      $rec->{ccflags_from_own} = 1;
-    } elsif ( !$rec->{ccflags_from_own} ) {
-      $rec->{ccflags} = $value;
+      $rec->{ $field }     = $value;
+      $rec->{ $own_guard } = 1;
+    } elsif ( !$rec->{ $own_guard } ) {
+      $rec->{ $field } = $value;
     }
   } elsif ( $field eq 'prepend' ) {
     # Keep the versioned spec: a later versioned prepend supersedes an earlier
@@ -247,6 +275,17 @@ sub get_ccflags {
     $self->_ordered_directive_names;
 }
 
+# The :wrapper channel, as [ module => flags ] pairs in directive order. Same
+# empty-is-inert filter as get_ccflags; independent of the :env channel above.
+sub get_ccflags_wrapper {
+  my $self = shift;
+  return
+    map  { [ $_ => $self->{directives}{$_}{ccflags_wrapper} ] }
+    grep { defined $self->{directives}{$_}{ccflags_wrapper}
+             and length $self->{directives}{$_}{ccflags_wrapper} }
+    $self->_ordered_directive_names;
+}
+
 
 sub get_scripts {
   my $self = shift;  my $phase = shift;
@@ -302,16 +341,19 @@ sub build_cpanm_call_stack {
   my @prepended = $self->get_prepended_modules;
 
   # state variables
-  my ( %version, %scheduled, %dont_test, %ccflags, %core_satisfies, @callstack );
+  my ( %version, %scheduled, %dont_test, %ccflags, %ccflags_wrapper,
+       %core_satisfies, @callstack );
 
   # decorations keyed by bare module name
-  %dont_test = map { $_      => 1        } $self->get_modules_not_to_test;
-  %ccflags   = map { $_->[0] => $_->[1]  } $self->get_ccflags;
+  %dont_test       = map { $_      => 1        } $self->get_modules_not_to_test;
+  %ccflags         = map { $_->[0] => $_->[1]  } $self->get_ccflags;
+  %ccflags_wrapper = map { $_->[0] => $_->[1]  } $self->get_ccflags_wrapper;
 
-  # push a module on the call stack according to state vars. notest and ccflags
-  # are decorators: either one splits the build into `--installdeps X` (deps,
-  # undecorated) then `X` carrying both --notest and a { ccflags => ... } marker,
-  # so the flag/skip-test scopes to X alone and never leaks onto its deps.
+  # push a module on the call stack according to state vars. notest and the two
+  # ccflags channels are decorators: any of them splits the build into
+  # `--installdeps X` (deps, undecorated) then `X` carrying --notest and a
+  # { ccflags => ..., ccflags_wrapper => ... } marker, so the flags/skip-test scope
+  # to X alone and never leak onto its deps.
   my $push_module_on_stack = sub{
     my ( $module, $explicit_spec, $force ) = @_;
     return if $scheduled{ $module };
@@ -328,14 +370,18 @@ sub build_cpanm_call_stack {
     my $mod_spec = defined $explicit_spec ? $explicit_spec
       : ( $version{ $module } ? join( q{~}, $module, $version{$module} ) : $module );
 
-    my $notest = $dont_test{ $module } && !$opts{'force-tests'};
-    my $flags  = $ccflags{ $module };
+    my $notest    = $dont_test{ $module } && !$opts{'force-tests'};
+    my $flags     = $ccflags{ $module };
+    my $wrapflags = $ccflags_wrapper{ $module };
 
-    if ( $notest or defined $flags ) {
+    if ( $notest or defined $flags or defined $wrapflags ) {
       push @callstack, [ '--installdeps', $mod_spec ];
       my @decorated = ( $mod_spec );
       unshift @decorated, '--notest' if $notest;
-      unshift @decorated, { ccflags => $flags } if defined $flags;
+      my %mark;
+      $mark{ccflags}         = $flags     if defined $flags;
+      $mark{ccflags_wrapper} = $wrapflags if defined $wrapflags;
+      unshift @decorated, \%mark if %mark;
       push @callstack, \@decorated;
     } else {
       push @callstack, [ $mod_spec ];
@@ -386,8 +432,8 @@ sub build_cpanm_call_stack {
   }
 
   # Directive pass: schedule the mistfile's standing module list - its prepend /
-  # notest / ccflags dists - ahead of the bulk prereqs, in declaration order
-  # (merged-before-outer), so a notest- or ccflags-decorated dist installs before a
+  # notest / ccflags dists (either ccflags mode) - ahead of the bulk prereqs, in
+  # declaration order (merged-before-outer), so a decorated dist installs before a
   # prereq could pull it in undecorated, and a decorated dist that depends on
   # another can be ordered first by declaring it first.
   #
@@ -398,10 +444,14 @@ sub build_cpanm_call_stack {
     for my $name ( $self->_ordered_directive_names ) {
       my $rec = $self->{directives}{ $name };
       my $has_ccflags = defined $rec->{ccflags} && length $rec->{ccflags};
-      next unless defined $rec->{prepend} || $rec->{notest} || $has_ccflags;
+      my $has_wrapper = defined $rec->{ccflags_wrapper}
+                          && length $rec->{ccflags_wrapper};
+      next unless defined $rec->{prepend} || $rec->{notest}
+                    || $has_ccflags || $has_wrapper;
 
       # Schedule by the bare module name ($name = the record key), so %version,
-      # %dont_test and %ccflags - all keyed by bare name - line up. When the prepend
+      # %dont_test, %ccflags and %ccflags_wrapper - all keyed by bare name - line up.
+      # When the prepend
       # spec carries a version constraint, pass it explicitly so it is emitted
       # verbatim; this is what lets an operator-prefixed constraint like B==2.0 keep
       # its --notest / ccflags decoration (a ~-split token would not match the bare
