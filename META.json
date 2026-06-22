@@ -85,7 +85,7 @@
          "web" : "https://github.com/willert/mist"
       }
    },
-   "version" : "0.45",
+   "version" : "0.46",
    "x_contributors" : [
       "Sebastian Willert <willert@cpan.org>",
       "Sebastian Willert <willert@gmail.com>",
