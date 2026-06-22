@@ -2,6 +2,8 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+0.47 2026-06-22T20:37:02Z
+
   - mpan-install: migrating a legacy `perl5/<arch>` dir to a generation symlink, and
     re-installing a named branch, now rename the old tree aside instead of deleting
     it in place - so files the deploying user cannot remove no longer half-delete the
