@@ -7,6 +7,10 @@ Revision history for App::Mist
     it in place - so files the deploying user cannot remove no longer half-delete the
     live env on a partial failure. An unwritable `perl5/` now fails fast.
 
+  - mist inject/merge: resolve only from the project's own mpan-dist (plus explicit
+    `--from` peers), dropping a stale `MIST_APP_ROOT` mirror that could pull in an
+    unrelated project's dists; the output now names the actual vendoring destination.
+
 0.46 2026-06-22T16:33:26Z
 
   - mistfile: `ccflags` gains a `:wrapper` mode. It applies the flags to the dist's

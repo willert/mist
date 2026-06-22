@@ -13,7 +13,7 @@ with (
 );
 
 use Digest::MD5 qw/ md5_hex /;
-use Path::Class qw/ file dir /;
+use Path::Class ();   # loaded for the Path::Class::Dir type; no functions imported
 
 use Try::Tiny;
 
@@ -43,17 +43,13 @@ has mirror_only => (
 sub _build_mirror_list {
   my $self = shift;
   my @mirrors;
-  if ( my $mist_root = $ENV{MIST_APP_ROOT}) {
-    printf STDERR "Mist root: %s\n", $mist_root;
-
-    my $mpan = dir( $mist_root )->subdir( 'mpan-dist' );
-    printf STDERR "MPAN: %s\n", $mpan;
-
-    push @mirrors, "file://${mpan}" if -d "$mpan";
-  }
-
+  # The project's own mpan-dist is prepended by the around-modifier below, and
+  # explicit peer mirrors arrive via add_mirror / prepend_mirror (mist inject
+  # --from). Live CPAN is the only base entry, and only when not pinned to the
+  # mirrors. (A former $MIST_APP_ROOT-derived mirror was dropped: it duplicated the
+  # project mirror at best, and at worst - a stale/leaked env var - pulled in an
+  # unrelated project's mirror while printing it as if it were the destination.)
   push @mirrors, 'http://www.cpan.org/' unless $self->mirror_only;
-
   return \@mirrors;
 }
 
@@ -137,6 +133,9 @@ sub cpanm_install_options {
 
 sub install {
   my ( $self, @cmd_args ) = @_;
+  # Name the actual vendoring destination (this project's mpan-dist, resolved from
+  # the project root) so it is never mistaken for mist's own / a mirror source.
+  printf STDERR "Vendoring into %s\n", $self->mpan_dist;
   $self->run_bundled_cpanm_script( $self->cpanm_install_options, @cmd_args );
 }
 
