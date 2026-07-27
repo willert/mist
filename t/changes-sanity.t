@@ -21,6 +21,14 @@ my $changes = File::Spec->catfile( $repo, 'Changes' );
 
 plan skip_all => 'no Changes here' unless -f $changes;
 
+# Every assertion here is about the *repository's* changelog, so this only runs
+# in a checkout. In a dist build Minilla::WorkDir::_rewrite_changes has already
+# substituted {{$NEXT}} for the version being built, and there is no .git for the
+# tag cross-check - so the file the tarball ships legitimately violates the
+# invariants below, and asserting them there fails the release at DistTest.
+plan skip_all => 'not a git checkout (a dist/clean-room build)'
+  unless -e File::Spec->catdir( $repo, '.git' );
+
 my @lines = do {
   open my $fh, '<', $changes or die "open Changes: $!";
   <$fh>;
@@ -79,15 +87,8 @@ ORDERED_AND_UNIQUE: {
 }
 
 # The assertion that maps onto the actual bug: a version that was released must
-# still have somewhere to hang its entries. Needs the repo, so it does not run in
-# a dist/clean-room build.
+# still have somewhere to hang its entries.
 SUBTEST_EVERY_TAG_HAS_A_SECTION: {
-  my $git_dir = File::Spec->catdir( $repo, '.git' );
-  unless ( -e $git_dir ) {
-    note 'no .git here (a dist/clean-room build), skipping the tag cross-check';
-    last SUBTEST_EVERY_TAG_HAS_A_SECTION;
-  }
-
   my @tags = do {
     open my $fh, '-|', 'git', '-C', $repo, 'tag', '--list'
       or die "git tag: $!";
