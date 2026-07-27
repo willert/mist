@@ -4,8 +4,6 @@ use strict;
 use warnings;
 
 use Test::More;
-use File::Spec;
-use Cwd ();
 
 use Mist::Distribution;
 use Mist::Environment;
@@ -353,18 +351,24 @@ SCRIPT_EXTRA_ARGS: {
     'script stores trailing args alongside the path';
 }
 
-# --- dist_path verb --------------------------------------------------------
+# --- dist_path verb (retired) ----------------------------------------------
 
-DISTPATH_OUTSIDE_MERGE: {
-  my $dist = parse_source('dist_path q{../x};');
-  is $dist->get_dist_path, undef, 'dist_path outside a merge is silently ignored';
-}
+# dist_path recorded where `mist merge` merged a dist from, for `mist init
+# --rebuild` to replay; both are gone. The verb stays bound and inert because
+# generated merge blocks carrying it are committed in downstream mistfiles and
+# embedded verbatim in their already-shipped mpan-install, so it has to keep
+# parsing wherever it still appears - including repeatedly, and outside a merge.
+DISTPATH_IS_ACCEPTED_AND_IGNORED: {
+  ok parse_source('dist_path q{../x};'),
+    'dist_path outside a merge still parses';
+  ok parse_source('merge D => sub { dist_path q{a}; dist_path q{b} };'),
+    'dist_path parses inside a merge, and repeating it is no longer fatal';
 
-DISTPATH_TWICE_IN_MERGE: {
-  my $err = parse_expect_die(
-    'merge D => sub { dist_path q{a}; dist_path q{b} };'
-  );
-  like $err, qr/set before/, 'dist_path set twice in one merge croaks /set before/';
+  my $dist = parse_source( 'merge D => sub { dist_path q{a}; prepend q{P}; };' );
+  is_deeply [ $dist->get_merged_dists ], [ 'D' ],
+    'a merge block carrying dist_path is otherwise unaffected';
+  is_deeply [ $dist->get_prepended_modules ], [ 'P' ],
+    'and its sibling directives still register';
 }
 
 # --- merge verb ------------------------------------------------------------
@@ -408,9 +412,6 @@ MERGE_SUBDIST_INFO: {
   is scalar($sub->get_assertions), 1, 'sub-dist holds its own assertion';
   is $sub->get_default_perl_version, undef,
     'perl inside merge is ignored even for the sub-dist';
-  is $sub->get_dist_path, '../other', 'dist_path sets the sub-dist path';
-  is $dist->get_relative_merge_path('Other::Dist'), '../other',
-    'get_relative_merge_path returns sub-dist dist_path';
 }
 
 MERGE_MULTI_PREPEND_ORDER: {
@@ -533,40 +534,13 @@ MIST
     'parent receives both sibling notests in merge declaration order';
 }
 
-# --- merge path accessors --------------------------------------------------
-
-MERGE_PATHS: {
-  my $dist = parse_source(<<'MIST');
-merge q{With::Path} => sub { dist_path q{../wp}; prepend q{W1}; };
-merge q{No::Path}   => sub { prepend q{N1}; };
-MIST
-
-  # relative path = the sub-dist's declared dist_path
-  is $dist->get_relative_merge_path('With::Path'), '../wp',
-    'get_relative_merge_path returns the declared dist_path';
-
-  # merged dist with NO dist_path -> undef (sub-dist exists, dist_path undef)
-  is $dist->get_relative_merge_path('No::Path'), undef,
-    'get_relative_merge_path is undef when the merged dist has no dist_path';
-
-  # unknown dist -> undef (early return, before touching dist_path)
-  is $dist->get_relative_merge_path('Nope'), undef,
-    'get_relative_merge_path is undef for an unknown dist';
-
-  # default path is derived from cwd, updir, and lc(dist with :: -> -),
-  # independent of any declared dist_path. Compute the expectation from the
-  # live cwd so the test is location-independent.
-  my $expect_default =
-    File::Spec->catdir( Cwd::cwd(), File::Spec->updir, 'no-path' );
-  is $dist->get_default_merge_path('No::Path'), $expect_default,
-    'get_default_merge_path derives <cwd>/../<lc dashed-name>';
-  is $dist->get_default_merge_path('With::Path'),
-    File::Spec->catdir( Cwd::cwd(), File::Spec->updir, 'with-path' ),
-    'get_default_merge_path ignores the declared dist_path';
-
-  # unknown dist -> undef
-  is $dist->get_default_merge_path('Nope'), undef,
-    'get_default_merge_path is undef for an unknown dist';
+# The merge path accessors (get_relative_merge_path / get_default_merge_path) and
+# Context::get_merge_path_for are gone with `mist init --rebuild`, the only thing
+# that resolved a merged dist back to its source checkout.
+MERGE_PATH_ACCESSORS_ARE_GONE: {
+  my $dist = parse_source( 'merge q{With::Path} => sub { dist_path q{../wp}; };' );
+  ok ! $dist->can( $_ ), "${_} is gone"
+    for qw/ get_dist_path get_relative_merge_path get_default_merge_path /;
 }
 
 # --- whole-distribution invariants -----------------------------------------

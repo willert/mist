@@ -82,4 +82,34 @@ EMPTY_MISTFILE_PLANS_ONLY_PREREQS: {
   is_deeply $p->{prereqs}, [ 'Just::A::Prereq' ], 'bulk prereq passes through';
 }
 
+# --rebuild is retired: it wiped mpan-dist and rebuilt the pinned mirror from
+# whatever was checked out in the sibling source trees, and removed all of perl5/
+# along with its build generations. The flag is still declared, hidden, so it can
+# be rejected with a pointer to ./mpan-install --rebuild rather than Getopt's bare
+# "Unknown option". execute() dies on it before touching $self, so pass undef.
+REBUILD_FLAG_IS_REJECTED: {
+  my ( $spec ) = grep { $_->[0] =~ /^rebuild\b/ }
+    App::Mist::Command::init::opt_spec();
+
+  ok $spec, 'the rebuild option is still declared';
+  is $spec->[0], 'rebuild|R', 'under both its old names, so -R is still parsed';
+  ok $spec->[2] && $spec->[2]{hidden}, 'but hidden from the usage listing';
+
+  my $err = do {
+    local $@;
+    eval { App::Mist::Command::init::execute( undef, { rebuild => 1 }, [] ) };
+    $@;
+  };
+
+  like $err, qr/--rebuild\S*.{0,40}removed/s, 'passing it dies as removed';
+  like $err, qr/manually/, 'saying a from-scratch rebuild is manual now';
+
+  my $ok = do {
+    local $@;
+    eval { App::Mist::Command::init::execute( undef, {}, [] ); 1 };
+  };
+  ok !$ok, 'without the flag it proceeds past the guard (and dies later on $self)';
+  unlike "$@", qr/retired/, 'so a plain init is not caught by the guard';
+}
+
 done_testing;

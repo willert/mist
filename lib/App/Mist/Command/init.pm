@@ -13,23 +13,21 @@ use Cwd;
 
 sub opt_spec {
   return (
-    [ "rebuild|R",  "rebuild the complete mpan distribution" ],
+    # Removed, still parsed so it can be rejected by name instead of with Getopt's
+    # bare "Unknown option".
+    [ "rebuild|R", "removed - see the error text", { hidden => 1 } ],
   );
 }
 
 sub execute {
   my ( $self, $opt, $args ) = @_;
 
-  my $rebuild_dist = !! $opt->{rebuild};
+  die <<'REMOVED' if $opt->{rebuild};
+mist init: --rebuild/-R has been removed.
+If you want to start from scratch, you have to do it manually.
+REMOVED
 
   my $ctx  = $self->app->ctx;
-
-  if ( $rebuild_dist ) {
-    print "Rebuilding Mist distribution environment\n", ;
-    for my $mist_dir ( $ctx->mpan_dist, $ctx->perl5_base_lib ) {
-      $mist_dir->rmtree; $mist_dir->mkpath;
-    }
-  }
 
   my $app = $self->app;
   my $do  = sub{
@@ -54,22 +52,6 @@ sub execute {
   };
 
   $run_script->( $_ ) for $ctx->dist->get_scripts( 'prepare' );
-
-  if ( $rebuild_dist ) {
-
-    my @merge = $ctx->dist->get_merged_dists;
-
-  MERGED_DIST:
-    for my $dist ( @merge ) {
-      my $dist_path = $ctx->get_merge_path_for( $dist );
-      if ( not $dist_path or not -r -d "$dist_path" ) {
-        warn "Merged dist ${dist} not found. Skipping ..\n";
-        next MERGED_DIST;
-      }
-      print "\n";
-      $do->( 'merge', @$args, "$dist_path" );
-    }
-  }
 
   $do->( 'inject',             @$args, @{ $plan->{prepend} } ) if @{ $plan->{prepend} };
   $do->( 'inject', '--notest', @$args, @{ $plan->{notest}  } ) if @{ $plan->{notest}  };
@@ -137,7 +119,6 @@ App::Mist::Command::init - bootstrap the project environment in one step
 =head1 SYNOPSIS
 
   mist init
-  mist init -R          # wipe mpan-dist/ and perl5/, rebuild from scratch
 
 =head1 DESCRIPTION
 
@@ -169,14 +150,24 @@ run F<./mpan-install> to populate F<./perl5/>.
 
 =back
 
-With C<-R> / C<--rebuild> it first deletes F<mpan-dist/> and F<perl5/>
-outright and re-C<merge>s every merged sub-distribution, for a clean
-from-scratch rebuild.
+C<init> never deletes F<mpan-dist/> or F<perl5/>; it only adds what is declared
+but not yet vendored.
+
+C<-R> / C<--rebuild> is removed; starting from scratch is manual. Mind which
+scope you actually want. For the B<environment>, C<./mpan-install --rebuild>
+builds the dependency tree into a fresh generation and leaves the current one
+activatable, and C<mist purge> reclaims superseded ones -- it reads
+F<mpan-dist/> and never writes it, so it is not C<-R> with the re-merging
+removed. For the B<mirror>, C<mist clean> drops tarballs the index no longer
+references and C<mist merge> re-vendors one dist from its source checkout.
+Nothing re-resolves the mirror wholesale: it is a committed artifact of pinned
+tarballs, and rebuilding it from live sibling working trees is what made C<-R>
+unreproducible.
 
 =head1 SEE ALSO
 
 L<App::Mist::Command::compile>, L<App::Mist::Command::inject>,
-L<App::Mist::Command::merge>
+L<App::Mist::Command::merge>, L<App::Mist::Command::purge>
 
 =head1 AUTHORS
 

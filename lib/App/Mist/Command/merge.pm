@@ -114,19 +114,9 @@ sub execute {
       goto MISTFILE_DONE;
     }
 
-    # construct the most convenient path to store
-    my $distpath = dir( $path )->resolve->absolute;
-    my $dev_home = dir( $ENV{HOME} )->resolve->absolute;
-    if ( $dev_home->subsumes( $distpath ) ) {
-      $distpath = $distpath->relative( $dev_home );
-    } else {
-      $distpath->relative( $ctx->project_root );
-    }
-
     $our_mistfile->spew({ iomode => '<:utf8' }, _splice_merge_block(
       $our_mistfile->slurp( iomode => '<:utf8' ),
       $dist_info->as_module_name,
-      $distpath,
       $other_mistfile->slurp( iomode => '<:utf8' ),
     ));
   }
@@ -148,15 +138,14 @@ sub execute {
 # to a subordinate block, where the next merge of the dist owning the enclosing
 # block would regenerate the subtree and silently drop what we wrote.
 sub _splice_merge_block {
-  my ( $mistfile, $distname, $distpath, $spec ) = @_;
+  my ( $mistfile, $distname, $spec ) = @_;
 
   $spec =~ s/\n(?!\n|$)/\n  /g; # indent merged file
 
-  my $merged = sprintf <<'MERGE_SPEC', ( $distname ) x 2, $distpath, $spec, $distname;
+  my $merged = sprintf <<'MERGE_SPEC', ( $distname ) x 2, $spec, $distname;
 ### <<<[%s] - keep this line intact
 merge '%s' => sub {
   # generated code block - do not edit
-  dist_path '%s';
 
   %s
 };

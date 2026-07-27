@@ -5,8 +5,6 @@ use strict;
 use warnings;
 
 use Carp;
-use File::Spec;
-use Cwd ();
 
 sub _uniq { my %i = (); grep { not $i{$_}++ } @_; }
 
@@ -18,7 +16,6 @@ sub new {
   bless {
     assert      => [],
     perl        => undef,
-    dist_path   => undef,
     dist_name   => $dist_name,
     merge_dists => [],
     merge_info  => {},
@@ -111,19 +108,13 @@ sub perl ($) {
   $self->{perl} = $version;
 }
 
-sub dist_path ($) {
-  my ( $self, $path ) = @_;
-
-  # ignore merged default perl version
-  return unless $merging_dist;
-
-  my $md_info = $self->get_merged_dist_info( $merging_dist )
-    or die "Unknown merged dist ${merging_dist}";
-
-  croak "Dist path has been set before" if $md_info->{dist_path};
-
-  $md_info->{dist_path} = "$path";
-}
+# Retired verb, still bound and still accepted. `mist merge` used to record where
+# it merged a dist from so `mist init --rebuild` could replay the merges from the
+# sibling source checkouts; both that flag and this memo are gone. The binding
+# stays because generated merge blocks carrying `dist_path` are committed in
+# downstream mistfiles - and embedded verbatim in their already-shipped
+# mpan-install - so unbinding it would fail their parse.
+sub dist_path ($) { return }
 
 sub prepend ($;$) {
   my ( $self, $module, $version ) = @_;
@@ -246,7 +237,6 @@ sub script ($$@) {
 
 sub get_assertions           { my $self = shift; return @{ $self->{assert}}   }
 sub get_default_perl_version { my $self = shift; return    $self->{perl}      }
-sub get_dist_path            { my $self = shift; return    $self->{dist_path} }
 sub get_prepended_modules {
   my $self = shift;
   return
@@ -302,30 +292,6 @@ sub get_merged_dist_info {
   croak "No dist name given" unless $dist;
   return undef unless exists $self->{ merge_info }{ $dist };
   return $self->{merge_info}{ $dist };
-};
-
-# ---
-
-sub get_relative_merge_path {
-  my ( $self, $dist ) = @_;
-  croak "No dist name given" unless $dist;
-
-  my $md_info = $self->get_merged_dist_info( $dist )
-    or return undef;
-
-  return $md_info->get_dist_path;
-}
-
-sub get_default_merge_path {
-  my ( $self, $dist ) = @_;
-  croak "No dist name given" unless $dist;
-
-  my $md_info = $self->get_merged_dist_info( $dist )
-    or return undef;
-
-  $dist =~ s{::}{-}g;
-  my $cwd = Cwd::cwd();
-  return File::Spec->catdir( $cwd, File::Spec->updir, lc $dist );
 };
 
 sub build_cpanm_call_stack {

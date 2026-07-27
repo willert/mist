@@ -25,7 +25,6 @@ sub splice_block {
   return App::Mist::Command::merge::_splice_merge_block(
     $mistfile,
     $p{dist} || 'WeCARE::Env',
-    $p{path} || 'Devel/wecare-env',
     $p{spec} || "prepend 'Term::Table' => '0.023';\n",
   );
 }
@@ -39,7 +38,9 @@ sub count_markers {
 
 # A sibling's block as `mist merge` writes it: markers at column 0, body indented
 # two spaces, and - because embedding a mistfile indents every line - a nested
-# copy of WeCARE::Env's own block sitting two spaces deeper.
+# copy of WeCARE::Env's own block sitting two spaces deeper. The retired
+# `dist_path` lines are deliberate: this is the legacy shape still committed in
+# downstream mistfiles, and the splice has to handle it unchanged.
 my $sibling_block = <<'SIBLING';
 ### <<<[WeCARE::Env::PSGI] - keep this line intact
 merge 'WeCARE::Env::PSGI' => sub {
@@ -64,10 +65,12 @@ APPEND_TO_EMPTY_MISTFILE: {
     'a mistfile with no block for the dist gains exactly one';
   like $out, qr/^merge 'WeCARE::Env' => sub \{$/m,
     'the generated merge verb sits at column 0';
-  like $out, qr/^  dist_path 'Devel\/wecare-env';$/m,
+  like $out, qr/^  # generated code block - do not edit$/m,
     'the block body is indented one level';
   like $out, qr/^  prepend 'Term::Table' => '0\.023';$/m,
     "the merged dist's own directives are carried into the block";
+  unlike $out, qr/dist_path/,
+    'the retired dist_path directive is no longer emitted';
 }
 
 REPLACE_TOP_LEVEL_BLOCK_IN_PLACE: {

@@ -7,7 +7,14 @@ Revision history for App::Mist
     subordinate pair - one nested inside a sibling's merge block - no longer captures
     the top-level result, where the next merge of that sibling silently discarded it.
 
-0.47 2026-06-22T20:37:02Z
+  - mist init: `--rebuild`/`-R` is removed and starting from scratch is manual; it
+    fused an environment rebuild with a mirror rebuild, removing all of `perl5/`
+    including the build generations, and reconstructing the pinned `mpan-dist/` from
+    whatever the sibling source trees happened to have checked out.
+
+  - mistfile: the `dist_path` verb is inert. It only recorded where `mist init
+    --rebuild` should replay a merge from, and `mist merge` no longer emits it; it
+    stays bound, and ignored, so mistfiles and installers still carrying it parse.
 
   - mpan-install: migrating a legacy `perl5/<arch>` dir to a generation symlink, and
     re-installing a named branch, now rename the old tree aside instead of deleting
