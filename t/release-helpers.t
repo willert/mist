@@ -375,6 +375,12 @@ is $after, $before, 'cwd is restored after a with_changes call';
   my $cdir = $R->can('_candidate_dir')->( $ctx, 'fp' );
   $cdir->mkpath;
 
+  # Staleness now also refuses a candidate with no installed closure, so this
+  # fixture needs one - otherwise every assertion below would trip that reason
+  # instead of exercising the fingerprint inputs it is here to test.
+  $cdir->subdir( 'lib', 'perl5' )->mkpath;
+  $cdir->subdir( 'lib', 'perl5' )->file( 'Dummy.pm' )->spew( "1;\n" );
+
   for my $input ( [ cpanfile => "$cpanfile" ],
                   [ mistfile => "$mistfile" ],
                   [ '02packages index' => $index ] ) {
@@ -393,6 +399,18 @@ is $after, $before, 'cwd is restored after a with_changes call';
   unlink $R->can('_fingerprint_file')->( "$cdir" );
   like $R->can('_candidate_staleness')->( $ctx, "$cdir" ), qr/no fingerprint/,
     'missing fingerprint -> stale (fail closed)';
+
+  # The observed failure: a candidate carrying a current fingerprint and nothing
+  # else passed every check, was promoted, and then starved DistTest of the
+  # dist's own prereqs - after the version bump, so the release died mid-pipeline
+  # with a dirty tree. A matching fingerprint says the inputs are unchanged, not
+  # that anything was installed.
+  my $hollow = $R->can('_candidate_dir')->( $ctx, 'hollow' );
+  $hollow->mkpath;
+  $R->can('_write_candidate_fingerprint')->( $ctx, "$hollow" );
+  like $R->can('_candidate_staleness')->( $ctx, "$hollow" ),
+    qr/no installed modules/,
+    'current fingerprint but empty candidate -> refused, not promoted';
 }
 
 # ---------------------------------------------------------------------------
@@ -416,6 +434,38 @@ is $after, $before, 'cwd is restored after a with_changes call';
   ok !$ok->( 'a/b' ),          'slash rejected';
   ok !$ok->( '--dry-run' ),    'option-shaped value rejected';
   ok !$ok->( 'has space' ),    'whitespace rejected';
+}
+
+# _candidate_holds_closure / the staleness guard that uses it.
+#
+# The fingerprint attests only to the inputs that decide the closure - cpanfile,
+# mistfile, mpan-dist index, perl - never that the closure was actually
+# installed. A candidate holding just a fingerprint therefore passed every check
+# and was promoted, whereupon DistTest starved for the dist's own prereqs. That
+# happens after RegenerateFiles has bumped the version, so the release dies
+# mid-pipeline and leaves lib/*.pm and META.json dirty. Refuse it up front.
+CANDIDATE_MUST_HOLD_A_CLOSURE: {
+  my $holds = \&App::Mist::Command::release::_candidate_holds_closure;
+
+  my $tmp = File::Temp->newdir( CLEANUP => 1 );
+  my $dir = Path::Class::dir( "$tmp" );
+
+  ok !$holds->( $dir ), 'an empty candidate holds no closure';
+
+  $dir->subdir( 'lib', 'perl5' )->mkpath;
+  ok !$holds->( $dir ), 'a candidate with an empty lib/perl5 holds no closure';
+
+  $dir->subdir( 'lib', 'perl5' )->file( 'README' )->spew( "not a module\n" );
+  ok !$holds->( $dir ), 'non-module files do not count';
+
+  $dir->subdir( 'lib', 'perl5', 'Deep', 'Nested' )->mkpath;
+  $dir->subdir( 'lib', 'perl5', 'Deep', 'Nested' )->file( 'Mod.pm' )
+      ->spew( "1;\n" );
+  ok $holds->( $dir ), 'a .pm anywhere under lib/perl5 counts';
+
+  # Callers pass a Path::Class::Dir or a plain path interchangeably, as the
+  # staleness helpers already do.
+  ok $holds->( "$dir" ), 'accepts a plain string path too';
 }
 
 done_testing;

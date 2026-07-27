@@ -7,6 +7,13 @@ Revision history for App::Mist
     a section for every released tag - so an edit that drops a heading, and with it a
     release's attribution, fails the suite instead of surfacing after the next release.
 
+  - mist release: `--candidate` refuses a candidate holding no installed modules, and
+    a `--dry-run` that installed nothing discards its candidate rather than
+    advertising it. The fingerprint attests only to the inputs that decide the
+    closure, never that one was built, so an empty candidate passed every check and
+    then starved the real release's tests - after the version bump, so it failed
+    mid-pipeline and left the tree dirty.
+
   - mist init/compile: a cpanfile `requires 'perl'` line no longer aborts the run with
     "Couldn't find module or a distribution perl". It is CPAN::Meta's pseudo-prereq for
     the interpreter rather than a distribution, so it is withheld from cpanm and its

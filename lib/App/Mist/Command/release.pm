@@ -8,6 +8,7 @@ use Minilla::CLI;
 use Minilla::Project;
 
 use Config;
+use File::Find ();
 use File::Spec;
 use File::Temp ();
 use Getopt::Long ();
@@ -167,6 +168,18 @@ sub execute {
   $minil->run( release => @minil_args );
 
   if ( $dry_run ) {
+    # A dry-run whose tests pass but whose candidate is empty is promotable on
+    # every other check and then starves the real release. Refuse to advertise
+    # one: the closure has to be on disk for the promote to reuse it, and a
+    # passing dry-run does not prove that on its own, because its own test run
+    # can be satisfied from elsewhere on @INC.
+    unless ( _candidate_holds_closure( _candidate_dir( $ctx, $candidate ) ) ) {
+      _remove_release_candidate( $ctx, $candidate );
+      die "mist release: the dry-run validated but installed no modules into its\n"
+        . "release candidate, so there is nothing for --candidate to reuse.\n"
+        . "Candidate discarded. Re-run `mist release --dry-run`.\n";
+    }
+
     # The build validated. Stamp the candidate with the current fingerprint -
     # its presence also marks the dry-run as having completed - and print the
     # exact promote command. The "mist release --candidate=" prefix is stable so
@@ -357,7 +370,34 @@ sub _candidate_staleness {
   chomp $stored;
   return 'cpanfile, mistfile, mpan-dist or perl changed since the dry-run'
     if $stored ne _release_fingerprint( $ctx );
+  # The fingerprint only attests to the inputs that decide the closure, never
+  # that the closure was installed. A candidate holding just a fingerprint passes
+  # every other check and then starves DistTest of its own prereqs - after
+  # RegenerateFiles has bumped the version, so it fails mid-pipeline and leaves
+  # the tree dirty. Refuse it up front instead.
+  return 'the candidate holds no installed modules (the dry-run built nothing)'
+    unless _candidate_holds_closure( $dir );
   return '';
+}
+
+# Cheap presence check, not an inventory: any .pm under the candidate's local-lib
+# means cpanm populated it. An empty or lib-less candidate is the failure worth
+# catching; a partial one still fails loudly at DistTest, which is where a
+# genuinely broken closure belongs.
+sub _candidate_holds_closure {
+  my $dir = shift;
+  # Stringified like _fingerprint_file: callers pass a Path::Class::Dir or a
+  # plain path interchangeably.
+  my $lib = File::Spec->catdir( "$dir", 'lib', 'perl5' );
+  return 0 unless -d $lib;
+
+  my $found = 0;
+  File::Find::find(
+    { no_chdir => 1,
+      wanted   => sub { $found = 1 if not $found and /\.pm\z/ } },
+    $lib,
+  );
+  return $found;
 }
 
 # True if @$args asks for a dry run, parsed the way Minilla will parse it.
