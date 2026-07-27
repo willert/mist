@@ -333,8 +333,29 @@ sub fetch_prereqs {
   my $cpanfile = Module::CPANfile->load( $self->cpanfile->stringify );
   my $prereqs  = $cpanfile->prereqs->merged_requirements;
 
+  my @required = $prereqs->required_modules;
+
+  # `perl` is CPAN::Meta's pseudo-prereq for the interpreter version, not a
+  # distribution: passed through to cpanm it fails the whole install with
+  # "Couldn't find module or a distribution perl". Check it against the perl the
+  # mistfile pins - the project's own declared answer, and unlike $] the same
+  # whichever perl happens to be running this command - and keep it out of the
+  # list cpanm gets. accepts_module does the comparing, so a decimal floor
+  # ('5.020') and a dotted pin ('5.20.3') line up and ranges keep working.
+  if ( grep { $_ eq 'perl' } @required ) {
+    my $pinned = $self->dist->get_default_perl_version;
+
+    # No mistfile pin means nothing authoritative to compare against, so the
+    # floor stays unverified rather than checked against a guess.
+    if ( defined $pinned and not $prereqs->accepts_module( 'perl', $pinned )) {
+      die sprintf "%s requires perl %s, but the mistfile pins perl %s.\n"
+        . "Raise the mistfile's perl version or relax the cpanfile requirement.\n",
+        $self->cpanfile, $prereqs->requirements_for_module( 'perl' ), $pinned;
+    }
+  }
+
   my @reqs;
-  foreach my $module ( $prereqs->required_modules ) {
+  foreach my $module ( grep { $_ ne 'perl' } @required ) {
     my $req_str = $module;
     if ( my $meta = $prereqs->requirements_for_module( $module )) {
       $req_str .= '~' . $meta;
