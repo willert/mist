@@ -7,6 +7,11 @@ Revision history for App::Mist
     a section for every released tag - so an edit that drops a heading, and with it a
     release's attribution, fails the suite instead of surfacing after the next release.
 
+  - mist init/compile: a cpanfile `requires 'perl'` line no longer aborts the run with
+    "Couldn't find module or a distribution perl". It is CPAN::Meta's pseudo-prereq for
+    the interpreter rather than a distribution, so it is withheld from cpanm and its
+    floor checked against the perl the mistfile pins.
+
 0.48 2026-07-27T04:05:18Z
 
   - mist merge: the mistfile block for a merged dist now binds only to a top-level
