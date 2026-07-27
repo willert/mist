@@ -205,18 +205,28 @@ WRITE_KEEPS_A_BACKUP: {
   my $file = $dir->file( 'mistfile' );
   $file->spew( iomode => '>:utf8', "perl '5.20.3';\n# umlaut: \x{e4}\n" );
 
-  App::Mist::Command::merge::_write_mistfile( $file, "rewritten\n" );
+  # The backup goes to the per-project workspace, not next to the mistfile: a
+  # project root is version-controlled, and an untracked mistfile.bak there would
+  # fail the CheckUntrackedFiles step of that project's own mist release.
+  my $workspace = dir( tempdir( 'mist-mistws-XXXXXX', TMPDIR => 1, CLEANUP => 1 ));
+  my $backup    = $workspace->file( 'mistfile.bak' );
+
+  App::Mist::Command::merge::_write_mistfile( $file, $backup, "rewritten\n" );
 
   is $file->slurp( iomode => '<:utf8' ), "rewritten\n", 'the new content lands';
-  is $dir->file( 'mistfile.bak' )->slurp( iomode => '<:utf8' ),
+  is $backup->slurp( iomode => '<:utf8' ),
     "perl '5.20.3';\n# umlaut: \x{e4}\n",
-    'the previous content is kept in mistfile.bak, decoded intact';
+    'the previous content is kept in the workspace backup, decoded intact';
+  ok ! -e $dir->file( 'mistfile.bak' )->stringify,
+    'nothing is left in the project root beside the mistfile';
   ok ! -e $dir->file( 'mistfile.tmp' )->stringify,
     'no temp file is left behind';
+  is_deeply [ sort map { $_->basename } $dir->children ], [ 'mistfile' ],
+    'the project root holds only the mistfile afterwards';
 
   # Round trip a non-ASCII rewrite: spew's hashref-iomode form silently writes
   # bytes, which would mangle what the matching '<:utf8' slurp decoded.
-  App::Mist::Command::merge::_write_mistfile( $file, "# \x{2014} \x{e4}\n" );
+  App::Mist::Command::merge::_write_mistfile( $file, $backup, "# \x{2014} \x{e4}\n" );
   is $file->slurp( iomode => '<:utf8' ), "# \x{2014} \x{e4}\n",
     'wide characters survive the write/read round trip';
 }

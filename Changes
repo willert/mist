@@ -7,10 +7,10 @@ Revision history for App::Mist
     subordinate pair - one nested inside a sibling's merge block - no longer captures
     the top-level result, where the next merge of that sibling silently discarded it.
 
-  - mist merge: the mistfile rewrite keeps the previous content in `mistfile.bak` and
-    swaps the new one in by rename, and refuses outright to write a block with a
-    blank dist name or a rewrite that would drop a top-level block other than the
-    merge target.
+  - mist merge: the mistfile rewrite keeps the previous content in the per-project
+    workspace (`~/.mist/<project>/mistfile.bak`, reported on stdout) and swaps the new
+    one in by rename, and refuses outright to write a block with a blank dist name or
+    a rewrite that would drop a top-level block other than the merge target.
 
   - mist merge: writing the mistfile back applies the `:utf8` layer it is read with;
     the iomode had been passed in a form `spew` ignores, so a mistfile containing

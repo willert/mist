@@ -121,9 +121,11 @@ sub execute {
     my $mistfile = $our_mistfile->slurp( iomode => '<:utf8' );
     my $spec     = $other_mistfile->slurp( iomode => '<:utf8' );
 
-    _write_mistfile( $our_mistfile, _splice_merge_block(
+    my $backup = $ctx->workspace->file( 'mistfile.bak' );
+    _write_mistfile( $our_mistfile, $backup, _splice_merge_block(
       $mistfile, $dist_info->as_module_name, $spec
     ));
+    printf "Previous mistfile kept at %s\n", $backup;
   }
 
   print "\nPlease run\n  mist compile\nas mistfile might have changed\n";
@@ -207,22 +209,32 @@ sub _assert_only_target_block_changed {
 }
 
 # The mistfile is hand-authored source that no generated artefact can
-# reconstruct, so keep the previous content in mistfile.bak and swap the new one
-# in by rename. A consumer without version control can then still recover.
+# reconstruct, so keep the previous content and swap the new one in by rename. A
+# consumer without version control can then still recover.
+#
+# $backup belongs in the per-project mist workspace rather than beside the
+# mistfile: projects commit their mistfile, so a backup in the project root shows
+# up as an untracked file and trips the CheckUntrackedFiles step of their own
+# mist release.
 #
 # The iomode has to be passed as a flat list: spew's `%args = splice(@_, 0, @_-1)`
 # takes a hashref as a single odd element, leaving $args{iomode} undef and
 # silently writing bytes - which would mangle a mistfile that the matching
 # '<:utf8' slurp had decoded.
 sub _write_mistfile {
-  my ( $file, $content ) = @_;
+  my ( $file, $backup, $content ) = @_;
 
-  my $backup = $file->dir->file( $file->basename . '.bak' );
   copy( "$file", "$backup" )
     or croak "Can't back $file up to $backup: $!";
 
+  # Staged in the target's own directory: rename is only atomic within a single
+  # filesystem, and the workspace may be on another one.
   my $tmp = $file->dir->file( $file->basename . '.tmp' );
-  $tmp->spew( iomode => '>:utf8', $content );
+  unless ( eval { $tmp->spew( iomode => '>:utf8', $content ); 1 } ) {
+    my $error = $@;
+    $tmp->remove if -e "$tmp";  # else the leftover is itself untracked cruft
+    croak "Can't write ${tmp}: ${error}";
+  }
 
   rename( "$tmp", "$file" )
     or croak "Can't move $tmp onto $file: $!";
