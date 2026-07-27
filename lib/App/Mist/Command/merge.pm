@@ -114,12 +114,6 @@ sub execute {
       goto MISTFILE_DONE;
     }
 
-    my $mistfile = $our_mistfile->slurp( iomode => '<:utf8' );
-    my $spec = $other_mistfile->slurp( iomode => '<:utf8' );;
-
-    my $distname = $dist_info->as_module_name;
-    $spec =~ s/\n(?!\n|$)/\n  /g; # indent merged file
-
     # construct the most convenient path to store
     my $distpath = dir( $path )->resolve->absolute;
     my $dev_home = dir( $ENV{HOME} )->resolve->absolute;
@@ -129,7 +123,36 @@ sub execute {
       $distpath->relative( $ctx->project_root );
     }
 
-    my $merged = sprintf <<'MERGE_SPEC', ( $distname ) x 2, $distpath, $spec, $distname;
+    $our_mistfile->spew({ iomode => '<:utf8' }, _splice_merge_block(
+      $our_mistfile->slurp( iomode => '<:utf8' ),
+      $dist_info->as_module_name,
+      $distpath,
+      $other_mistfile->slurp( iomode => '<:utf8' ),
+    ));
+  }
+
+  print "\nPlease run\n  mist compile\nas mistfile might have changed\n";
+
+ MISTFILE_DONE:
+
+  $project->cleanup if $project;
+}
+
+# Render dist $distname's merge block from $spec - the dist's own mistfile - and
+# splice it into $mistfile, replacing that dist's existing block or appending a
+# new one.
+#
+# Both markers are anchored at column 0. Embedding a mistfile indents every line
+# of it, so a column-0 marker is top-level by construction while a nested one
+# always carries at least two spaces: the anchor is what keeps this from binding
+# to a subordinate block, where the next merge of the dist owning the enclosing
+# block would regenerate the subtree and silently drop what we wrote.
+sub _splice_merge_block {
+  my ( $mistfile, $distname, $distpath, $spec ) = @_;
+
+  $spec =~ s/\n(?!\n|$)/\n  /g; # indent merged file
+
+  my $merged = sprintf <<'MERGE_SPEC', ( $distname ) x 2, $distpath, $spec, $distname;
 ### <<<[%s] - keep this line intact
 merge '%s' => sub {
   # generated code block - do not edit
@@ -140,17 +163,11 @@ merge '%s' => sub {
 ### [%s]>>> - keep this line intact
 MERGE_SPEC
 
-    $mistfile =~ s{### <<<\[(${distname})\].*?### \[\1\]>>>.*?(?:\n|$)}
-                  {$merged}s or $mistfile .= "\n\n${merged}";
+  $mistfile =~ s{^### <<<\[(\Q${distname}\E)\].*?^### \[\1\]>>>[^\n]*(?:\n|\z)}
+                {$merged}sm
+    or $mistfile .= "\n\n${merged}";
 
-    $our_mistfile->spew({ iomode => '<:utf8' }, $mistfile );
-  }
-
-  print "\nPlease run\n  mist compile\nas mistfile might have changed\n";
-
- MISTFILE_DONE:
-
-  $project->cleanup if $project;
+  return $mistfile;
 }
 
 1;
@@ -181,7 +198,12 @@ F<mistfile>:
 
 This is how those C<merge> blocks are created in the first place -- see the
 C<merge> directive of the mistfile DSL. Re-running C<merge> on a project
-whose block already exists refreshes it in place.
+whose block already exists refreshes that block in place.
+
+The block written is always a top-level one. A F<mistfile> can also carry
+I<subordinate> blocks for the same dist - nested inside the block of a
+sibling that merges it too, and owned by that sibling's F<mistfile> - and
+C<merge> neither binds to nor rewrites those.
 
 Because the F<mistfile> changes, C<merge> reminds you to run
 L<mist compile|App::Mist::Command::compile> afterwards.
