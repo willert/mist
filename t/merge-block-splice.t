@@ -7,6 +7,9 @@ use Test::More;
 use FindBin ();
 use lib "$FindBin::Bin/lib";
 
+use File::Temp qw/ tempdir /;
+use Path::Class qw/ dir /;
+
 # `mist merge` splices a marker-delimited block for the merged dist into the
 # consumer's mistfile. _splice_merge_block is the pure step: it renders the block
 # and either replaces the dist's existing top-level block or appends a new one.
@@ -128,6 +131,94 @@ REPEATED_MERGE_IS_IDEMPOTENT: {
   my $twice = splice_block( $once );
 
   is $twice, $once, 'merging an unchanged dist twice leaves the mistfile alone';
+}
+
+# --- write-path guards ------------------------------------------------------
+
+# The splice builds its output from its input, so it cannot lose content on its
+# own - it loses content when it is handed the wrong arguments. Path::Class'
+# slurp returns a list of lines in list context, so a slurp inlined into the
+# call arguments shifts the mistfile into $mistfile=line 1, $distname=line 2,
+# $spec=line 3 and drops the rest as surplus args. That silently rewrote a
+# 268-line mistfile down to its first three lines. These guards make the whole
+# class loud instead.
+sub splice_dies {
+  my @args = @_;
+  local $@;
+  eval { App::Mist::Command::merge::_splice_merge_block( @args ); 1 };
+  return "$@";
+}
+
+FIXED_ARITY: {
+  my $mistfile = "perl '5.20.3';\n\nnotest 'Sub::Name';\n\nassert { 1 };\n";
+
+  like splice_dies( split /^/, $mistfile ),
+    qr/takes 3 arguments, got 5/,
+    'a list-context slurp in the argument list dies on arity';
+  like splice_dies( $mistfile, 'WeCARE::Env' ),
+    qr/takes 3 arguments, got 2/, 'too few arguments dies too';
+
+  # The exact shape of the regression: line 2 of a mistfile is blank, so it
+  # arrived as the dist name.
+  like splice_dies( "perl '5.20.3';\n", "\n", "notest 'Sub::Name';\n" ),
+    qr/blank dist name/, 'and a blank dist name is refused on its own';
+}
+
+BLANK_OR_MULTILINE_DIST_NAME: {
+  like splice_dies( '', '', 'spec' ), qr/blank dist name/, 'empty name refused';
+  like splice_dies( '', '   ', 'spec' ), qr/blank dist name/, 'whitespace name refused';
+  like splice_dies( '', undef, 'spec' ), qr/blank dist name/, 'undef name refused';
+  like splice_dies( '', "Foo\nBar", 'spec' ), qr/multi-line dist name/,
+    'a name spanning lines is refused';
+}
+
+# Independent of how the inputs went wrong: if a rewrite would drop a top-level
+# block that is not the one being merged, refuse to hand it back.
+REFUSES_TO_DROP_TOP_LEVEL_BLOCKS: {
+  my $before = splice_block( '', dist => 'Other::Dist' )
+             . "\n" . splice_block( '' );
+
+  is count_markers( $before, 'Other::Dist' ), 1, 'fixture has the sibling block';
+
+  # Splicing WeCARE::Env against the full file keeps Other::Dist, as it must.
+  my $ok = splice_block( $before, spec => "prepend 'X';\n" );
+  is count_markers( $ok, 'Other::Dist' ), 1, 'a normal rewrite keeps it';
+
+  # Hand the guard the regression's actual outcome - a mistfile rewritten down to
+  # its first line - with Other::Dist as the merge target, so the block it must
+  # not have lost is WeCARE::Env.
+  my $err = do {
+    local $@;
+    eval {
+      App::Mist::Command::merge::_assert_only_target_block_changed(
+        $before, "perl '5.20.3';\n", 'Other::Dist' );
+      1;
+    };
+    "$@";
+  };
+  like $err, qr/would drop top-level merge block\(s\).*WeCARE::Env/,
+    'a rewrite that drops a foreign top-level block is refused';
+}
+
+WRITE_KEEPS_A_BACKUP: {
+  my $dir  = dir( tempdir( 'mist-mistwrite-XXXXXX', TMPDIR => 1, CLEANUP => 1 ));
+  my $file = $dir->file( 'mistfile' );
+  $file->spew( iomode => '>:utf8', "perl '5.20.3';\n# umlaut: \x{e4}\n" );
+
+  App::Mist::Command::merge::_write_mistfile( $file, "rewritten\n" );
+
+  is $file->slurp( iomode => '<:utf8' ), "rewritten\n", 'the new content lands';
+  is $dir->file( 'mistfile.bak' )->slurp( iomode => '<:utf8' ),
+    "perl '5.20.3';\n# umlaut: \x{e4}\n",
+    'the previous content is kept in mistfile.bak, decoded intact';
+  ok ! -e $dir->file( 'mistfile.tmp' )->stringify,
+    'no temp file is left behind';
+
+  # Round trip a non-ASCII rewrite: spew's hashref-iomode form silently writes
+  # bytes, which would mangle what the matching '<:utf8' slurp decoded.
+  App::Mist::Command::merge::_write_mistfile( $file, "# \x{2014} \x{e4}\n" );
+  is $file->slurp( iomode => '<:utf8' ), "# \x{2014} \x{e4}\n",
+    'wide characters survive the write/read round trip';
 }
 
 done_testing;

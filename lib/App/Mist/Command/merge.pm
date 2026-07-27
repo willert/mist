@@ -5,6 +5,7 @@ use 5.010;
 
 use App::Mist -command;
 
+use Carp qw/ croak /;
 use Path::Class qw/ dir file /;
 use File::Spec::Functions qw/ catfile /;
 use File::Basename qw/ basename /;
@@ -114,10 +115,14 @@ sub execute {
       goto MISTFILE_DONE;
     }
 
-    $our_mistfile->spew({ iomode => '<:utf8' }, _splice_merge_block(
-      $our_mistfile->slurp( iomode => '<:utf8' ),
-      $dist_info->as_module_name,
-      $other_mistfile->slurp( iomode => '<:utf8' ),
+    # slurp is context-sensitive: in list context it returns one value per line.
+    # These have to reach scalars before being passed on - inlined into the call
+    # below, the first one explodes into one argument per line of the mistfile.
+    my $mistfile = $our_mistfile->slurp( iomode => '<:utf8' );
+    my $spec     = $other_mistfile->slurp( iomode => '<:utf8' );
+
+    _write_mistfile( $our_mistfile, _splice_merge_block(
+      $mistfile, $dist_info->as_module_name, $spec
     ));
   }
 
@@ -138,7 +143,21 @@ sub execute {
 # to a subordinate block, where the next merge of the dist owning the enclosing
 # block would regenerate the subtree and silently drop what we wrote.
 sub _splice_merge_block {
+  # Fixed arity, checked: Path::Class' slurp returns a list of lines in list
+  # context, so passing one straight into this call silently shifts the mistfile
+  # into $mistfile-is-line-1, $distname-is-line-2, $spec-is-line-3 and drops the
+  # rest as surplus arguments. That wrote a mistfile down to its first three lines.
+  croak sprintf 'BUG: _splice_merge_block takes 3 arguments, got %d', scalar @_
+    if @_ != 3;
+
   my ( $mistfile, $distname, $spec ) = @_;
+
+  # A blank name renders `### <<<[]` markers and `merge '' => sub`, which will not
+  # parse. Refuse rather than write unparseable code into hand-authored source.
+  croak 'BUG: refusing to write a merge block with a blank dist name'
+    unless defined $distname and $distname =~ /\S/;
+  croak "BUG: refusing to write a merge block for multi-line dist name '${distname}'"
+    if $distname =~ /\n/;
 
   $spec =~ s/\n(?!\n|$)/\n  /g; # indent merged file
 
@@ -152,11 +171,63 @@ merge '%s' => sub {
 ### [%s]>>> - keep this line intact
 MERGE_SPEC
 
+  my $original = $mistfile;
+
   $mistfile =~ s{^### <<<\[(\Q${distname}\E)\].*?^### \[\1\]>>>[^\n]*(?:\n|\z)}
                 {$merged}sm
     or $mistfile .= "\n\n${merged}";
 
+  _assert_only_target_block_changed( $original, $mistfile, $distname );
+
   return $mistfile;
+}
+
+# The backstop for the whole class of rewrite bug: a merge may only ever touch
+# $distname's own top-level block, so every other top-level block must come out
+# the far side, and none may be invented. Cheap, and it fails loudly on a rewrite
+# that would otherwise silently discard hand-authored source.
+sub _assert_only_target_block_changed {
+  my ( $before, $after, $distname ) = @_;
+
+  my %was = map { $_ => 1 } $before =~ m{^### <<<\[([^\]\n]*)\]}mg;
+  my %now = map { $_ => 1 } $after  =~ m{^### <<<\[([^\]\n]*)\]}mg;
+  delete $was{ $distname };
+  delete $now{ $distname };
+
+  if ( my @lost = sort grep { not $now{$_} } keys %was ) {
+    croak sprintf 'BUG: refusing to write mistfile, it would drop top-level '
+      . 'merge block(s): %s', join ', ', @lost;
+  }
+  if ( my @invented = sort grep { not $was{$_} } keys %now ) {
+    croak sprintf 'BUG: refusing to write mistfile, it would invent top-level '
+      . 'merge block(s): %s', join ', ', @invented;
+  }
+
+  return;
+}
+
+# The mistfile is hand-authored source that no generated artefact can
+# reconstruct, so keep the previous content in mistfile.bak and swap the new one
+# in by rename. A consumer without version control can then still recover.
+#
+# The iomode has to be passed as a flat list: spew's `%args = splice(@_, 0, @_-1)`
+# takes a hashref as a single odd element, leaving $args{iomode} undef and
+# silently writing bytes - which would mangle a mistfile that the matching
+# '<:utf8' slurp had decoded.
+sub _write_mistfile {
+  my ( $file, $content ) = @_;
+
+  my $backup = $file->dir->file( $file->basename . '.bak' );
+  copy( "$file", "$backup" )
+    or croak "Can't back $file up to $backup: $!";
+
+  my $tmp = $file->dir->file( $file->basename . '.tmp' );
+  $tmp->spew( iomode => '>:utf8', $content );
+
+  rename( "$tmp", "$file" )
+    or croak "Can't move $tmp onto $file: $!";
+
+  return;
 }
 
 1;
