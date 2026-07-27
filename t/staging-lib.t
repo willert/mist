@@ -124,23 +124,41 @@ NO_LIVE_GENERATION_YET: {
     'and no perl5/ is created for it to migrate aside' );
 }
 
+sub command_source {
+  my ( $command ) = @_;
+  my $file = File::Spec->catfile( $FindBin::Bin, File::Spec->updir,
+    'lib', 'App', 'Mist', 'Command', "${command}.pm" );
+  open my $fh, '<', $file or die "open $file: $!";
+  my $source = do { local $/; <$fh> };
+  close $fh;
+  return $source;
+}
+
 INJECT_AND_MERGE_USE_IT: {
   # The staging lib only helps where it is wired in, and the wiring is a single
   # constructor argument that reads almost the same either way.
-  my $lib = File::Spec->catdir( $FindBin::Bin, File::Spec->updir, 'lib' );
-
   for my $command (qw/ inject merge /) {
-    my $file = File::Spec->catfile(
-      $lib, 'App', 'Mist', 'Command', "${command}.pm" );
-    open my $fh, '<', $file or die "open $file: $!";
-    my $source = do { local $/; <$fh> };
-    close $fh;
+    my $source = command_source( $command );
 
     like( $source, qr/local_lib \s* => \s* \$ctx->staging_lib/x,
       "$command resolves into the staging lib" );
     unlike( $source, qr/local_lib \s* => \s* \$ctx->local_lib/x,
       "$command never installs into the live environment" );
   }
+}
+
+UPGRADE_DELEGATES_THE_INSTALL: {
+  # `mist upgrade` cannot resolve into a throwaway - changing the live
+  # environment is its whole purpose - so it keeps the same invariant the other
+  # way round: it decides what lags, then hands the laggards to ./mpan-install,
+  # which builds them into a fresh generation and promotes it atomically.
+  # (`mist local` is the deliberate exception and does still install in place.)
+  my $source = command_source( 'upgrade' );
+
+  unlike( $source, qr/local_lib \s* => \s* \$ctx->local_lib/x,
+    'upgrade no longer drives cpanm at the live environment' );
+  like( $source, qr/system\( \s* "\$installer"/x,
+    'upgrade hands the outdated set to ./mpan-install' );
 }
 
 done_testing;

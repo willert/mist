@@ -7,6 +7,11 @@ Revision history for App::Mist
     so a promoted generation stays immutable and only `./mpan-install` populates
     `perl5/`. An inject no longer doubles as an install of that module.
 
+  - `mist upgrade` stops installing into the live `perl5/` too: it still decides
+    which modules lag behind `mpan-dist`, but hands them to `./mpan-install` as a
+    targeted install, so an upgrade lands in a fresh generation promoted
+    atomically instead of mutating the running one in place.
+
 0.50 2026-07-27T17:28:56Z
 
   - packaging: mist builds with ExtUtils::MakeMaker, set explicitly, rather than
