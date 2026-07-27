@@ -1,6 +1,16 @@
 name = "App-Mist"
 
 no_github_issues = true
+
+# Set explicitly rather than inheriting Minilla's default of ModuleBuildTiny.
+# MBT has to be vendored into mpan-dist along with ExtUtils::{Helpers,Config,
+# InstallPaths} - four tarballs committed to the mirror for a build toolchain -
+# where a mist project already carries ExtUtils::MakeMaker. EUMM also installs
+# bin/ and sbin/, which MBT refuses, so it is the right default for mist-managed
+# projects generally, not just this one.
+module_maker = "ExtUtilsMakeMaker"
+
+# EUMM's EXE_FILES shape: globs for absent dirs simply match nothing.
 script_files = ['bin/*', 'sbin/*', 'script/*']
 
 [release]
