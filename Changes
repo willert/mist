@@ -2,6 +2,8 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+0.50 2026-07-27T17:28:56Z
+
   - packaging: mist builds with ExtUtils::MakeMaker, set explicitly, rather than
     inheriting Minilla's ModuleBuildTiny default; `script_files` now describes EUMM's
     EXE_FILES instead of being read by nothing, and adding a `bin/` script can no
