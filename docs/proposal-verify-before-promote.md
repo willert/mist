@@ -30,12 +30,20 @@ candidate; nothing currently gets to vote on it.
 
 ## Where this came from
 
-A 2026-07-27 session tracing `docs/bug-init-creates-pregeneration-libdir.md`,
-which ended in the finding that `mist inject` and `mist merge` install into the
-*live* generation (`App::Mist::Context::_build_local_lib` resolves the selector
-symlink), bypassing the stage-then-swap discipline every other build path
-follows. Asking "could we test the build before committing to it" fell out of
-that discussion, and answering it settled the inject/merge question.
+A 2026-07-27 session investigating a fresh project whose first `mist init`
+aborted and left `perl5/<arch_path>` as a real directory. `mist inject` had
+created it: `init` injects before it runs `./mpan-install`, so cpanm's
+`--local-lib-contained` made the selector path as a plain directory before the
+generation ladder existed, and the installer then found a real directory where
+its symlink belongs and took the pre-generation migration path, renaming it
+aside as `.legacy-<pid>`.
+
+Tracing that ended in the wider finding that `mist inject` and `mist merge`
+install into the *live* generation (`App::Mist::Context::_build_local_lib`
+resolves the selector symlink), bypassing the stage-then-swap discipline every
+other build path follows. Asking "could we test the build before committing to
+it" fell out of that discussion, and answering it settled the inject/merge
+question.
 
 ## What already exists, and why this is smaller than it looks
 

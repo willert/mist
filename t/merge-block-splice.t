@@ -19,7 +19,7 @@ use Path::Class qw/ dir /;
 # inside siblings that merge D themselves - and an unanchored first-match scan
 # writes the top-level result into one of those instead. The next `mist merge S`
 # then regenerates S's whole subtree from S's own mistfile and drops it, both
-# commands exiting 0. See docs/bug-merge-block-placement.md.
+# commands exiting 0.
 eval { require App::Mist::Command::merge; 1 }
   or plan skip_all => "cannot load App::Mist::Command::merge: $@";
 
