@@ -5,7 +5,9 @@ Revision history for App::Mist
   - packaging: mist builds with ExtUtils::MakeMaker, set explicitly, rather than
     inheriting Minilla's ModuleBuildTiny default; `script_files` now describes EUMM's
     EXE_FILES instead of being read by nothing, and adding a `bin/` script can no
-    longer fail regeneration mid-release the way ModuleBuildTiny does with one.
+    longer fail regeneration mid-release the way ModuleBuildTiny does with one. The
+    cpanfile's hand-written EUMM configure floor is dropped with it: Minilla stamps
+    the maker's own floor into META.json, which always superseded it.
 
 0.49 2026-07-27T16:12:04Z
 

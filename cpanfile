@@ -32,7 +32,3 @@ requires 'Probe::Perl';
 requires 'Minilla' => '3.1.2';
 requires 'Software::License' => '0.102250';
 requires 'Version::Next';
-
-on 'configure' => sub {
-  requires "ExtUtils::MakeMaker" => "6.30";
-};
