@@ -46,7 +46,7 @@ ERROR_MSG
 
 use App::Cmd::Setup -app;
 
-our $VERSION = '0.48';
+our $VERSION = '0.49';
 
 use App::Mist::Context;
 
