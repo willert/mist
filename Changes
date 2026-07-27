@@ -2,6 +2,11 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+  - mist merge: the mistfile block for a merged dist now binds only to a top-level
+    `### <<<[Dist]` marker pair rather than the first one anywhere in the file, so a
+    subordinate pair - one nested inside a sibling's merge block - no longer captures
+    the top-level result, where the next merge of that sibling silently discarded it.
+
 0.47 2026-06-22T20:37:02Z
 
   - mpan-install: migrating a legacy `perl5/<arch>` dir to a generation symlink, and
