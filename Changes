@@ -2,6 +2,11 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+  - `mist inject` and `mist merge` no longer install into the live `perl5/`: both
+    resolve into a throwaway lib seeded copy-on-write from the active generation,
+    so a promoted generation stays immutable and only `./mpan-install` populates
+    `perl5/`. An inject no longer doubles as an install of that module.
+
 0.50 2026-07-27T17:28:56Z
 
   - packaging: mist builds with ExtUtils::MakeMaker, set explicitly, rather than

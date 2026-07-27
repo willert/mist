@@ -11,8 +11,11 @@ use Config;
 use Path::Class qw/dir file/;
 use File::HomeDir;
 use File::Which;
+use File::Find ();
 use File::Find::Upwards;
+use File::Path ();
 use File::Share qw/ dist_file /;
+use File::Temp qw/ tempdir /;
 
 BEGIN {
   local $SIG{__WARN__} = sub { };
@@ -174,6 +177,91 @@ sub _build_local_lib {
   my $lib_dir = $self->perl5_base_lib->subdir( $version );
   $lib_dir = $lib_dir->resolve if -l $lib_dir;   # follow a branch/generation link
   return $lib_dir;
+}
+
+
+has staging_lib => (
+  is         => 'ro',
+  isa        => 'Path::Class::Dir',
+  lazy_build => 1,
+);
+
+# The install target for the commands that resolve dependencies in order to
+# vendor them - `mist inject`, `mist merge`. What they produce is the set of
+# tarballs --save-dists writes into mpan-dist; where cpanm installs along the way
+# is incidental, and a throwaway serves. It must not be the live environment:
+# a promoted generation is immutable, and perl5/ belongs to ./mpan-install, which
+# is the only thing that may create one or move the selector symlink onto it.
+#
+# Seeded copy-on-write from the live generation rather than left empty, because
+# --local-lib-contained resolves against the target lib plus the core and nothing
+# else: an empty one reports every non-core module as missing, so it rebuilds the
+# whole dependency tree and raises dependencies the live environment already
+# satisfies at an older version - the opposite of what a plain inject promises.
+# Seeded, cpanm sees what the live environment has and builds only the delta.
+# Before a first install there is nothing to seed from, and an empty lib is then
+# an accurate picture rather than a distorted one.
+#
+# One per mist run, not one per command: `mist init` chains four injects in a
+# single process, and they have to resolve against each other's results the way
+# they did when the live lib was their shared target.
+sub _build_staging_lib {
+  my $self = shift;
+
+  my $container = $self->workspace->subdir( 'staging' );
+  $container->mkpath;
+
+  # tempdir gives the container; the staging lib is the not-yet-existing child
+  # that cp creates, since `cp SRC DEST` copies *into* an existing DEST.
+  my $staging = dir(
+    tempdir( 'lib-XXXXXX', DIR => "$container", CLEANUP => 1 )
+  )->subdir( 'perl5' );
+
+  my $seed = $self->local_lib;
+  unless ( -d "$seed" ) {
+    $staging->mkpath;
+    return $staging;
+  }
+
+  # Hard-link the seed so unchanged files share inodes - the same copy-on-write
+  # seeding a new generation uses, and safe for the same reason: ExtUtils::Install
+  # unlinks or renames a file before writing it, so an installed file is replaced
+  # rather than written through the link into the live environment. Hard links
+  # need a single filesystem, so a workspace on another one falls back to a real
+  # copy: slower, and worth saying so, but still correct.
+  if ( system( cp => '--link', '--archive', "$seed", "$staging" ) != 0 ) {
+    File::Path::rmtree( "$staging" );
+    printf STDERR "Can't hard-link a staging lib from %s, copying it instead\n", $seed;
+    system( cp => '--archive', "$seed", "$staging" ) == 0
+      or die "$0: can't seed a staging lib from $seed\n";
+  }
+
+  _shed_seeded_bookkeeping( $staging );
+
+  return $staging;
+}
+
+# Whatever the seed shares that gets written *in place* would reach the live
+# environment through its hard link. Two things do: perllocal.pod, which the
+# install step appends to, and cpanm's .meta receipts, which it rewrites with a
+# truncating open. Neither holds anything the staging lib needs - cpanm writes
+# both itself - so drop them and leave the staging lib owning what it writes.
+sub _shed_seeded_bookkeeping {
+  my ( $lib ) = @_;
+
+  my @receipts;
+  File::Find::find( sub {
+    if ( -d $_ and $_ eq '.meta' ) {
+      push @receipts, $File::Find::name;
+      $File::Find::prune = 1;
+      return;
+    }
+    unlink $_ if $_ eq 'perllocal.pod';
+  }, "$lib" );
+
+  File::Path::rmtree( \@receipts ) if @receipts;
+
+  return;
 }
 
 

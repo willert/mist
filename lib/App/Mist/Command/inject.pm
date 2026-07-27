@@ -17,7 +17,7 @@ sub usage_desc { '%c inject %o <module-spec>...' }
 sub opt_spec {
   return (
     [ 'from=s@' => "resolve from this peer project's mpan-dist instead of CPAN (mirror-only; repeatable)" ],
-    [ 'full-dependency-tree' => "raise the target's whole dependency tree to the peer's versions and write a bundle, without touching the live env (requires --from)" ],
+    [ 'full-dependency-tree' => "raise the target's whole dependency tree to the peer's versions and write a bundle, resolving from an empty lib (requires --from)" ],
   );
 }
 
@@ -58,7 +58,11 @@ sub execute {
 
   my $package_manager = Mist::PackageManager::MPAN->new({
     project_root => $ctx->project_root,
-    local_lib    => $ctx->local_lib,
+
+    # Vendoring is the point; installing is not. The install goes to a throwaway
+    # seeded from the live environment, so resolution matches what is installed
+    # while ./perl5 stays untouched - see App::Mist::Context::_build_staging_lib.
+    local_lib    => $ctx->staging_lib,
     workspace    => $ctx->workspace_lib,
 
     # --from sources strictly from the file:// mirrors, never live CPAN: you get
@@ -297,17 +301,19 @@ set lives nowhere in the dependency metadata - and you want that whole set, not
 just what the declarations admit. It requires at least one C<--from> and the long
 name is deliberate: it is a rare rebaseline, not a reflex.
 
-It does B<not> touch the live F<./perl5> and does B<not> install anything. It
-resolves the tree in a clean room (so cpanm walks the whole tree, not just the
-unsatisfied parts) with the peer's mirror consulted first, vendors the resolved
-tarballs into this project's F<mpan-dist/>, and writes the resolved versions as a
-B<bundle> - a floor-spec set you apply later, incrementally and atomically, with
+Like a plain C<inject> it leaves the live F<./perl5> alone, but where that one
+resolves against a throwaway seeded from the live environment, this resolves in
+an B<empty> clean room - so cpanm walks the whole tree rather than only what the
+live environment leaves unsatisfied. It does that with the peer's mirror
+consulted first, vendors the resolved tarballs into this project's
+F<mpan-dist/>, and writes the resolved versions as a B<bundle> - a floor-spec
+set you apply later, incrementally and atomically, with
 C<< ./mpan-install --bundle <id> >>. The versions are inherited as floors, never a
 clone: B's own graph still wins wherever it needs something newer, so the result
 is C<max(your needs, the peer's floors)>, raise-only. The bundle id is printed on
 completion. See L<Mist::Bundle> and L<mist bundle|App::Mist::Command::bundle>.
 
-C<inject> (without C<--full-dependency-tree>) changes three things:
+C<inject> (without C<--full-dependency-tree>) changes two things:
 
 =over
 
@@ -318,19 +324,21 @@ the selected tarball(s) land under F<mpan-dist/authors/id/...>;
 =item *
 
 F<mpan-dist/modules/02packages.details> and its F<.txt.gz> companion are
-re-indexed to point at them;
-
-=item *
-
-the distribution is also installed into the live F<./perl5/>, so an
-C<inject> doubles as an install of that module.
+re-indexed to point at them.
 
 =back
 
-What C<inject> does B<not> do is touch F<cpanfile>. Staging a dist makes it
-I<available>; it does not I<declare> it as a dependency. After injecting,
-add or bump the C<requires> line in F<cpanfile> yourself, then run
-C<mist compile> followed by C<./mpan-install>.
+Both are under F<mpan-dist/>. C<inject> does B<not> install into the live
+F<./perl5/>: it resolves and builds in a throwaway lib seeded from the live
+environment, so cpanm sees what is installed and builds only what is missing,
+while the environment itself is left alone. Environments are built by
+C<./mpan-install> and by nothing else - an injected module becomes I<available>
+to install, and the next C<./mpan-install> is what installs it.
+
+What C<inject> does B<not> do either is touch F<cpanfile>. Staging a dist makes
+it available; it does not I<declare> it as a dependency. After injecting, add or
+bump the C<requires> line in F<cpanfile> yourself, then run C<mist compile>
+followed by C<./mpan-install>.
 
 Everything C<inject> writes under F<mpan-dist/> is version-controlled.
 Commit those files together with the matching F<cpanfile> change -- the

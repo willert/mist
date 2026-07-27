@@ -64,7 +64,11 @@ sub execute {
 
   my $package_manager = Mist::PackageManager::MPAN->new({
     project_root => $ctx->project_root,
-    local_lib    => $ctx->local_lib,
+
+    # The sibling and its call stack are vendored into mpan-dist, not installed
+    # into the live environment: a throwaway seeded from it absorbs the install -
+    # see App::Mist::Context::_build_staging_lib.
+    local_lib    => $ctx->staging_lib,
     workspace    => $ctx->workspace_lib,
     mirror_only  => 1,    # merge resolves strictly from the pinned mpans
   });
@@ -128,7 +132,9 @@ sub execute {
     printf "Previous mistfile kept at %s\n", $backup;
   }
 
-  print "\nPlease run\n  mist compile\nas mistfile might have changed\n";
+  print "\nPlease run\n  mist compile\n  ./mpan-install\n"
+      . "as the mistfile might have changed, and the merged distribution is\n"
+      . "vendored but not installed yet\n";
 
  MISTFILE_DONE:
 
@@ -277,8 +283,12 @@ I<subordinate> blocks for the same dist - nested inside the block of a
 sibling that merges it too, and owned by that sibling's F<mistfile> - and
 C<merge> neither binds to nor rewrites those.
 
-Because the F<mistfile> changes, C<merge> reminds you to run
-L<mist compile|App::Mist::Command::compile> afterwards.
+Like L<mist inject|App::Mist::Command::inject>, C<merge> vendors rather than
+installs. The sibling and its call stack are built in a throwaway lib seeded
+from the live environment, and F<./perl5/> is left to C<./mpan-install>. So a
+merge ends by asking for both C<mist compile>, because the F<mistfile> changed,
+and C<./mpan-install>, which is what puts the merged distribution into the
+environment.
 
 =head1 SEE ALSO
 
