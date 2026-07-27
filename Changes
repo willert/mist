@@ -2,6 +2,11 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+  - tests: t/changes-sanity.t asserts this file's own structure - well-formed version
+    headings, a single release placeholder above them, unique descending versions, and
+    a section for every released tag - so an edit that drops a heading, and with it a
+    release's attribution, fails the suite instead of surfacing after the next release.
+
 0.48 2026-07-27T04:05:18Z
 
   - mist merge: the mistfile block for a merged dist now binds only to a top-level
