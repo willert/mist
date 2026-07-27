@@ -2,6 +2,8 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+0.48 2026-07-27T04:05:18Z
+
   - mist merge: the mistfile block for a merged dist now binds only to a top-level
     `### <<<[Dist]` marker pair rather than the first one anywhere in the file, so a
     subordinate pair - one nested inside a sibling's merge block - no longer captures
