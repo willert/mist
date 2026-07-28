@@ -254,7 +254,11 @@ PROMOTE_REPLACES_A_NAMED_GENERATION: {
   my $base = sandbox();
   my $gens = Mist::Generation::container( $base );
   my $existing = File::Spec->catdir( $gens, "$arch-wip" );
-  touch( $existing, 'old-content' );
+  my $old = touch( $existing, 'old-content' );
+  # Model what is actually on disk: EUMM installs modules read-only. A writable
+  # fixture would let the reclaim pass here while reclaiming nothing in reality.
+  chmod 0444, $old;
+  chmod 0555, $existing;
   my $build = Mist::Generation::build_dir( $gens, "$arch-wip" );
   touch( $build, 'new-content' );
 
@@ -293,14 +297,20 @@ ACTIVATE_MIGRATES_A_LEGACY_LIB_DIR: {
   mkpath( File::Spec->catdir( $gens, "$arch-1" ) );
   my $generic = File::Spec->catdir( $base, $arch );
   mkpath( $generic );                       # pre-ladder real directory
-  touch( $generic, 'legacy-file' );
+  my $legacy = touch( $generic, 'legacy-file' );
+  # Read-only, as every EUMM-installed module is. This is the fixture detail that
+  # decides whether the reclaim is real: File::Path's safe mode skips anything the
+  # process cannot write, so a writable fixture passes while the live migration
+  # leaves the whole tree behind.
+  chmod 0444, $legacy;
+  chmod 0555, $generic;
 
   Mist::Generation::activate(
     $generic, File::Spec->catdir( 'generations', "$arch-1" ) );
 
   ok( -l $generic, 'a legacy real lib dir becomes a selector symlink' );
   is_deeply( [ glob "${generic}.legacy-*" ], [],
-    'and the old directory entry is reclaimed' );
+    'and the read-only old directory entry is still fully reclaimed' );
 }
 
 ACTIVATE_REFUSES_WHAT_IT_CANNOT_CLASSIFY: {

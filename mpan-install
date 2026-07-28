@@ -27737,10 +27737,51 @@ sub promote {
   rename( $build, $final )
     or die "Failed to promote $build to $final: $!";
 
-  File::Path::rmtree( $superseded, { safe => 1, error => \my $errors } )
-    if defined $superseded;
+  if ( defined $superseded ) {
+    my $why = reclaim( $superseded );
+    warn "${why}\nIt shares storage with the new generation, so it costs no disk;\n"
+       . "remove it by hand when convenient.\n"
+      if defined $why;
+  }
 
   return $final;
+}
+
+# Best-effort removal of a tree we have finished with - a superseded generation, a
+# migrated legacy lib dir. Returns undef on success, else a diagnostic naming what
+# stopped it.
+#
+# Deliberately NOT File::Path's safe mode. safe skips every file the process
+# cannot *write* (File/Path.pm's `!(-l $root || -w $root)`), and EUMM installs
+# modules 0444, so safe mode reclaims nothing at all - which is how a migrated
+# legacy tree used to survive entire while reporting that its files were "not
+# yours to delete". They were ours; they were merely read-only.
+#
+# -w is the wrong test anyway: deletability is governed by the containing
+# directory, never by a file's own mode or owner. Forcing through therefore
+# removes what is ours (chmod'ing as needed), and a tree genuinely owned by
+# someone else still fails - chmod needs ownership, and mist refuses to run as
+# root (Mist::Script::install: `die ... if $> == 0`), so it can never force its
+# way into another user's files. What changes is that the failure is now
+# explained instead of guessed at.
+sub reclaim {
+  my ( $dir ) = @_;
+
+  File::Path::rmtree( $dir, { error => \my $errors } );
+  return undef unless -e $dir;
+
+  my @why;
+  for my $problem ( @{ $errors || [] } ) {
+    my ( $file, $message ) = %$problem;
+    push @why, length $file ? "  ${file}: ${message}" : "  ${message}";
+  }
+  push @why, '  (rmtree reported no diagnostics)' unless @why;
+
+  my $shown = @why > 5 ? 5 : scalar @why;
+  return join qq{\n},
+    "Could not fully remove ${dir}:",
+    @why[ 0 .. $shown - 1 ],
+    ( @why > $shown ? sprintf( '  ... and %d more', scalar( @why ) - $shown ) : () );
 }
 
 # Atomic activation: stage the symlink under a temp name, then rename it over the
@@ -27786,11 +27827,11 @@ sub activate {
         or warn "Could not restore $generic after a failed symlink: $!\n";
       die "Failed to link $generic to generation $gen_relpath: $err\n";
     }
-    File::Path::rmtree( $aside, { safe => 1, error => \my $errors } );
-    warn "Migrated the legacy $generic to a generation symlink. Could not fully\n"
-       . "remove the old copy at $aside (some files are not yours to delete); it\n"
-       . "shares storage with the new generation and is safe to remove by hand.\n"
-      if -e $aside;
+    if ( my $why = reclaim( $aside ) ) {
+      warn "Migrated the legacy $generic to a generation symlink.\n${why}\n"
+         . "The old copy is hard-linked into the new generation, so it costs no\n"
+         . "disk; remove it by hand when convenient.\n";
+    }
     return;
   }
 

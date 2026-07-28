@@ -14,6 +14,14 @@ Revision history for App::Mist
     upgrading intact. Its cpan-outdated step also reports why it failed rather
     than dying bare.
 
+  - Reclaiming a superseded generation, or a legacy lib dir migrated to a
+    selector symlink, actually removes it now. Both used `File::Path`'s `safe`
+    mode, which skips every file the process cannot write - and EUMM installs
+    modules read-only, so the reclaim removed nothing while reporting that the
+    files were "not yours to delete". They were; deletability depends on the
+    containing directory, not on a file's mode or owner. A failure now names what
+    stopped it instead of guessing.
+
   - `share/cpan-outdated` is rebuilt from cpan-outdated 0.32 (was 0.28), which
     reads a `file://` index straight off disk instead of through LWP. The packed
     0.28 could never read the only kind of mirror mist hands it, so plain
