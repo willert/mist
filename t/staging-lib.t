@@ -147,18 +147,30 @@ INJECT_AND_MERGE_USE_IT: {
   }
 }
 
-UPGRADE_DELEGATES_THE_INSTALL: {
-  # `mist upgrade` cannot resolve into a throwaway - changing the live
-  # environment is its whole purpose - so it keeps the same invariant the other
-  # way round: it decides what lags, then hands the laggards to ./mpan-install,
-  # which builds them into a fresh generation and promotes it atomically.
+UPGRADE_BUILDS_A_GENERATION: {
+  # `mist upgrade` cannot resolve into a throwaway - changing the live environment
+  # is its whole purpose - so it keeps the invariant the other way round: it builds
+  # the laggards into a fresh generation and promotes it only on success, through
+  # the same ladder ./mpan-install uses rather than by invoking that artifact.
   # (`mist local` is the deliberate exception and does still install in place.)
   my $source = command_source( 'upgrade' );
 
   unlike( $source, qr/local_lib \s* => \s* \$ctx->local_lib/x,
-    'upgrade no longer drives cpanm at the live environment' );
-  like( $source, qr/system\( \s* "\$installer"/x,
-    'upgrade hands the outdated set to ./mpan-install' );
+    'upgrade never drives cpanm at the live environment' );
+  like( $source, qr/Mist::Generation::stage\(/,
+    'upgrade stages a generation for the install' );
+  like( $source, qr/Mist::Generation::promote\(/,
+    '...promotes it' );
+  like( $source, qr/Mist::Generation::activate\(/,
+    '...and activates it by repointing the selector' );
+
+  # The promote must be unreachable when the install failed, or a broken upgrade
+  # becomes the live environment. Order, not adjacency: the bail-out has to come
+  # first, but nothing says it must be the immediately preceding statement.
+  my $bail    = index( $source, 'if $install_error' );
+  my $promote = index( $source, 'Mist::Generation::promote' );
+  ok( $bail > 0 && $promote > $bail,
+    'a failed install bails out before the promote' );
 }
 
 done_testing;

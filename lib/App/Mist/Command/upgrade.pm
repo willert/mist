@@ -9,6 +9,8 @@ use Path::Class qw/ dir /;
 use File::Copy qw/ copy /;
 
 use Mist::CPAN::PackageIndex;
+use Mist::Generation ();
+use Mist::PackageManager::MPAN;
 use Mist::Role::CPAN::PackageIndex ();
 
 use CPAN::PackageDetails;
@@ -193,12 +195,18 @@ sub _read_index {
 # install) is simply not reported, so nothing is downgraded.
 #
 # Deciding what is stale is upgrade's own job - that comparison is exactly what
-# mpan-install cannot make, since it only reinstalls what the cpanfile leaves
-# unsatisfied. Performing the install is not: the laggards are handed to
-# ./mpan-install as a targeted install, so they are built into a fresh
-# copy-on-write generation and promoted atomically, like every other install.
-# Driving cpanm at the live lib here instead would mutate a promoted generation
-# in place and leave a failed upgrade half-applied to the running environment.
+# mpan-install cannot make, since cpanm only upgrades a dist it is *named*, never
+# one reached as an already-satisfied prereq of something else. Mutating the live
+# environment is not upgrade's job: the laggards are built into a fresh
+# copy-on-write generation, which is promoted and activated only once the build
+# succeeds, so a failed upgrade leaves the environment it was upgrading intact and
+# the generation it would have replaced is still there to roll back to.
+#
+# That goes through Mist::Generation - the same ladder ./mpan-install uses - rather
+# than by shelling out to ./mpan-install itself. The installer is a committed build
+# artifact frozen at whenever someone last ran `mist compile`, so delegating to it
+# would make this atomicity depend on the artifact's age: against a project still
+# vendoring a pre-generation installer the guarantee would silently not hold.
 #
 # cpan-outdated still reads the live lib: what is installed *now* is the question
 # being asked, so that one genuinely wants the active generation.
@@ -213,9 +221,15 @@ sub _catch_up_local_lib {
     '--local-lib-contained' => $ctx->local_lib,
   );
 
-  my ( $stdout, $stderr, $exit ) = capture {
-    system( $cpan_outdated, @cpo_args ) == 0 or die;
+  # Dying inside the capture block would throw away the very output that explains
+  # the failure, leaving a bare "Died". Capture first, then report.
+  my ( $stdout, $stderr, $status ) = capture {
+    system( $cpan_outdated, @cpo_args );
   };
+
+  die sprintf "%s: cpan-outdated failed (exit %d) comparing %s against %s\n%s",
+    $0, $status >> 8, $ctx->local_lib, $mpan_dist_url, $stderr
+    if $status != 0;
 
   my @outdated = split qq{\n}, $stdout;
 
@@ -224,28 +238,57 @@ sub _catch_up_local_lib {
     return;
   }
 
-  # cpan-outdated emits distribution paths (AUTHOR/Dist-1.00.tar.gz), not module
-  # names, and that is what we want to forward: mpan-install's targeted-install
-  # path keys its core-satisfied filter and its notest/ccflags decorations on
-  # bare module names, so a path passes through untouched. A module name would
-  # be matched against Module::CoreList and a vendored-newer-than-core module -
-  # exactly the case `mist inject --reinstall` exists for - would be dropped.
-  my $installer = $ctx->project_root->file( 'mpan-install' );
-  die sprintf "%s: no mpan-install in %s - run `mist compile` first\n",
-    $0, $ctx->project_root
-    unless -f "$installer";
+  # @outdated carries cpan-outdated's default form, distribution paths
+  # (AUTHOR/Dist-1.00.tar.gz) rather than module names. Naming the exact tarball is
+  # what makes the upgrade happen at all: cpanm derives its skip decision from the
+  # resolved dist, so a path pins the release the index offered, with no chance of
+  # the request being read as already satisfied.
+  my $perl5_base = $ctx->perl5_base_lib->stringify;
+  my $arch_path  = Mist::Generation::arch_path();
+  my $container  = Mist::Generation::container( $perl5_base );
+  my $gen_name   = Mist::Generation::next_name(
+    container => $container,
+    arch_path => $arch_path,
+  );
 
-  printf "Upgrading %d outdated module%s through %s\n",
-    scalar @outdated, ( @outdated == 1 ? '' : 's' ), $installer;
+  printf "Upgrading %d outdated distribution%s into generation %s\n",
+    scalar @outdated, ( @outdated == 1 ? '' : 's' ), $gen_name;
 
-  # MIST_APP_ROOT would point the installer at whichever project exported it -
-  # another project's sourced mist env - instead of this one. `mist init` clears
-  # it around its own mpan-install call for the same reason.
-  local $ENV{MIST_APP_ROOT};
-  delete $ENV{MIST_APP_ROOT};
+  my $build = Mist::Generation::stage(
+    build_dir  => Mist::Generation::build_dir( $container, $gen_name ),
+    perl5_base => $perl5_base,
+    container  => $container,
+    arch_path  => $arch_path,
+    gen_name   => $gen_name,
+  );
 
-  system( "$installer", @outdated ) == 0
-    or die "$0: mpan-install failed, ./perl5 is unchanged\n";
+  my $package_manager = Mist::PackageManager::MPAN->new({
+    project_root => $ctx->project_root,
+    local_lib    => dir( $build ),
+    workspace    => $ctx->workspace_lib,
+    mirror_list  => [ $mpan_dist_url ],
+  });
+
+  $package_manager->begin_work;
+  eval { $package_manager->install( @outdated ) };
+  my $install_error = $@;
+  $package_manager->commit;
+
+  # Bail out before promoting: an unpromoted ...-build dir is self-labelling junk,
+  # and the environment this was upgrading is still the active one.
+  die "$0: the upgrade failed, ./perl5 is unchanged:\n${install_error}"
+    if $install_error;
+
+  Mist::Generation::promote(
+    build_dir => $build,
+    final     => Mist::Generation::final_dir( $container, $gen_name ),
+  );
+  Mist::Generation::activate(
+    dir( $perl5_base, $arch_path )->stringify,
+    dir( 'generations', $gen_name )->stringify,
+  );
+
+  printf "Activated generation %s\n", $gen_name;
 
   return;
 }
@@ -302,13 +345,21 @@ so it pulls the newer vendored release in regardless - without the full
 F<perl5/> wipe and cold rebuild that would otherwise be the only way to get
 there.
 
-Deciding I<what> lags is all C<upgrade> does itself. The laggards are then handed
-to C<./mpan-install> as a targeted install, so they are built into a fresh
-copy-on-write generation and activated by the atomic symlink swap like any other
-install: a failed upgrade leaves the environment it was upgrading fully intact,
-and the generation it replaces stays on disk to roll back to. C<upgrade>
-therefore needs a current F<./mpan-install> in the project root - run
-C<mist compile> if there is none.
+Deciding I<what> lags is all C<upgrade> decides. The laggards are then built into
+a fresh copy-on-write generation, seeded from the active one, and that generation
+is promoted and activated by the atomic symlink swap only once the build
+succeeds - so a failed upgrade leaves the environment it was upgrading fully
+intact, and the generation it replaces stays on disk to roll back to.
+
+It runs the same ladder C<./mpan-install> does (L<Mist::Generation>) rather than
+invoking the installer, so the guarantee does not depend on how recently that
+committed artifact was regenerated. What it deliberately does not do is the rest
+of an install: no F<mistfile> assertions, no C<prepare>/C<finalize> scripts, and
+no regeneration of the F<perl5/bin> shims. The wrapper and rc need none - they
+bake the generic C<perl5/E<lt>archE<gt>> path, which resolves through the
+selector this repoints - but a dist whose I<newly> upgraded version ships a
+script it did not ship before will not get a shim until the next
+C<./mpan-install>.
 
 =head2 C<mist upgrade --from> I<PATH> - be like a peer
 

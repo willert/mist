@@ -8,9 +8,11 @@ Revision history for App::Mist
     `perl5/`. An inject no longer doubles as an install of that module.
 
   - `mist upgrade` stops installing into the live `perl5/` too: it still decides
-    which modules lag behind `mpan-dist`, but hands them to `./mpan-install` as a
-    targeted install, so an upgrade lands in a fresh generation promoted
-    atomically instead of mutating the running one in place.
+    which modules lag behind `mpan-dist`, but builds them into a fresh generation
+    that is promoted and activated only on success, instead of reinstalling into
+    the running one in place. A failed upgrade now leaves the environment it was
+    upgrading intact. Its cpan-outdated step also reports why it failed rather
+    than dying bare.
 
   - The copy-on-write generation ladder - naming, seeding, promotion, activation
     and the purge classifier - moves out of the fatpacked installer into
