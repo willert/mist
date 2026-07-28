@@ -95,6 +95,12 @@ sub execute {
     append_module_source( 'Mist::Distribution' => $out );
     append_module_source( 'Mist::Environment'  => $out );
 
+    # The generation ladder is shared code, not installer-private: mist commands
+    # that move the live environment forward call the same module directly, so the
+    # host and the build-master cannot drift apart on how a generation is named,
+    # seeded, promoted or activated.
+    append_module_source( 'Mist::Generation'   => $out );
+
     print $out $ctx->mist_environment->as_code( package => 'DISTRIBUTION' );
 
     append_text_file(

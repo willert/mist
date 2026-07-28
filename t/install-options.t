@@ -46,7 +46,11 @@ ARTIFACT_CARRIES_SYMLINK_ACTIVATION: {
   # Step-1 restructure: per-perl wrapper bodies, atomic symlink activation and
   # the --build-only flag. These reach the committed installer only through
   # `mist compile`, so they double as the drift guard for this changeset.
-  like $src, qr/sub _activate_symlink/,
+  # The ladder now lives in Mist::Generation, shared with the build-master side and
+  # fatpacked in, so these anchors name the module rather than installer-private subs.
+  like $src, qr/package Mist::Generation/,
+    'committed mpan-install carries the shared generation ladder';
+  like $src, qr/sub activate_symlink/,
     'committed mpan-install carries the atomic symlink-activation helper';
   like $src, qr/mist-run-\$arch_path/,
     'committed mpan-install builds per-perl wrapper bodies (mist-run-<ver>-<arch>)';
@@ -65,8 +69,8 @@ ARTIFACT_CARRIES_SWITCH_GUARD: {
 ARTIFACT_CARRIES_GENERATION_INSTALL: {
   # Step-3 default-path CoW generations; reach the committed installer only via
   # `mist compile`, so they double as this changeset's drift guard.
-  like $src, qr/sub _activate_generation/,
-    'committed mpan-install carries the generation-activation helper';
+  like $src, qr/Mist::Generation::activate\(/,
+    'committed mpan-install activates the generation through the shared ladder';
   like $src, qr/generations/,
     'committed mpan-install installs into a perl5/generations/ container';
   like $src, qr/\$\{gen_name\}-build/,
@@ -75,7 +79,7 @@ ARTIFACT_CARRIES_GENERATION_INSTALL: {
     'committed mpan-install stamps a .mist-built-<ts> completion marker';
   like $src, qr/defined \$resume and not \$resume/,
     'committed mpan-install carries the --no-resume clean-rebuild discard';
-  like $src, qr/\$rebuild or \$continue_last_build or -d \$LOCAL_LIB_DIR/,
+  like $src, qr/no_seed\s*=>\s*\(\s*\$rebuild \|\| \$continue_last_build\s*\)/,
     'committed mpan-install carries the --rebuild / --continue-last-build seed-skip';
   like $src, qr/Failed to seed generation from/,
     'committed mpan-install falls back to a copy where hard links are unsupported';

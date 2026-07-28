@@ -10,15 +10,17 @@ use File::Path qw/ mkpath /;
 
 # Loading the command pulls in App::Mist, whose BEGIN needs this repo's perl5 env
 # for the running perl (run this under ./mist-run prove). Skip cleanly otherwise.
-eval { require App::Mist::Command::purge; 1 }
+eval { require App::Mist::Command::purge; require Mist::Generation; 1 }
   or plan skip_all => "cannot load App::Mist::Command::purge: $@";
 
 my $arch  = 'perl-5.20.3-x86_64-linux';
 my $arch2 = 'perl-5.38.0-x86_64-linux';
 
-# --- _generations_to_purge: the pure classifier -----------------------------
+# --- names_to_purge: the pure classifier ------------------------------------
+# It lives in Mist::Generation, which owns the generation naming convention for
+# both halves of mist - `mist purge` here and ./mpan-install --purge on the host.
 
-sub purge_names { App::Mist::Command::purge::_generations_to_purge( @_ ) }
+sub purge_names { Mist::Generation::names_to_purge( @_ ) }
 
 {
   my @names = (

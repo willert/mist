@@ -58,30 +58,22 @@ our $PERL5_BASE_LIB = 'perl5';
 ( $branch ) =  `git status --porcelain --branch` =~ m{## ([\w-]+)}
   if defined $branch and not $branch;
 
-my $arch_path = join( q{-}, 'perl', $Config{version}, $Config{archname} );
+my $arch_path = Mist::Generation::arch_path();
 
 # A generation's final name is perl5/generations/<arch_path>-<id>: a named
 # --branch, else a monotonic counter (highest existing completed counter + 1).
 # It is built under a -build suffix and renamed to the final name only once the
-# build succeeds (the promote step near the end), so an interrupted build is
-# self-labelling - a leftover ...-build dir is junk, never a seed parent or a
-# rollback target - and the counter only ever numbers completed generations.
-my $gen_container = File::Spec->catdir( $PERL5_BASE_LIB, 'generations' );
+# build succeeds (the promote step near the end). See Mist::Generation, which owns
+# the whole ladder so the build-master side cannot drift from it.
+my $gen_container = Mist::Generation::container( $PERL5_BASE_LIB );
 
-my $gen_name;
-if ( defined $branch ) {
-  $gen_name = join( q{-}, $arch_path, $branch );
-} else {
-  my $max = 0;
-  for ( glob File::Spec->catdir( $gen_container, "${arch_path}-*" ) ) {
-    my ( $n ) = ( File::Spec->splitdir( $_ ) )[-1] =~ m/^\Q${arch_path}\E-(\d+)\z/
-      or next;
-    $max = $n if $n > $max;
-  }
-  $gen_name = join( q{-}, $arch_path, $max + 1 );
-}
+my $gen_name = Mist::Generation::next_name(
+  container => $gen_container,
+  arch_path => $arch_path,
+  branch    => $branch,
+);
 
-our $LOCAL_LIB_DIR = File::Spec->catdir( $gen_container, "${gen_name}-build" );
+our $LOCAL_LIB_DIR = Mist::Generation::build_dir( $gen_container, $gen_name );
 
 # Resume an interrupted build. A failed build leaves its ...-build dir behind, and
 # the counter is deterministic (a failure never completes, so a re-run recomputes
@@ -106,57 +98,18 @@ our $LOCAL_LIB_DIR = File::Spec->catdir( $gen_container, "${gen_name}-build" );
 #                the arch of the throwaway pre-re-exec pass.)
 my $discard_leftover = !$continue_last_build
   && ( ( defined $resume and not $resume ) || $rebuild );
-File::Path::rmtree( $LOCAL_LIB_DIR ) if $discard_leftover and -e $LOCAL_LIB_DIR;
-unless ( $rebuild or $continue_last_build or -d $LOCAL_LIB_DIR ) {
 
-  # Seed the new generation copy-on-write from its parent: hard-link the parent's
-  # tree so unchanged files share inodes and only what cpanm replaces costs disk.
-  # The parent is an explicit --parent, else this named branch itself (re-installing
-  # a named generation updates it), else the generation this perl currently runs
-  # (the perl5/<arch_path> symlink, or a legacy real lib dir being migrated), else
-  # nothing on a first install.
-  my $generic_rel = File::Spec->catdir( $PERL5_BASE_LIB, $arch_path );
-  my $seed_from;
-  if ( defined $parent ) {
-    $seed_from = File::Spec->catdir( $gen_container, join( q{-}, $arch_path, $parent ) );
-    die "Parent generation $seed_from doesn't exist\n" unless -d $seed_from;
-  } elsif ( defined $branch and -d File::Spec->catdir( $gen_container, $gen_name ) ) {
-    $seed_from = File::Spec->catdir( $gen_container, $gen_name );
-  } elsif ( -l $generic_rel ) {
-    $seed_from = File::Spec->catdir( $PERL5_BASE_LIB, readlink $generic_rel );
-  } elsif ( -d $generic_rel ) {
-    $seed_from = $generic_rel;
-  }
-
-  if ( $seed_from and -d $seed_from ) {
-    File::Path::mkpath( $gen_container );
-    print "Seeding generation ${gen_name} from $seed_from\n";
-
-    # Hard-link the parent's tree so unchanged files share inodes (cheap on ext4,
-    # XFS, btrfs, ... - safe because cpanm installs files anew rather than editing
-    # in place, so a shared file is never mutated through the parent). On a
-    # filesystem without hard links (FAT, some network/FUSE mounts) the link
-    # fails; fall back to a full copy so the generation is still correct, just
-    # without the disk sharing. A seed that cannot even be copied dies here,
-    # before any activation, so the live environment is left untouched.
-    if ( system( cp => '--link', '--archive', $seed_from, $LOCAL_LIB_DIR ) != 0 ) {
-      File::Path::rmtree( $LOCAL_LIB_DIR );
-      if ( system( cp => '--archive', $seed_from, $LOCAL_LIB_DIR ) != 0 ) {
-        File::Path::rmtree( $LOCAL_LIB_DIR );
-        die "Failed to seed generation from $seed_from\n";
-      }
-    }
-
-    # perllocal.pod is appended to in place, and a .mist-built-* marker belongs to
-    # the generation that wrote it; left hard-linked from the seed they would tie
-    # this generation to its parent. Break those links (perllocal is a regenerable
-    # install log; the marker is rewritten fresh at promote).
-    require File::Find;
-    File::Find::find( sub {
-      unlink $_ if $_ eq 'perllocal.pod' or /^\.mist-built-/;
-    }, $LOCAL_LIB_DIR );
-  }
-}
+Mist::Generation::stage(
+  build_dir  => $LOCAL_LIB_DIR,
+  perl5_base => $PERL5_BASE_LIB,
+  container  => $gen_container,
+  arch_path  => $arch_path,
+  gen_name   => $gen_name,
+  branch     => $branch,
+  parent     => $parent,
+  discard    => $discard_leftover,
+  no_seed    => ( $rebuild || $continue_last_build ),
+);
 
 our $PREPEND_DISTS ||= eval {[ DISTRIBUTION->distinfo->get_prepended_modules ]};
 die '$PREPEND_DISTS not set' . $@ unless $PREPEND_DISTS;
@@ -436,57 +389,6 @@ sub _bundle_specs {
   return @specs;
 }
 
-# Atomic activation: stage the symlink under a temp name, then rename it over
-# the live selector. rename(2) is atomic, so a reader never sees a missing or
-# half-written link.
-sub _activate_symlink {
-  my ( $target, $link ) = @_;
-  my $tmp = "${link}.tmp.$$";
-  unlink $tmp;
-  symlink( $target, $tmp ) or die "Failed to stage symlink $tmp -> $target: $!";
-  rename( $tmp, $link )    or die "Failed to activate symlink $link -> $target: $!";
-}
-
-# Make the freshly built generation current for this perl by pointing the
-# perl5/<arch_path> selector at it. The target is relative to perl5/, so it
-# resolves natively for the wrapper and local::lib. A legacy real lib dir
-# (pre-generation layout) is migrated in place: its tree is already hard-linked
-# into the new generation, so dropping the directory entry loses no data.
-sub _activate_generation {
-  my ( $generic, $gen_relpath ) = @_;
-  if ( -l $generic or not -e $generic ) {
-    _activate_symlink( $gen_relpath, $generic );
-  } elsif ( -d $generic ) {
-    # Legacy real lib dir (pre-generation layout): migrate it to a symlink. Its tree
-    # is already hard-linked into the new generation, so only the directory ENTRY
-    # needs to go - rename it aside rather than rmtree it. rename needs write on the
-    # parent perl5/ only (which we have - we just built a generation there), never
-    # permission to delete the contents, which on a deployment may be owned by
-    # another user. rmtree-ing here would delete what it could, stall on the rest,
-    # and leave the env with neither a working dir nor a symlink.
-    my $aside = sprintf '%s.legacy-%d', $generic, $$;
-    rename( $generic, $aside )
-      or die "Failed to move the legacy lib dir aside ($generic): $!\n"
-           . "mpan-install needs write permission on the parent perl5 directory.\n";
-    unless ( symlink( $gen_relpath, $generic ) ) {
-      my $err = $!;
-      rename( $aside, $generic )
-        or warn "Could not restore $generic after a failed symlink: $!\n";
-      die "Failed to link $generic to generation $gen_relpath: $err\n";
-    }
-    # Reclaim the old copy best-effort. Its tree is hard-linked into the generation,
-    # so anything we cannot remove is a shared inode (never unique data), not loss;
-    # error => captures the per-file failures instead of spewing them.
-    File::Path::rmtree( $aside, { safe => 1, error => \my $rm_errors } );
-    warn "Migrated the legacy $generic to a generation symlink. Could not fully\n"
-       . "remove the old copy at $aside (some files are not yours to delete); it\n"
-       . "shares storage with the new generation and is safe to remove by hand.\n"
-      if -e $aside;
-  } else {
-    die "$generic exists but is neither a symlink nor a directory\n";
-  }
-}
-
 
 die "mpan-install can not run as root\n" if $> == 0;
 
@@ -614,45 +516,22 @@ run_cpanm( @$_ ) for @callstack;
 
 system( @$_ ) for $dist->get_scripts( 'finalize' );
 
-# Promote: the build succeeded, so freeze it into a completed generation. Drop
-# any marker inherited via the seed, stamp this generation's own completion time
-# (the counter in the dir name orders generations; the marker records when, since
-# cp --archive leaves the dir mtime unreliable), then atomically rename ...-build
-# to its final name. A failed build never reaches here, so it stays a labelled
-# ...-build dir.
-unlink $_ for glob File::Spec->catfile( $local_lib, '.mist-built-*' );
-{
-  my @t = gmtime;
-  my $marker = File::Spec->catfile( $local_lib,
-    sprintf '.mist-built-%04d%02d%02dT%02d%02d%02dZ',
-      $t[5] + 1900, $t[4] + 1, $t[3], $t[2], $t[1], $t[0] );
-  if ( open my $m, '>', $marker ) { close $m }
-  else { warn "Could not write build marker $marker: $!\n" }
-}
-
-my $final_lib = File::Spec->catdir( $perl5_baselib, 'generations', $gen_name );
-# Named-branch re-install replaces an existing named generation. Move the old one
-# aside (atomic, parent-write only) rather than rmtree it in place: a partial rmtree
-# would corrupt the named generation AND leave the new build unpromoted. The old
-# copy is reclaimed best-effort after the promote succeeds.
-my $superseded;
-if ( $branch and -e $final_lib ) {
-  $superseded = sprintf '%s.superseded-%d', $final_lib, $$;
-  rename( $final_lib, $superseded )
-    or die "Failed to move the existing generation $final_lib aside: $!\n";
-}
-rename( $local_lib, $final_lib )
-  or die "Failed to promote $local_lib to $final_lib: $!";
-$local_lib = $final_lib;
-File::Path::rmtree( $superseded, { safe => 1, error => \my $sup_errors } )
-  if defined $superseded;
+# Promote: the build succeeded, so freeze it into a completed generation - stamped
+# with its own completion time and renamed from ...-build to its final name. A
+# failed build never reaches here, so it stays a labelled ...-build dir.
+$local_lib = Mist::Generation::promote(
+  build_dir => $local_lib,
+  final     => Mist::Generation::final_dir(
+    Mist::Generation::container( $perl5_baselib ), $gen_name ),
+  branch    => $branch,
+);
 
 # Lib-level Activate: point this perl's generation selector at the completed
 # generation (atomic rename). The rc and body below bake the stable generic path
 # perl5/<arch_path>, which resolves through this symlink, so a later generation
 # swap (an upgrade or a rollback) takes effect without rewriting them.
 my $gen_relpath = File::Spec->catdir( 'generations', $gen_name );
-_activate_generation( $generic_libdir, $gen_relpath ) if $repoint_generic;
+Mist::Generation::activate( $generic_libdir, $gen_relpath ) if $repoint_generic;
 
 printf $env <<'MIST_ENV', $ENV{MIST_APP_ROOT}, $generic_libdir;
 # This file is automatically generated by ./mpan-install
@@ -719,8 +598,8 @@ if ( $activate ) {
   # Activate: repoint the stable selectors at this perl's freshly-built body
   # and rc. rename(2) over the existing link makes each flip atomic, so a
   # cross-perl switch is complete or not at all.
-  _activate_symlink( $body_name, $mist_run_fn );
-  _activate_symlink( $rc_name,   $mist_rc );
+  Mist::Generation::activate_symlink( $body_name, $mist_run_fn );
+  Mist::Generation::activate_symlink( $rc_name,   $mist_rc );
 
   my $global_mist_run = File::Spec->catfile( $mist_home, 'mist-run' );
   unlink $global_mist_run;
@@ -836,17 +715,22 @@ SUCCESS
 # where the live generation is not the one just built. Named generations and other
 # perls' generations are left untouched.
 if ( $purge ) {
-  my $abs_gen_container = File::Spec->catdir( $perl5_baselib, 'generations' );
+  my $abs_gen_container = Mist::Generation::container( $perl5_baselib );
   my %keep = ( $gen_name => 1 );
   if ( -l $generic_libdir ) {
     my $active = readlink $generic_libdir;
     $keep{ $1 } = 1 if defined $active and $active =~ m{(?:\A|/)([^/]+)/?\z};
   }
-  for my $dir ( glob File::Spec->catdir( $abs_gen_container, "${arch_path}-*" ) ) {
-    my $base = ( File::Spec->splitdir( $dir ) )[-1];
-    next if $keep{ $base };
-    next unless $base =~ /-\d+\z/ or $base =~ /-build\z/;
-    print "Purging old generation $base\n";
-    File::Path::rmtree( $dir );
+
+  my @dir = glob File::Spec->catdir( $abs_gen_container, "${arch_path}-*" );
+  my %dir_of = map {( ( File::Spec->splitdir( $_ ) )[-1] => $_ )} @dir;
+
+  # Named generations are deliberate environments, so the host-side purge never
+  # sweeps them: no include_branches here. The classifier is shared with
+  # `mist purge`, which does offer that opt-in.
+  for my $name ( Mist::Generation::names_to_purge(
+    [ sort keys %dir_of ], \%keep, 0 ) ) {
+    print "Purging old generation $name\n";
+    File::Path::rmtree( $dir_of{ $name } );
   }
 }

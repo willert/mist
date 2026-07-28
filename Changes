@@ -12,6 +12,13 @@ Revision history for App::Mist
     targeted install, so an upgrade lands in a fresh generation promoted
     atomically instead of mutating the running one in place.
 
+  - The copy-on-write generation ladder - naming, seeding, promotion, activation
+    and the purge classifier - moves out of the fatpacked installer into
+    `Mist::Generation`, shared by `./mpan-install` and the build-master side, so
+    the two halves can no longer drift on what a generation is. The naming
+    convention had been duplicated in three places; the ladder's decisions are now
+    unit-tested directly rather than only through full installs.
+
 0.50 2026-07-27T17:28:56Z
 
   - packaging: mist builds with ExtUtils::MakeMaker, set explicitly, rather than

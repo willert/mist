@@ -27,6 +27,7 @@ use CPAN::Meta::Prereqs 2.132830;
 
 use Mist::Distribution;
 use Mist::Environment;
+use Mist::Generation ();
 
 use Sort::Key qw/keysort/;
 
@@ -173,8 +174,9 @@ has local_lib => (
 sub _build_local_lib {
   my $self = shift;
 
-  my $version = join( q{-}, 'perl', $Config{version}, $Config{archname} );
-  my $lib_dir = $self->perl5_base_lib->subdir( $version );
+  # The same per-perl identity ./mpan-install builds its generation names from,
+  # so the selector this resolves is the one the installer activates.
+  my $lib_dir = $self->perl5_base_lib->subdir( Mist::Generation::arch_path() );
   $lib_dir = $lib_dir->resolve if -l $lib_dir;   # follow a branch/generation link
   return $lib_dir;
 }

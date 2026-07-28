@@ -9,6 +9,8 @@ use File::Spec;
 use File::Path ();
 use File::Find ();
 
+use Mist::Generation ();   # the ladder owns what a generation name means
+
 sub usage_desc { '%c purge %o' }
 
 sub opt_spec {
@@ -17,31 +19,6 @@ sub opt_spec {
     [ 'include-branches' => 'also remove non-active named-branch generations'      ],
     [ 'perlbrew=s'       => 'only purge generations for this perl version (e.g. 5.42.2); default is every perl' ],
   );
-}
-
-# Pure classifier, factored out so it can be unit-tested without a project or CLI
-# context. Given the generation directory names, the protected set (basenames of
-# the active generations, one per perl), and whether named branches are in scope,
-# return the names to remove. An active generation is always kept (checked first,
-# so even an auto-numbered active one survives); a -build dir is an interrupted
-# build and always junk; an auto-numbered generation ends in -<digits> (archnames
-# always end in letters, so this never matches a named branch) and is removed when
-# not active; a named branch is kept unless the caller opts into sweeping them.
-sub _generations_to_purge {
-  my ( $names, $protected, $include_branches ) = @_;
-
-  my @remove;
-  for my $name ( @$names ) {
-    next if $protected->{ $name };
-    if ( $name =~ /-build\z/ ) {
-      push @remove, $name;
-    } elsif ( $name =~ /-\d+\z/ ) {
-      push @remove, $name;
-    } elsif ( $include_branches ) {
-      push @remove, $name;
-    }
-  }
-  return @remove;
 }
 
 # Best-effort reclaimed disk: sum the block sizes of files whose only link is in
@@ -136,7 +113,8 @@ sub _purge_generations {
   closedir $gh;
 
   my @remove = sort { $a cmp $b }
-    _generations_to_purge( \@names, \%protected, $opt{ include_branches } );
+    Mist::Generation::names_to_purge(
+      \@names, \%protected, $opt{ include_branches } );
 
   unless ( @remove ) {
     print "Nothing to purge - the active generations are the only ones present\n";
