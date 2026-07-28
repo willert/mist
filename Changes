@@ -14,6 +14,14 @@ Revision history for App::Mist
     upgrading intact. Its cpan-outdated step also reports why it failed rather
     than dying bare.
 
+  - `share/cpan-outdated` is rebuilt from cpan-outdated 0.32 (was 0.28), which
+    reads a `file://` index straight off disk instead of through LWP. The packed
+    0.28 could never read the only kind of mirror mist hands it, so plain
+    `mist upgrade` worked only in projects that happened to have libwww-perl
+    installed. `contrib/cpan-outdated/pack.sh` now traces against a `file://`
+    mirror - the omission that caused it - and verifies the result before
+    declaring success; the artifact is less than half its old size.
+
   - The copy-on-write generation ladder - naming, seeding, promotion, activation
     and the purge classifier - moves out of the fatpacked installer into
     `Mist::Generation`, shared by `./mpan-install` and the build-master side, so

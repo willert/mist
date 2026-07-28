@@ -1,30 +1,28 @@
 #!/usr/bin/env perl
 use strict;
 use warnings;
+use ExtUtils::Installed;
 use Getopt::Long;
-use Pod::Usage;
-use File::Temp;
-use File::Spec;
 use Config;
 use version;
-use LWP::Simple ();
 use IO::Zlib;
 use CPAN::DistnameInfo;
-use Module::CoreList ();
 use Module::Metadata;
-use constant WIN32 => $^O eq 'MSWin32';
+use URI;
 
-our $VERSION = "0.28";
+our $VERSION = "0.32";
 
 my $mirror = 'http://www.cpan.org/';
-my $quote = WIN32 ? q/"/ : q/'/;
 my $local_lib;
 my $self_contained = 0;
+my $index_file;
+my $help;
 Getopt::Long::Configure("bundling");
 Getopt::Long::GetOptions(
-    'h|help'          => \my $help,
+    'h|help'          => \$help,
     'verbose'         => \my $verbose,
     'm|mirror=s'      => \$mirror,
+    'index=s'         => \$index_file,
     'p|print-package' => \my $print_package,
     'I=s'             => sub { die "this option was deprecated" },
     'l|local-lib=s'   => \$local_lib,
@@ -36,27 +34,67 @@ Getopt::Long::GetOptions(
           . "cpanm cpan-listchanges # install from CPAN\n"
     },
     'exclude-core' => \my $exclude_core,
-) or pod2usage();
-pod2usage() if $help;
+) or $help++;
+if ($help) {
+    require Pod::Usage;
+    Pod::Usage::pod2usage();
+}
 
 $mirror =~ s:/$::;
 my $index_url = "${mirror}/modules/02packages.details.txt.gz";
+$index_url = URI->new($index_url);
+if ($index_url->isa('URI::file')) {
+    die '--index is incompatible with a file:// mirror' if defined $index_file;
+    $index_file = $index_url->file
+}
 
-my $core_modules = $Module::CoreList::version{$]};
+my $core_modules;
+if ($exclude_core) {
+    require Module::CoreList;
+    no warnings 'once';
+    $core_modules = $Module::CoreList::version{$]};
+}
 
 unless ($ENV{HARNESS_ACTIVE}) {
     &main;
     exit;
 }
 
+sub modules_to_check {
+    my @inc = @_;
+    my @modules =
+        ExtUtils::Installed->new(skip_cwd => 1, inc_override => \@inc)->modules;
+    # As core modules may not have been listed by EUI because they lack
+    # .packlist, we add them from Module::CoreList
+    if (!$exclude_core || ($local_lib && !$self_contained)) {
+        require Module::CoreList;
+        # This adds duplicates, but they are removed by the caller
+        push @modules, keys %{ $Module::CoreList::version{$]} };
+    }
+    (@modules)
+}
+
+sub installed_version_for {
+    my($pkg, $inc) = @_;
+
+    local $SIG{__WARN__} = sub {};
+    my $meta = Module::Metadata->new_from_module($pkg, inc => $inc);
+    $meta ? $meta->version($pkg) : undef;
+}
+
 sub main {
-    my @libpath = make_inc($local_lib, $self_contained);
-    # warn join("\n", @libpath);
+    my @inc = make_inc($local_lib, $self_contained);
 
-    my $tmpfile = File::Temp->new(UNLINK => 1, SUFFIX => '.gz');
-    getstore($index_url, $tmpfile->filename);
+    if (   !defined($index_file)
+        || ! -e $index_file || -z $index_file
+        || !$index_url->isa('URI::file')) {
 
-    my $fh = zopen($tmpfile) or die "cannot open $tmpfile";
+        $index_file = get_index($index_url, $index_file)
+    }
+
+    my %installed = map { $_ => 1 } modules_to_check(@inc);
+
+    my $fh = zopen($index_file) or die "cannot open $index_file";
     # skip header part
     while (my $line = <$fh>) {
         last if $line eq "\n";
@@ -66,7 +104,11 @@ sub main {
     my %dist_latest_version;
     LINES: while (my $line = <$fh>) {
         my ($pkg, $version, $dist) = split /\s+/, $line;
+        next unless $installed{$pkg};
         next if $version eq 'undef';
+
+        # The note below about the latest version heuristics applies here too
+        next if $seen{$dist};
 
         # $Mail::SpamAssassin::Conf::VERSION is 'bogus'
         # https://rt.cpan.org/Public/Bug/Display.html?id=73465
@@ -76,48 +118,19 @@ sub main {
         next if $exclude_core && exists $core_modules->{$pkg};
 
         next if $dist =~ m{/perl-[0-9._]+\.tar\.(gz|bz2)$};
-        (my $file = $pkg) =~ s!::!/!g;
-        $file = "${file}.pm";
-        SCAN_INC: for my $dir (@libpath) {
-            my $path = "$dir/$file";
-            next SCAN_INC unless -f $path;
 
-            # ignore old distribution.
-            #   This is a heuristic approach. It is not a strict.
-            #   If you want a strict check, cpan-outdated looks 02packages.details.txt.gz twice.
-            #   It is too slow.
-            #
-            #   But, 02packages.details.txt.gz is sorted.
-            #   Submodules are listed after main module most of the time.
-            #   This strategy works well for now.
-            # ref https://github.com/tokuhirom/cpan-outdated/issues#issue/4
-            my $info = CPAN::DistnameInfo->new($dist);
-            if (my $latest = $dist_latest_version{$info->dist}) {
-                # $info->version < $latest
-                if (compare_version($info->version, $latest)) {
-                    # warn "SKIP old distribution ($pkg): $dist < ", $latest, "\n";
-                    next LINES; # skip old version
-                }
-            }
-            $dist_latest_version{$info->dist} = $info->version;
+        my $inst_version = installed_version_for($pkg, \@inc)
+            or next;
 
-            my $meta = do {
-                local $SIG{__WARN__} = sub {};
-                Module::Metadata->new_from_file($path);
-            };
-            my $inst_version = $meta->version($pkg);
-            next unless defined $inst_version;
-            if (compare_version($inst_version, $version)) {
-                next if $seen{$dist}++;
-                if ($verbose) {
-                    printf "%-30s %-7s %-7s %s\n", $pkg, $inst_version, $version, $dist;
-                } elsif ($print_package) {
-                    print "$pkg\n";
-                } else {
-                    print "$dist\n";
-                }
+        if (compare_version($inst_version, $version)) {
+            $seen{$dist}++;
+            if ($verbose) {
+                printf "%-30s %-7s %-7s %s\n", $pkg, $inst_version, $version, $dist;
+            } elsif ($print_package) {
+                print "$pkg\n";
+            } else {
+                print "$dist\n";
             }
-            last SCAN_INC;
         }
     }
 }
@@ -146,41 +159,53 @@ sub permissive_filter {
     $_;
 }
 
-# taken from cpanminus
-sub which {
-    my($name) = @_;
-    my $exe_ext = $Config{_exe};
-    foreach my $dir(File::Spec->path){
-        my $fullpath = File::Spec->catfile($dir, $name);
-        if (-x $fullpath || -x ($fullpath .= $exe_ext)){
-            if ($fullpath =~ /\s/ && $fullpath !~ /^$quote/) {
-                $fullpath = "$quote$fullpath$quote"
-            }
-            return $fullpath;
-        }
-    }
-    return;
-}
 
-sub getstore {
+# Return the $fname (a generated File::Temp object if not provided)
+sub get_index {
     my ($url, $fname) = @_;
-    my $ua = LWP::UserAgent->new(
-        parse_head => 0,
-    );
-    $ua->env_proxy();
-    my $request = HTTP::Request->new(GET => $url);
-    my $response = $ua->request($request, $fname);
-    if (my $died = $response->header('X-Died')) {
-        die "Cannot getstore $url to $fname: $died";
-    } elsif ($response->code == 200) {
-        return 1;
+    require HTTP::Tiny;
+    my $ua = HTTP::Tiny->new;
+    my $response;
+    if (defined $fname) {
+        # If the file is not empty, use it as a local cached copy
+        if (-s $fname) {
+            $response = $ua->mirror($url, $fname);
+        } else {
+            # If the file is empty we do not trust its timestamp
+            # so set a custom If-Modified-Since (Perl 5.0 release)
+            $response = $ua->mirror($url, $fname,
+                {
+                    headers => {
+                        'if-modified-since' => 'Wed, 19 Oct 1994 17:18:57 GMT',
+                    },
+                });
+        }
     } else {
-        die "Cannot getstore $url to $fname: " . $response->status_line;
+        require File::Temp;
+        $fname = File::Temp->new(UNLINK => 1, SUFFIX => '.gz');
+        binmode $fname;
+        $response = $ua->request(
+            'GET' => $url,
+            {
+                data_callback => sub { print {$fname} $_[0] },
+            }
+        );
+        close $fname;
     }
+    if ($response->{status} == 599) {
+        die "Cannot get_index $url to $fname: $response->{content}";
+    # 304 = "Not Modified" is still a success since we are mirroring
+    } elsif (! $response->{success}) {
+        die "Cannot get_index $url to $fname: $response->{status} $response->{reason}";
+    }
+    #print "$fname $response->{status} $response->{reason}\n";
+    # Return the filename (which might be a File::Temp object)
+    $fname
 }
 
 sub zopen {
-    IO::Zlib->new($_[0], "rb");
+    # Explicitely stringify the filename as it may be a File::Temp object
+    IO::Zlib->new("$_[0]", "rb");
 }
 
 sub make_inc {
@@ -211,14 +236,17 @@ cpan-outdated - detect outdated CPAN modules in your environment
 
 =head1 SYNOPSIS
 
-    # print the list of distribution that contains outdated modules
+    # print a list of distributions that contain outdated modules
     % cpan-outdated
 
-    # print the list of outdated modules in packages
+    # print a list of outdated modules in packages
     % cpan-outdated -p
 
     # verbose
     % cpan-outdated --verbose
+    
+    # ignore core modules (do not update dual life modules)
+    % cpan-outdated --exclude-core
 
     # alternate mirrors
     % cpan-outdated --mirror file:///home/user/minicpan/
@@ -236,22 +264,29 @@ cpan-outdated - detect outdated CPAN modules in your environment
 
 =head1 DESCRIPTION
 
-This script prints the list of outdated CPAN modules in your machine.
+This script prints a list of outdated CPAN modules on your machine.
 
-It's same feature of 'CPAN::Shell->r', but C<cpan-outdated> is much faster and uses less memory.
+This is the same feature as 'CPAN::Shell->r', but C<cpan-outdated> is much faster and uses less memory.
 
-This script can be integrated with L<cpanm> command.
+This script can be integrated with the L<cpanm> command.
 
 =head1 PRINTING PACKAGES VS DISTRIBUTIONS
 
 This script by default prints the outdated distribution as in the CPAN
 distro format, i.e: C<A/AU/AUTHOR/Distribution-Name-0.10.tar.gz> so
-you can pipe into CPAN installers, but with C<-p> option it can be
-twaked to print the module's package names.
+you can pipe it into CPAN installers, but with the C<-p> option it can be
+tweaked to print the module's package names.
 
-For some tools such as L<cpanm> installing from packages could be a
+If you wish to manage a set of modules separately from your system
+perl installation and not install newer versions of "dual life modules"
+that are distributed with perl, the C<--exclude-core> option will make
+cpan-outdated ignore changes to core modules. Used with tools like
+cpanm and its C<-L --local-lib-contained> and C<--self-contained> options,
+this facilitates maintaining updates on standalone sets of modules.
+
+For some tools, such as L<cpanm>, installing from packages could be a
 bit more useful since you can track to see the old version number
-where you upgrade from.
+which you upgrade from.
 
 =head1 AUTHOR
 
