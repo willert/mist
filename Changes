@@ -2,6 +2,10 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+  - App::Mist keeps its own lib/ ahead of the vendored perl5 on @INC, so the
+    Minilla release-pipeline overrides (BumpVersionSmart, TagPublish) can no
+    longer be shadowed by stock Minilla in perlbrew re-exec'd processes.
+
   - `mist inject` and `mist merge` no longer install into the live `perl5/`: both
     resolve into a throwaway lib seeded copy-on-write from the active generation,
     so a promoted generation stays immutable and only `./mpan-install` populates

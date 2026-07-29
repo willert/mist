@@ -33,6 +33,15 @@ ERROR_MSG
 
   require local::lib;
   local::lib->import( $mist_lib );
+
+  # local::lib->import prepends the vendored perl5 paths, which can shadow
+  # mist's own lib/ - and with it the Minilla::CLI::Release override that
+  # swaps BumpVersionSmart and TagPublish into the release pipeline. Whether
+  # that shadowing happens depends on how the process was reached (a perlbrew
+  # re-exec reorders PERL5LIB), so re-assert our own code ahead of the
+  # vendored dependencies unconditionally.
+  my $own_lib = File::Spec->catdir( $basedir => 'lib' );
+  unshift @INC, $own_lib if -d $own_lib;
 }
 
 # BEGIN {
