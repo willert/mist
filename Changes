@@ -15,6 +15,14 @@ Revision history for App::Mist
     checkout, so it is now rejected with that explanation instead of being taken
     literally as a perlbrew perl named `perl-system`.
 
+  - A project that pins no perl version is deprecated and now warns, from both
+    `mist` and `./mpan-install`. It is the one configuration that silently
+    reinterprets an environment: the build follows whatever perl is on `PATH`,
+    and the guard that refuses an implicit interpreter switch short-circuits
+    when no perl is managed, so a later run from another shell re-activates onto
+    that perl without asking. Pin a version, or use `--system-perl`, which is
+    guarded and remembered.
+
   - App::Mist declares the standard Perl 5 licence in its POD, so `META.json`
     records `perl_5` instead of `unknown` and the release pipeline stops warning
     that it cannot determine one. The terms are unchanged - the `LICENSE` file

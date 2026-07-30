@@ -267,6 +267,31 @@ sub _shed_seeded_bookkeeping {
 }
 
 
+# Deprecated state, not a supported mode. Unpinned is the one configuration that
+# silently reinterprets an environment: the build follows whatever perl is on
+# PATH at that moment, and the switch guard that would refuse an implicit
+# interpreter change short-circuits when no perl is managed, so a later run from
+# a different shell re-activates onto that perl without asking. Being unmanaged
+# is legitimate - that is what --system-perl is for - but it should be stated,
+# and stated per machine, rather than fallen into by leaving a line out.
+sub _unpinned_warning {
+  return <<'WARNING';
+
+mist: this project pins no perl version.
+
+Builds follow whatever perl is on PATH, and the guard that refuses an implicit
+interpreter switch does not apply, so a later run from a different shell
+re-activates the environment onto that perl without asking.
+
+Add `perl '<version>'` to the mistfile, or - on a host that deliberately tracks
+its own perl - run ./mpan-install --system-perl, which is guarded and remembered.
+
+Unpinned projects are deprecated and will be refused in a future release.
+
+WARNING
+}
+
+
 has cpanm_executable => (
   is         => 'ro',
   isa        => 'Path::Class::File',
@@ -291,7 +316,10 @@ sub _build_perl_version {
   my $self = shift;
   my $pb_version = $self->dist->get_default_perl_version;
 
-  return '' unless $pb_version;
+  unless ( $pb_version ) {
+    warn _unpinned_warning();
+    return '';
+  }
 
   # Opting out of perl management is a per-machine decision, so it is not
   # expressible here. A mistfile is committed and speaks for every machine that

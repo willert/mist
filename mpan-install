@@ -28025,6 +28025,24 @@ $pb_version = _resolve_perl_version(
 my $system_perl_mode = ( not defined $pb_version )
   && ( $pb_explicit || _system_perl_persisted() );
 
+sub _unpinned_warning {
+  return <<'WARNING';
+
+./mpan-install: this project pins no perl version.
+
+This build uses whatever perl is on PATH, and the guard that refuses an implicit
+interpreter switch does not apply, so it will re-activate the environment onto
+that perl without asking.
+
+Add `perl '<version>'` to the mistfile and recompile, or - if this machine is
+meant to track its own perl - re-run with --system-perl, which is guarded and
+remembered.
+
+Unpinned projects are deprecated and will be refused in a future release.
+
+WARNING
+}
+
 # Pure precedence decision, factored out so it is unit-testable without a
 # project, an installer or a perlbrew (cf. _switch_verdict). Returns the perlbrew
 # version to run under, or undef for "manage no perl at all" - which is what
@@ -28043,6 +28061,14 @@ sub _resolve_perl_version {
 }
 
 sub init {
+  # Warned here as well as in the build-master, because this is where the harm
+  # lands: a vendored installer outlives the mistfile edit that would fix it, and
+  # the selector repoint is what quietly follows PATH. Raised from init rather
+  # than at load time so requiring this module standalone (the tests do) stays
+  # silent - only an actual install has anything to warn about.
+  warn _unpinned_warning()
+    if not defined $pb_version and not $system_perl_mode;
+
   refuse_inherited_perl_env() if $system_perl_mode;
   guard_against_implicit_switch();
   find_perl_version_manager_executable();
