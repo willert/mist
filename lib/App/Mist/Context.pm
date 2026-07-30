@@ -293,12 +293,23 @@ sub _build_perl_version {
 
   return '' unless $pb_version;
 
-  # `perl 'system'` is the mistfile opting out of perl management entirely, the
-  # declared form of ./mpan-install --system-perl. An empty version is what every
-  # caller reads as "no perlbrew context to ensure"; without this the pin would
-  # be taken literally and each command would try to exec a perlbrew perl called
-  # "perl-system".
-  return '' if $pb_version eq 'system';
+  # Opting out of perl management is a per-machine decision, so it is not
+  # expressible here. A mistfile is committed and speaks for every machine that
+  # builds the project, including development boxes; "use whatever perl this box
+  # ships" is one host's statement about itself, and belongs in that host's
+  # ./mpan-install --system-perl instead.
+  #
+  # Refused rather than ignored: the host installer does honour a 'system'
+  # sentinel (it is what --system-perl resolves to), so silently dropping the pin
+  # here would leave the two halves disagreeing about what the mistfile means.
+  die <<'REFUSED' if $pb_version eq 'system';
+mistfile: `perl 'system'` is not a valid pin.
+
+Opting out of perl management is a decision for one machine, not for the
+project: a committed pin applies to every checkout, development boxes
+included. Run ./mpan-install --system-perl on the host that needs it - the
+choice is recorded there and survives later installs.
+REFUSED
 
   return "perl-${pb_version}";
 }

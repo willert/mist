@@ -16,10 +16,12 @@ package Mist::Script::usage;
    --perlbrew VERSION  use this perlbrew-managed perl version
    --system-perl       build against the perl already on this machine and manage
                        only the library tree: no perlbrew, no re-exec, and the
-                       mistfile's pinned version is ignored. The choice is
-                       remembered for this checkout, so later plain runs stay on
-                       the system perl; --perlbrew VERSION hands the interpreter
-                       back to perlbrew and clears it
+                       mistfile's pinned version is ignored. Needs a shell with
+                       no managed perl active (no perlbrew, no local::lib) and
+                       refuses otherwise, since it would silently build against
+                       that one instead. The choice is remembered for this
+                       checkout, so later plain runs stay on the system perl;
+                       --perlbrew VERSION hands the interpreter back and clears it
    --build-only        build (or rebuild) the target perl's environment but
                        do not activate it; the current selector is untouched
    --no-resume         discard a resumable build left by a failed install and

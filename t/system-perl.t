@@ -92,6 +92,43 @@ MARKER_ROUND_TRIP: {
     'recording twice is harmless';
 }
 
+REFUSES_AN_INHERITED_PERL_ENV: {
+  # The mode names a specific interpreter - the one the machine ships - and
+  # there is no re-exec on this path to correct a wrong one. An active perlbrew
+  # or local::lib would be used silently and then recorded as "system".
+  my $detect = \&Mist::Script::perl::_inherited_perl_env;
+  my $refuse = \&Mist::Script::perl::refuse_inherited_perl_env;
+
+  {
+    local %ENV = %ENV;
+    delete @ENV{qw/ PERLBREW_PERL PERL_LOCAL_LIB_ROOT /};
+    is_deeply [ $detect->() ], [], 'a clean shell has nothing active';
+    ok eval { $refuse->(); 1 }, '...and is allowed through';
+
+    # PERL5LIB alone is set for too many innocent reasons to refuse on.
+    local $ENV{PERL5LIB} = '/somewhere/else';
+    is_deeply [ $detect->() ], [], 'a bare PERL5LIB is not grounds to refuse';
+  }
+
+  for my $var (qw/ PERLBREW_PERL PERL_LOCAL_LIB_ROOT /) {
+    local %ENV = %ENV;
+    delete @ENV{qw/ PERLBREW_PERL PERL_LOCAL_LIB_ROOT /};
+    local $ENV{$var} = 'perl-5.20.3';
+    is_deeply [ $detect->() ], [ $var ], "$var is detected";
+    ok ! eval { $refuse->(); 1 }, "...and refuses the build";
+    like $@, qr/\Q$var\E/, '...naming it, so the fix is obvious';
+    like $@, qr/perlbrew off|clean shell/, '...and how to clear it';
+  }
+
+  {
+    local %ENV = %ENV;
+    local $ENV{PERLBREW_PERL}      = 'perl-5.20.3';
+    local $ENV{PERL_LOCAL_LIB_ROOT} = '/somewhere';
+    is_deeply [ $detect->() ], [qw/ PERLBREW_PERL PERL_LOCAL_LIB_ROOT /],
+      'both are reported together rather than one at a time';
+  }
+}
+
 sub slurp {
   my ( $file ) = @_;
   open my $fh, '<', $file or return '';

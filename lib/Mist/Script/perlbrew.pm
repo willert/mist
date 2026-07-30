@@ -63,6 +63,13 @@ $pb_version = _resolve_perl_version(
   default   => $PERLBREW_DEFAULT_VERSION,
 );
 
+# "No perl is managed" has two causes that must not be confused: this project
+# pins none (long-standing, and whatever perl you are in is the answer), or
+# system-perl mode was chosen here or recorded earlier. Only the latter promises
+# a *specific* perl, so only the latter polices the ambient environment.
+my $system_perl_mode = ( not defined $pb_version )
+  && ( $pb_explicit || _system_perl_persisted() );
+
 # Pure precedence decision, factored out so it is unit-testable without a
 # project, an installer or a perlbrew (cf. _switch_verdict). Returns the perlbrew
 # version to run under, or undef for "manage no perl at all" - which is what
@@ -81,6 +88,7 @@ sub _resolve_perl_version {
 }
 
 sub init {
+  refuse_inherited_perl_env() if $system_perl_mode;
   guard_against_implicit_switch();
   find_perl_version_manager_executable();
   assert_availability_of_requested_perl_version();
@@ -143,6 +151,32 @@ sub guard_against_implicit_switch {
   print "This workdir runs on $active, switch to $target? [y/N] ";
   my $answer = <STDIN>;
   exit 1 unless defined $answer and $answer =~ /\A\s*y/i;
+}
+
+# --- System-perl environment hygiene --------------------------------------
+
+# Which managed-perl environments the calling shell has active. Pure (reads only
+# %ENV, which a test can localise) so the detection is exercisable without a
+# perlbrew. PERLBREW_PERL and PERL_LOCAL_LIB_ROOT are the reliable markers:
+# PERL5LIB alone is set for too many innocent reasons to refuse on.
+sub _inherited_perl_env {
+  return grep { defined $ENV{$_} and length $ENV{$_} }
+    qw/ PERLBREW_PERL PERL_LOCAL_LIB_ROOT /;
+}
+
+# --system-perl claims a specific interpreter: the one this machine ships. An
+# activated perlbrew or local::lib makes that claim false and does it silently -
+# $^X is that perl, $Config{version}/{archname} name the generation after it, and
+# the recorded choice says "system" regardless. Nothing downstream would notice,
+# because there is no re-exec on this path to correct it. Refuse instead of
+# building something mislabelled.
+sub refuse_inherited_perl_env {
+  my @active = _inherited_perl_env() or return;
+  die "FATAL: --system-perl expects a shell with no managed perl active, but "
+    . join( ' and ', @active ) . " " . ( @active > 1 ? 'are' : 'is' ) . " set.\n"
+    . "Leave that environment first - `perlbrew off`, or a clean shell - and\n"
+    . "re-run. Building now would use whichever perl is active and record it\n"
+    . "as this machine's system perl.\n";
 }
 
 # --- System-perl persistence ----------------------------------------------
