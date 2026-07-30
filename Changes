@@ -2,6 +2,11 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+  - App::Mist declares the standard Perl 5 licence in its POD, so `META.json`
+    records `perl_5` instead of `unknown` and the release pipeline stops warning
+    that it cannot determine one. The terms are unchanged - the `LICENSE` file
+    has said the same since 2013; only the machine-readable metadata was missing.
+
 0.51 2026-07-30T17:37:43Z
 
   - App::Mist keeps its own lib/ ahead of the vendored perl5 on @INC, so the

@@ -121,4 +121,11 @@ accepted.
 
 Sebastian Willert <s.willert@wecare.de>
 
+=head1 LICENSE
+
+Copyright (C) 2013 Sebastian Willert.
+
+This library is free software; you can redistribute it and/or modify it under
+the same terms as the Perl 5 programming language system itself.
+
 =cut
