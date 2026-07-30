@@ -292,6 +292,14 @@ sub _build_perl_version {
   my $pb_version = $self->dist->get_default_perl_version;
 
   return '' unless $pb_version;
+
+  # `perl 'system'` is the mistfile opting out of perl management entirely, the
+  # declared form of ./mpan-install --system-perl. An empty version is what every
+  # caller reads as "no perlbrew context to ensure"; without this the pin would
+  # be taken literally and each command would try to exec a perlbrew perl called
+  # "perl-system".
+  return '' if $pb_version eq 'system';
+
   return "perl-${pb_version}";
 }
 

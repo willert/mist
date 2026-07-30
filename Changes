@@ -2,6 +2,16 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+  - `./mpan-install --system-perl` builds against the perl already on the machine
+    and manages only the library tree: no perlbrew, no re-exec, and the mistfile's
+    pinned version is ignored. Intended for containers and hosts that would rather
+    track a distro perl with backported security fixes than maintain a perlbrew
+    build. The choice is recorded under `perl5/`, so later plain runs stay on it
+    rather than reverting the box to the pin; `--perlbrew=<version>` hands the
+    interpreter back and clears it. A mistfile may also declare `perl 'system'`
+    for the same effect project-wide, which previously made every `mist` command
+    try to exec a perlbrew perl named `perl-system`.
+
   - App::Mist declares the standard Perl 5 licence in its POD, so `META.json`
     records `perl_5` instead of `unknown` and the release pipeline stops warning
     that it cannot determine one. The terms are unchanged - the `LICENSE` file

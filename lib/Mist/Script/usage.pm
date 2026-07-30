@@ -14,6 +14,12 @@ package Mist::Script::usage;
 
    --force-tests       ignore notest from mistfile, but still install dists
    --perlbrew VERSION  use this perlbrew-managed perl version
+   --system-perl       build against the perl already on this machine and manage
+                       only the library tree: no perlbrew, no re-exec, and the
+                       mistfile's pinned version is ignored. The choice is
+                       remembered for this checkout, so later plain runs stay on
+                       the system perl; --perlbrew VERSION hands the interpreter
+                       back to perlbrew and clears it
    --build-only        build (or rebuild) the target perl's environment but
                        do not activate it; the current selector is untouched
    --no-resume         discard a resumable build left by a failed install and
