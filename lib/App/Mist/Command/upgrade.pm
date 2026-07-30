@@ -336,14 +336,27 @@ in F<mpan-dist/>'s package index, and reinstalls - from F<mpan-dist/> - every
 module whose installed copy lags behind. It prints C<All modules up to date>
 when nothing lags.
 
-This closes a gap that C<./mpan-install> cannot. C<mpan-install> resolves the
-F<cpanfile> prerequisites through C<cpanm>, which reinstalls a distribution only
-when its requirement is I<unsatisfied>: an older version that still satisfies the
-F<cpanfile> pin is left untouched, even once F<mpan-dist/> vendors something
-newer. C<upgrade> keys off the raw installed-versus-vendored comparison instead,
-so it pulls the newer vendored release in regardless - without the full
-F<perl5/> wipe and cold rebuild that would otherwise be the only way to get
-there.
+This closes a gap that C<./mpan-install> cannot, and the gap is narrower than it
+looks. C<cpanm> upgrades a distribution it is I<named>: it derives the
+requirement from the release the index resolves to, so a directly declared
+F<cpanfile> prerequisite does move to the newest vendored version on its own -
+whether or not its pin was raised.
+
+What it never reaches is the tree below. A dependency pulled in transitively is
+tested against its I<parent's declared floor>, and an installed copy that
+satisfies that floor is never resolved against the index at all, so a newer
+vendored release of it is simply not seen. That is what C<upgrade> is for: it
+compares installed against vendored directly and then B<names> every laggard, so
+the ones no declaration reaches are upgraded too - without the full F<perl5/>
+wipe and cold rebuild that would otherwise be the only way there.
+
+The corollary matters more than the mechanism: B<do not raise a C<cpanfile> pin
+in order to make something install>. A version there is a contract with everyone
+who consumes this distribution - Minilla writes it into F<META.json>, and a
+consumer's C<mist merge> resolves against that - so a pin added for a local
+install reason becomes a floor imposed on every downstream project, permanently
+and with no record of why. Pin when you mean "we require at least this"; use
+C<upgrade> when you mean "install what is vendored".
 
 Deciding I<what> lags is all C<upgrade> decides. The laggards are then built into
 a fresh copy-on-write generation, seeded from the active one, and that generation
