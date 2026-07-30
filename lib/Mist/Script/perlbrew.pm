@@ -179,6 +179,54 @@ sub guard_against_implicit_switch {
   exit 1 unless defined $answer and $answer =~ /\A\s*y/i;
 }
 
+# --- System-perl @INC policy ----------------------------------------------
+
+sub in_system_perl_mode { return $system_perl_mode ? 1 : 0 }
+
+# What a build under --system-perl may NOT see. The policy is constructive - the
+# allow-list is the perl's own core library plus the environment being built -
+# and the strip is whatever the target perl's real @INC holds beyond it.
+#
+# Named that way round on purpose. Enumerating what to remove can never be
+# complete: on this box Debian contributes /etc/perl, .../perl-base and
+# /usr/local/lib/site_perl, and %Config names none of them (otherlibdirs, the
+# documented mechanism for exactly that, is unset). An allow-list excludes
+# whatever the next distro invents without having heard of it.
+#
+# Vendor and site are both out. Vendor is the distro's packaged modules, and the
+# reason to trust a distro perl - that the distro maintains it - does not spread
+# evenly across every libfoo-perl. Site is worse: it is where a hand-run cpanm
+# lands, so admitting it admits everything anyone ever did on that machine, with
+# no record of what or when.
+sub inc_strip_list {
+  my ( $keep_under ) = @_;
+
+  my %allow = map  { $_ => 1 }
+              grep { defined and length } @Config{qw/ archlibexp privlibexp /};
+
+  return grep {
+    not $allow{ $_ }
+      and ( not defined $keep_under or index( $_, $keep_under ) != 0 )
+  } grep { not ref } @INC;
+}
+
+# Perl has no way to *replace* a child's @INC - -I and PERL5LIB only add - so a
+# constructive policy has to be applied subtractively. -M-lib= removes entries,
+# and riding in PERL5OPT it reaches every perl started downstream, which is what
+# the build subprocesses (Makefile.PL, Build.PL, the dist's tests) are.
+#
+# Known limit: perl ignores PERL5OPT under -T, so a tainted build script or test
+# sees the full @INC again. Across the four mirrors on this box - 1490 dists -
+# no build script is tainted, so this narrows detection through test suites
+# rather than weakening the isolation of what gets installed.
+sub inc_strip_perl5opt {
+  my ( @strip ) = @_;
+  return unless @strip;
+  return join q{ },
+    '-M-lib=' . join( q{,}, @strip ),
+    ( defined $ENV{PERL5OPT} && length $ENV{PERL5OPT} ? $ENV{PERL5OPT} : () );
+}
+
 # --- System-perl environment hygiene --------------------------------------
 
 # Which managed-perl environments the calling shell has active. Pure (reads only

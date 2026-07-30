@@ -15,6 +15,16 @@ Revision history for App::Mist
     checkout, so it is now rejected with that explanation instead of being taken
     literally as a perlbrew perl named `perl-system`.
 
+  - Under `--system-perl`, a build no longer sees the machine's vendor or site
+    libraries. The allow-list is the perl's own core plus the environment being
+    built; everything else in the target perl's real `@INC` is stripped, which
+    also covers entries `%Config` cannot name (Debian contributes `/etc/perl`,
+    `.../perl-base` and `/usr/local/lib/site_perl`). Vendor is out because a
+    distro's maintenance attention is not spread evenly over every packaged
+    module; site is out because it is where a hand-run `cpanm` lands, with no
+    record of what or when. Known limit: perl ignores `PERL5OPT` under `-T`, so a
+    tainted build script or test sees the full `@INC` again.
+
   - The generated `perl5/bin/mist-run` wrapper no longer runs perl to set itself
     up. It re-derived local::lib's environment variables on every invocation,
     producing byte-identical values to the ones the rc it had just sourced

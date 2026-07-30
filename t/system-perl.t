@@ -4,6 +4,7 @@ use strict;
 use warnings;
 use Test::More;
 
+use Config;
 use FindBin ();
 use File::Spec;
 use File::Temp qw/ tempdir /;
@@ -127,6 +128,52 @@ REFUSES_AN_INHERITED_PERL_ENV: {
     is_deeply [ $detect->() ], [qw/ PERLBREW_PERL PERL_LOCAL_LIB_ROOT /],
       'both are reported together rather than one at a time';
   }
+}
+
+INC_ALLOW_LIST_IS_CONSTRUCTIVE: {
+  # The allow-list is core plus the environment being built; everything else in
+  # the target perl's real @INC is stripped, including entries %Config cannot
+  # name (Debian's /etc/perl, .../perl-base, /usr/local/lib/site_perl). That is
+  # the point of naming what is allowed rather than what is not.
+  my @strip = Mist::Script::perl::inc_strip_list();
+
+  my %stripped = map { $_ => 1 } @strip;
+  for my $keep ( grep { defined and length } @Config{qw/ archlibexp privlibexp /} ) {
+    ok !$stripped{ $keep }, "core stays on \@INC: $keep";
+  }
+
+  for my $drop ( grep { defined and length }
+                 @Config{qw/ vendorarch vendorlibexp sitearch sitelibexp /} ) {
+    next unless grep { $_ eq $drop } @INC;   # empty on a perlbrew perl
+    ok $stripped{ $drop }, "excluded: $drop";
+  }
+
+  # Anything in @INC that is neither core nor the build target is stripped
+  # whether or not %Config has a name for it.
+  my %allow = map { $_ => 1 } @Config{qw/ archlibexp privlibexp /};
+  my @unaccounted = grep { not ref and not $allow{ $_ } and not $stripped{ $_ } } @INC;
+  is_deeply \@unaccounted, [],
+    'nothing survives the strip that is not core';
+}
+
+INC_STRIP_PRESERVES_THE_TARGET_LIB: {
+  # The environment being built must survive, or the build cannot see what it
+  # just installed.
+  my ( $target ) = grep { not ref } @INC;
+  my %stripped = map { $_ => 1 } Mist::Script::perl::inc_strip_list( $target );
+  ok !$stripped{ $target }, 'a path under the target lib is never stripped';
+}
+
+PERL5OPT_COMPOSITION: {
+  my $opt = Mist::Script::perl::inc_strip_perl5opt( '/a', '/b' );
+  is $opt, '-M-lib=/a,/b', 'the strip becomes a single -M-lib switch';
+
+  local $ENV{PERL5OPT} = '-Mstrict';
+  is Mist::Script::perl::inc_strip_perl5opt( '/a' ), '-M-lib=/a -Mstrict',
+    "...prepended to whatever PERL5OPT already carried, never replacing it";
+
+  is Mist::Script::perl::inc_strip_perl5opt(), undef,
+    'nothing to strip yields no PERL5OPT at all';
 }
 
 sub slurp {
