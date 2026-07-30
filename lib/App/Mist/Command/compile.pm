@@ -40,7 +40,7 @@ sub execute {
         "         add '^\\.claude/' so its session/worktree state is not packaged\n";
     }
 
-    my @invalid_shebang;
+    my ( @invalid_shebang, @tainted_shebang );
     $home->traverse(sub {
       my ($child, $cont) = @_;
       my $local = $child->relative( $home );
@@ -52,12 +52,29 @@ sub execute {
       } else {
         my $fh = eval{ $child->openr }
           or return;
-        push @invalid_shebang, $local if <$fh> =~ m{^#.*bin/perl} ;
+        my $shebang = <$fh>;
+        return unless defined $shebang;
+        push @invalid_shebang, $local if $shebang =~ m{^#.*bin/perl};
+        push @tainted_shebang, $local if _shebang_enables_taint( $shebang );
       }
     });
 
     print STDERR "WARNING: invalid shebang found (use '#!/usr/bin/env perl' instead):",
       join( qq{\n  }, '', @invalid_shebang ), "\n" if @invalid_shebang;
+
+    # Reported separately from the shebang-style warning, and after it, because
+    # the two remedies conflict: the fix suggested above cannot be applied to a
+    # tainted script.
+    print STDERR
+      "WARNING: taint mode (-T) in a shebang cannot work in a mist project:",
+      join( qq{\n  }, '', @tainted_shebang ), "\n",
+      "         Taint makes perl ignore PERL5LIB, which is how mist hands a\n",
+      "         script the project's libraries - so these see none of ./perl5\n",
+      "         and every vendored module is missing. '#!/usr/bin/env perl -T'\n",
+      "         does not even start (env looks for a program named 'perl -T').\n",
+      "         If a script must run tainted, give it the paths with explicit\n",
+      "         -I switches; the environment cannot carry them.\n"
+      if @tainted_shebang;
   } else {
     print STDERR "WARNING: no MANIFEST.SKIP file found in project root\n";
     print STDERR "         skipping sanity scan of project files\n";
@@ -148,6 +165,33 @@ VERSION_INFO
 
   };
 
+}
+
+# Does this shebang put perl into taint mode? Pure, so the parsing is testable
+# on its own - and it needs parsing rather than a match, because a bare /-T/
+# catches an interpreter *path* like /opt/perl-T/bin/perl, and a non-perl
+# interpreter may take a -T of its own that means something else entirely.
+sub _shebang_enables_taint {
+  my ( $shebang ) = @_;
+  return 0 unless defined $shebang and $shebang =~ m{^#!\s*(\S+)(.*)$};
+
+  my ( $interpreter, $rest ) = ( $1, $2 );
+  my @args = split ' ', $rest;
+
+  if ( $interpreter =~ m{(?:\A|/)env\z} ) {
+    # `#!/usr/bin/env perl -T`: the interpreter is env and perl is its argument.
+    # Worth flagging even though the kernel hands env "perl -T" as a single
+    # word, so it never starts - that failure is opaque enough to be worth a
+    # warning of its own.
+    return 0 unless @args and $args[0] =~ m{\Aperl[\d.]*\z};
+    shift @args;
+  } else {
+    return 0 unless $interpreter =~ m{(?:\A|/)perl[\d.]*\z};
+  }
+
+  # -T alone, or bundled: -wT and -Tw both taint, -w does not. A long option
+  # never does.
+  return ( grep { /\A-[^-]*T/ } @args ) ? 1 : 0;
 }
 
 1;

@@ -15,6 +15,14 @@ Revision history for App::Mist
     checkout, so it is now rejected with that explanation instead of being taken
     literally as a perlbrew perl named `perl-system`.
 
+  - `mist compile`'s shebang scan also warns about taint mode. A `-T` script
+    cannot work in a mist project: taint makes perl ignore `PERL5LIB`, which is
+    the only way mist hands a script the project's libraries, so every vendored
+    module goes missing - and `#!/usr/bin/env perl -T` never starts at all,
+    because the kernel passes `env` the single word `perl -T`. Reported
+    separately from the shebang-style warning, whose suggested fix cannot be
+    applied to a tainted script.
+
   - A project that pins no perl version is deprecated and now warns, from both
     `mist` and `./mpan-install`. It is the one configuration that silently
     reinterprets an environment: the build follows whatever perl is on `PATH`,
