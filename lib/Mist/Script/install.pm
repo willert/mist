@@ -234,19 +234,18 @@ sub run_cpanm {
   %marker = %{ shift @_ } if @_ and ref $_[0] eq 'HASH';
   local %ENV = %ENV;
 
-  # --system-perl: keep the distro's own libraries out of the build. Both halves
-  # are needed or they disagree - --exclude-vendor governs what cpanm counts as
-  # already installed (its search_inc, since cpanm runs in-process here), while
-  # PERL5OPT reaches the separate perls that run Makefile.PL, Build.PL and the
-  # dist's tests, which cpanm's search_inc does not touch. Excluding vendor from
-  # one but not the other would be worse than excluding it from neither: cpanm
-  # would install a dist whose build then could not see it, or skip one the build
-  # then could. Site needs no flag - cpanm's contained @INC never included it.
-  my @strip;
+  # --system-perl: keep the machine's own libraries out of the build. This is
+  # mist's own enforcement, deliberately not cpanm's --exclude-vendor. That flag
+  # was tried and dropped: across three constructed cases - the distro's copy
+  # newer than the mirror's, exactly equal, and a core module - it changed
+  # nothing, because on this path cpanm does not consult those directories for
+  # its skip decision to begin with. What matters is the separate perls that run
+  # Makefile.PL, Build.PL and the dist's tests, and PERL5OPT is what reaches
+  # them.
   if ( eval { Mist::Script::perl->can( 'in_system_perl_mode' ) }
        and Mist::Script::perl::in_system_perl_mode() ) {
-    @strip = Mist::Script::perl::inc_strip_list( $local_lib );
-    my $perl5opt = Mist::Script::perl::inc_strip_perl5opt( @strip );
+    my $perl5opt = Mist::Script::perl::inc_strip_perl5opt(
+      Mist::Script::perl::inc_strip_list( $local_lib ) );
     $ENV{PERL5OPT} = $perl5opt if defined $perl5opt;
   }
 
@@ -255,7 +254,6 @@ sub run_cpanm {
     "--quiet",
     "--mirror=file://${mpan}",
     '--mirror-only',
-    ( @strip ? '--exclude-vendor' : () ),
     @CPAN_ARGS,
   );
 
