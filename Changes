@@ -15,6 +15,14 @@ Revision history for App::Mist
     checkout, so it is now rejected with that explanation instead of being taken
     literally as a perlbrew perl named `perl-system`.
 
+  - The generated `perl5/bin/mist-run` wrapper no longer runs perl to set itself
+    up. It re-derived local::lib's environment variables on every invocation,
+    producing byte-identical values to the ones the rc it had just sourced
+    already exports - and, before `--no-create` was added, created directory
+    trees under the target path as a side effect of merely asking. The wrapper is
+    now pure shell: source the rc, export three paths, exec. Nothing outside
+    `./mpan-install` needs local::lib at runtime any more.
+
   - `mist compile`'s shebang scan also warns about taint mode. A `-T` script
     cannot work in a mist project: taint makes perl ignore `PERL5LIB`, which is
     the only way mist hands a script the project's libraries, so every vendored

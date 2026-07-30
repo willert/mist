@@ -583,7 +583,14 @@ source $MIST_ENV
 VERSION_ARCH_PATH="%s"
 LOCAL_LIB="$MIST_ROOT/perl5/$VERSION_ARCH_PATH"
 
-eval `mist_run perl -Mlocal::lib=--no-create,$LOCAL_LIB`;
+# The local::lib variables (PERL5LIB, PERL_LOCAL_LIB_ROOT, PERL_MB_OPT,
+# PERL_MM_OPT, PATH) are already exported by the rc sourced above, which bakes
+# what local::lib computed at install time. This used to re-derive them by
+# running local::lib again on every invocation, which produced byte-identical
+# values - and, before --no-create was added, silently created directory trees
+# under the target path as a side effect of merely asking. LOCAL_LIB and
+# VERSION_ARCH_PATH are kept because they record which environment this wrapper
+# belongs to, and a finalize script or a mist_exec override may want them.
 export PATH="$MIST_ROOT/bin:$MIST_ROOT/sbin:$MIST_ROOT/script:$PATH"
 export PERL5LIB="$MIST_ROOT/lib:$PERL5LIB"
 export LD_LIBRARY_PATH=$MIST_ROOT/perl5/lib:$LD_LIBRARY_PATH
