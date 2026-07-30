@@ -2,6 +2,8 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+0.51 2026-07-30T17:37:43Z
+
   - App::Mist keeps its own lib/ ahead of the vendored perl5 on @INC, so the
     Minilla release-pipeline overrides (BumpVersionSmart, TagPublish) can no
     longer be shadowed by stock Minilla in perlbrew re-exec'd processes.
