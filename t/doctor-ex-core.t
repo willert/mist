@@ -23,6 +23,15 @@ plan skip_all => 'mist not on PATH' unless length $mist and -x $mist;
 my $repo = File::Spec->rel2abs(
   File::Spec->catdir( $FindBin::Bin, File::Spec->updir ) );
 
+# Every assertion here is about doctor's verdict on a real project: which
+# evictions it reports and which the mirror already covers. MANIFEST.SKIP keeps
+# mpan-dist out of the dist tarball, so in a clean-room build there is no mirror
+# to compare against and the gap would be "everything" - assertions that pass
+# for the wrong reason, and one that rightly fails.
+plan skip_all => 'no vendored mirror here (a dist/clean-room build)'
+  unless -f File::Spec->catfile(
+    $repo, 'mpan-dist', 'modules', '02packages.details.txt.gz' );
+
 my $other = '/usr/bin/perl';
 plan skip_all => "no system perl at $other" unless -x $other;
 
