@@ -123,4 +123,25 @@ UNSET_MODULE_MAKER: {
   ok !$fired4, 'a project with no minil.toml is silent';
 }
 
+KNOWN_BAD_VERSIONS_TABLE: {
+  # The blacklist is data, so the table itself is what is worth asserting: each
+  # entry has to carry enough to act on without looking anything up.
+  my @bad = @App::Mist::Command::doctor::KNOWN_BAD;
+  ok scalar @bad, 'the known-bad table has entries';
+
+  for my $entry ( @bad ) {
+    my $m = $entry->{module} // '<unnamed>';
+    ok length( $entry->{module} // '' ), "$m: names a module";
+    ok length( $entry->{below}  // '' ), "$m: names the version it is fixed in";
+    ok length( $entry->{what}   // '' ), "$m: says what is wrong";
+    ok length( $entry->{why}    // '' ), "$m: explains why it bites";
+    like $entry->{fix} // '', qr/\bmist\b/, "$m: gives a runnable fix";
+  }
+
+  my ( $term ) = grep { $_->{module} eq 'Term::Table' } @bad;
+  ok $term, 'Term::Table is covered';
+  is $term->{below}, '0.019',
+    '...fixed in 0.019, where the Test-Simple use cycle was resolved';
+}
+
 done_testing;

@@ -9,6 +9,29 @@ use Config;
 use Module::CoreList;
 
 use Mist::CPAN::PackageIndex ();
+use Mist::Role::CPAN::PackageIndex ();
+
+# Releases known to break a mirror-only install in ways the resulting error does
+# not explain. One line per entry; the point of having it here rather than in
+# prose is that nobody has to remember it.
+#
+# Read against the *indexed* version, never the tarballs on disk: a superseded
+# tarball no index entry points at cannot be resolved and so cannot bite, and
+# mirrors accumulate those routinely.
+our @KNOWN_BAD = (
+  {
+    module => 'Term::Table',
+    below  => '0.019',
+    what   => 'declares a use cycle with Test-Simple',
+    why    => <<'WHY',
+  Term::Table was split out of Test2-Suite, and Test2::Suite was later merged
+  into Test-Simple - which left the two declaring each other. Releases before
+  0.019 carry that cycle. Resolving it mirror-only does not fail in a way that
+  names the cause.
+WHY
+    fix    => 'mist inject Term::Table~0.019   (or newer)',
+  },
+);
 
 sub usage_desc { '%c doctor %o' }
 
@@ -44,6 +67,7 @@ sub execute {
   $found += _report_stale_bin_layout( $ctx );
   $found += _report_index_gaps( $ctx );
   $found += _report_unset_module_maker( $ctx );
+  $found += _report_known_bad_versions( $ctx );
 
   my @problems = _ex_core_gap( $ctx, $target, $opt->for );
 
@@ -90,6 +114,27 @@ and commit what lands in mpan-dist.
 ADVICE
 
   return;
+}
+
+sub _report_known_bad_versions {
+  my ( $ctx ) = @_;
+
+  my $indexed = _indexed_versions( $ctx );
+  my $found   = 0;
+
+  for my $bad ( @KNOWN_BAD ) {
+    my $have = $indexed->{ $bad->{module} };
+    next unless defined $have;
+    next unless Mist::Role::CPAN::PackageIndex::_version_cmp(
+      $have, $bad->{below} ) < 0;
+
+    printf "%s %s is indexed, and %s below %s.\n\n%s\n  Fix: %s\n\n",
+      $bad->{module}, $have, $bad->{what}, $bad->{below},
+      $bad->{why}, $bad->{fix};
+    $found++;
+  }
+
+  return $found;
 }
 
 # perl5/bin/mist-run is a symlink into a per-perl wrapper. A plain file there is
@@ -239,6 +284,26 @@ sub _version_of {
 
 # Every module name the project's own mirror indexes, so the report names only
 # what is genuinely absent rather than everything that left core.
+# module => the single version the index resolves to. mist's reindex is
+# highest-version-wins, so there is normally one; if an incremental add ever left
+# two, take the highest, which is what a resolver would reach.
+sub _indexed_versions {
+  my ( $ctx ) = @_;
+  my $index = Mist::CPAN::PackageIndex->new({ cpan_dist_root => $ctx->mpan_dist });
+  my $entries = eval { $index->package_index->entries->get_hash } or return {};
+
+  my %version;
+  for my $pkg ( keys %$entries ) {
+    for my $v ( keys %{ $entries->{ $pkg } } ) {
+      next unless defined $v and length $v and $v ne 'undef';
+      $version{ $pkg } = $v
+        if not defined $version{ $pkg }
+        or Mist::Role::CPAN::PackageIndex::_version_cmp( $v, $version{ $pkg } ) > 0;
+    }
+  }
+  return \%version;
+}
+
 sub _indexed_modules {
   my ( $ctx ) = @_;
   my $index = Mist::CPAN::PackageIndex->new({ cpan_dist_root => $ctx->mpan_dist });
