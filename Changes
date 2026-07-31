@@ -15,6 +15,13 @@ Revision history for App::Mist
     checkout, so it is now rejected with that explanation instead of being taken
     literally as a perlbrew perl named `perl-system`.
 
+  - `mist doctor --for <version>` answers for a perl that is not installed
+    locally, which is the usual case - the box being deployed to is not the box
+    in front of you. mist now vendors a current `Module::CoreList`; the one
+    shipping with 5.20.3 dates from 2015 and stops at 5.23.2, so it could not
+    answer for anything modern. `--perl <path>` still asks a real binary, for a
+    perl newer than the bundled table knows.
+
   - New `mist doctor`: reports build pitfalls that only surface once a project is
     built somewhere other than where it usually is. Its first check is the
     ex-core gap - modules that are core in the project's pinned perl, are not

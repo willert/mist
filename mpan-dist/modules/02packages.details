@@ -363,6 +363,8 @@ Module::CPANfile::Environment          0  M/MI/MIYAGAWA/Module-CPANfile-1.1004.t
 Module::CPANfile::Prereq               0  M/MI/MIYAGAWA/Module-CPANfile-1.1004.tar.gz
 Module::CPANfile::Prereqs              0  M/MI/MIYAGAWA/Module-CPANfile-1.1004.tar.gz
 Module::CPANfile::Requirement          0  M/MI/MIYAGAWA/Module-CPANfile-1.1004.tar.gz
+Module::CoreList                   5.20260720  B/BI/BINGOS/Module-CoreList-5.20260720.tar.gz
+Module::CoreList::Utils            5.20260720  B/BI/BINGOS/Module-CoreList-5.20260720.tar.gz
 Module::Implementation              0.09  D/DR/DROLSKY/Module-Implementation-0.09.tar.gz
 Module::Install                     1.21  E/ET/ETHER/Module-Install-1.21.tar.gz
 Module::Install::Admin              1.21  E/ET/ETHER/Module-Install-1.21.tar.gz

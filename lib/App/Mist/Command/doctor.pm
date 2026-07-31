@@ -14,7 +14,8 @@ sub usage_desc { '%c doctor %o' }
 
 sub opt_spec {
   return (
-    [ 'perl=s'    => 'check against this perl binary (default: /usr/bin/perl)' ],
+    [ 'for=s'     => 'check against this perl version (e.g. 5.38.2), from the bundled Module::CoreList' ],
+    [ 'perl=s'    => 'check against this perl binary instead (default: /usr/bin/perl)' ],
     [ 'verbose|v' => 'list every module rather than grouping them' ],
   );
 }
@@ -25,26 +26,37 @@ sub execute {
 
   $ctx->ensure_correct_perlbrew_context;
 
-  my $target = $opt->perl || '/usr/bin/perl';
-  die "$0: no such perl: $target\n" unless -x $target;
+  # --for consults the bundled Module::CoreList, so a perl need not be installed
+  # here to be asked about - which is the usual case: the box you are deploying
+  # to is not the box you are on. --perl asks a real binary, for a perl the
+  # bundled table does not know yet.
+  my ( $target, $label );
+  if ( my $spec = $opt->for ) {
+    die "$0: --for and --perl are alternatives, not a pair\n" if $opt->perl;
+    $label = $spec;
+  } else {
+    $target = $opt->perl || '/usr/bin/perl';
+    die "$0: no such perl: $target\n" unless -x $target;
+    $label = _version_of( $target );
+  }
 
   my $found = 0;
   $found += _report_stale_bin_layout( $ctx );
   $found += _report_index_gaps( $ctx );
   $found += _report_unset_module_maker( $ctx );
 
-  my @problems = _ex_core_gap( $ctx, $target );
+  my @problems = _ex_core_gap( $ctx, $target, $opt->for );
 
   if ( not @problems ) {
-    printf "No ex-core gap against %s.\n", $target unless $found;
+    printf "No ex-core gap against perl %s.\n", $label unless $found;
     return;
   }
 
-  printf <<'REPORT', scalar @problems, $Config{version}, _version_of( $target ), $target;
-%d module(s) are core in this project's perl (%s) but not in %s, and are
-not vendored in mpan-dist. A build under %s would have to find them
-somewhere else - which, without --system-perl's isolation, means silently
-binding to whatever the distribution happens to package.
+  printf <<'REPORT', scalar @problems, $Config{version}, $label;
+%d module(s) are core in this project's perl (%s) but not in perl %s, and
+are not vendored in mpan-dist. A build there would have to find them somewhere
+else - which, without --system-perl's isolation, means silently binding to
+whatever the distribution happens to package.
 
 REPORT
 
@@ -171,15 +183,45 @@ REPORT
 # bundled Module::CoreList only knows perls up to its own release - the 5.20.3
 # copy mist itself runs under stops at 5.23.2 and cannot answer for 5.38 at all.
 sub _ex_core_gap {
-  my ( $ctx, $target_perl ) = @_;
+  my ( $ctx, $target_perl, $version_spec ) = @_;
 
   my $here  = $Module::CoreList::version{ $] + 0 } || {};
-  my %there = map { $_ => 1 } _core_modules_of( $target_perl );
+  my %there = map { $_ => 1 } defined $version_spec
+    ? _core_modules_for_version( $version_spec )
+    : _core_modules_of( $target_perl );
   return () unless %there;   # nothing to compare against; say nothing
 
   my $vendored = _indexed_modules( $ctx );
 
   return sort grep { not $there{ $_ } and not $vendored->{ $_ } } keys %$here;
+}
+
+# From the bundled table rather than a live perl. Accepts the shapes people
+# actually write - 5.38, 5.38.2, 5.038002 - and refuses loudly rather than
+# reporting an empty gap, which would read as "all clear".
+sub _core_modules_for_version {
+  my ( $spec ) = @_;
+
+  my $key = _corelist_key( $spec ) or die <<"UNKNOWN";
+$0: Module::CoreList $Module::CoreList::VERSION does not know perl $spec.
+
+It knows up to @{[ (sort { $a <=> $b } keys %Module::CoreList::version)[-1] ]}.
+For a newer perl, point --perl at an actual binary instead, or update the
+vendored Module::CoreList.
+UNKNOWN
+
+  return keys %{ $Module::CoreList::version{ $key } || {} };
+}
+
+sub _corelist_key {
+  my ( $spec ) = @_;
+  return undef unless defined $spec and length $spec;
+  return $spec if exists $Module::CoreList::version{ $spec };
+
+  my @part = grep { length } split /[._v]+/, $spec;
+  return undef unless @part >= 2;
+  my $key = sprintf '%d.%03d%03d', $part[0], $part[1], ( $part[2] || 0 );
+  return exists $Module::CoreList::version{ $key } ? $key : undef;
 }
 
 sub _core_modules_of {

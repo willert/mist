@@ -69,4 +69,30 @@ GROUPS_BY_DEFAULT: {
     '...so a 27-module family does not flood the output';
 }
 
+ANSWERS_FOR_A_PERL_THAT_IS_NOT_INSTALLED: {
+  # The point of bundling a current Module::CoreList: the box you deploy to is
+  # not the box you are on, so --for must not require the perl to be present.
+  my $out = `$mist -C $repo doctor --for 5.38.2 2>&1`;
+  like $out, qr/but not in perl 5\.38\.2/,
+    'answers for a perl version by name, with no such binary here';
+  like $out, qr/^\s+CGI\s+\d+/m, '...and reports the same evictions';
+
+  for my $spec ( '5.38', '5.038000' ) {
+    my $o = `$mist -C $repo doctor --for $spec 2>&1`;
+    like $o, qr/but not in perl \Q$spec\E/, "accepts the $spec spelling";
+  }
+}
+
+REFUSES_RATHER_THAN_REPORTING_ALL_CLEAR: {
+  # An unknown version must not come back as an empty gap - that reads as a pass.
+  my $out = `$mist -C $repo doctor --for 9.99 2>&1`;
+  unlike $out, qr/No ex-core gap/, 'an unknown perl is not reported as clean';
+  like $out, qr/does not know perl 9\.99/, '...it says it cannot answer';
+  like $out, qr/It knows up to/,           '...and how far it does reach';
+
+  my $both = `$mist -C $repo doctor --for 5.38.2 --perl /usr/bin/perl 2>&1`;
+  like $both, qr/alternatives, not a pair/,
+    'naming both a version and a binary is refused rather than silently ranked';
+}
+
 done_testing;
