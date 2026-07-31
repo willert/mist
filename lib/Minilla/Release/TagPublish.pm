@@ -11,11 +11,14 @@ sub run {
 
   my $ver = $project->version;
   if ( $opts->{dry_run} ) {
-    # Deliberately no version here: a dry run skips the bump step, so $ver is
-    # the un-bumped current version, NOT what a real release would tag. Naming
-    # it reads as "this release is $ver" and misleads. The tag version is
-    # decided (bump or keep-in-flight) only on a real release.
-    infof("DRY-RUN.  No tag created or pushed; the release version is decided and tagged only on a real release.\n");
+    # Never $ver here: a dry run skips the bump step, so it is the un-bumped
+    # current version, NOT what a real release would tag, and naming it reads as
+    # "this release is $ver". BumpVersionSmart works the real one out and leaves
+    # it in $opts.
+    my $would = $opts->{dry_run_version};
+    infof("DRY-RUN.  No tag created or pushed; %s\n", $would
+      ? "a real release would tag $would."
+      : "the release version is decided and tagged only on a real release.");
     return;
   }
 
