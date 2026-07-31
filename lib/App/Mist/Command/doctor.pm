@@ -32,7 +32,33 @@ our @KNOWN_BAD = (
 WHY
     fix    => 'mist inject Term::Table~0.019   (or newer)',
   },
+  {
+    module     => 'Module::CPANTS::Analyse',
+    below      => '1.03',
+    above_perl => '5.20.3',
+    what       => 'fails its own test suite',
+    why        => <<'WHY',
+  t/analyse/manifest.t builds a fixture distribution containing a symlink with
+  an absolute target, and Archive::Tar's secure extract refuses that on perls
+  newer than 5.20.3. The assertion then never sees the symlink it is looking
+  for and fails. That takes Test::Kwalitee with it, and anything declaring
+  Test::Kwalitee among its author-test prereqs - Plack::Middleware::XSRFBlock,
+  for one. Nothing in the resulting cascade mentions Archive::Tar.
+WHY
+    fix        => 'mist inject Module::CPANTS::Analyse~1.03   (carries the test patch)',
+  },
 );
+
+# A perl version as a comparable number: 5.38.2 -> 5.038002, the shape
+# %Module::CoreList::version is keyed by.
+sub _numeric_perl {
+  my ( $spec ) = @_;
+  return undef unless defined $spec and length $spec;
+  return $spec if $spec =~ /\A\d+\.\d{6}\z/;
+  my @part = grep { length } split /[._v]+/, $spec;
+  return undef unless @part >= 2;
+  return sprintf '%d.%03d%03d', $part[0], $part[1], ( $part[2] || 0 );
+}
 
 sub usage_desc { '%c doctor %o' }
 
@@ -69,7 +95,7 @@ sub execute {
   $found += _report_index_gaps( $ctx );
   $found += _report_unset_module_maker( $ctx );
   $found += _report_unsatisfiable_declarations( $ctx );
-  $found += _report_known_bad_versions( $ctx );
+  $found += _report_known_bad_versions( $ctx, $label );
 
   my @problems = _ex_core_gap( $ctx, $target, $opt->for );
 
@@ -212,7 +238,7 @@ REPORT
 }
 
 sub _report_known_bad_versions {
-  my ( $ctx ) = @_;
+  my ( $ctx, $target_version ) = @_;
 
   my $indexed = _indexed_versions( $ctx );
   my $found   = 0;
@@ -222,6 +248,15 @@ sub _report_known_bad_versions {
     next unless defined $have;
     next unless Mist::Role::CPAN::PackageIndex::_version_cmp(
       $have, $bad->{below} ) < 0;
+
+    # Gated on the perl being asked about, never on the one pinned in the
+    # mistfile. The pin is where the project builds today; the target is where it
+    # is going, and that is the whole question doctor is run to answer. Being
+    # fine under the pin only means the entry bites later.
+    if ( my $above = $bad->{above_perl} ) {
+      my ( $target, $floor ) = map { _numeric_perl( $_ ) } $target_version, $above;
+      next unless defined $target and defined $floor and $target > $floor;
+    }
 
     printf "%s %s is indexed, and %s below %s.\n\n%s\n  Fix: %s\n\n",
       $bad->{module}, $have, $bad->{what}, $bad->{below},

@@ -175,6 +175,27 @@ KNOWN_BAD_VERSIONS_TABLE: {
   ok $term, 'Term::Table is covered';
   is $term->{below}, '0.019',
     '...fixed in 0.019, where the Test-Simple use cycle was resolved';
+  ok !$term->{above_perl}, '...and its cycle is unconditional, so it is ungated';
+
+  my ( $cpants ) = grep { $_->{module} eq 'Module::CPANTS::Analyse' } @bad;
+  ok $cpants, 'Module::CPANTS::Analyse is covered';
+  is $cpants->{below}, '1.03', '...fixed in 1.03, which carries the test patch';
+  is $cpants->{above_perl}, '5.20.3',
+    '...and gated on the perl, since Archive::Tar only refuses it above 5.20.3';
+}
+
+PERL_VERSIONS_COMPARE_NUMERICALLY: {
+  # The gate is evaluated against the perl being asked about, so the comparison
+  # has to order 5.38.2 above 5.20.3 - which string comparison does not.
+  my $num = \&App::Mist::Command::doctor::_numeric_perl;
+
+  is $num->('5.38.2'),   '5.038002', 'dotted becomes the CoreList shape';
+  is $num->('5.38'),     '5.038000', '...with a missing patch level as zero';
+  is $num->('5.020003'), '5.020003', '...and an already-numeric spec passes through';
+  ok $num->('5.38.2') > $num->('5.20.3'),
+    '5.38.2 orders above 5.20.3, which it does not as a string';
+  ok $num->('5.8.9') < $num->('5.20.3'), 'and 5.8.9 below 5.20.3, likewise';
+  is $num->('nonsense'), undef, 'an unparseable spec yields undef, not a guess';
 }
 
 done_testing;
