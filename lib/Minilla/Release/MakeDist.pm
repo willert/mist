@@ -13,6 +13,16 @@ use Minilla::Logger;
 # line names a file the project root never receives - and names it for the
 # un-bumped version besides. Both are worth one line at the point of confusion,
 # rather than being re-derived from the pipeline on every release.
+#
+# The label is deliberately explained rather than corrected. Minilla copies the
+# module source into the work dir verbatim (WorkDir::_rewrite_pod is disabled
+# upstream), so renaming the tarball to the version under validation would leave
+# it carrying the current $VERSION - and mist resolves on `>=` floors, where a
+# tarball claiming a version it does not have satisfies a floor it does not
+# meet. Under-labelling cannot break that invariant: it promises less than it
+# delivers. Naming the true version is also not free of the source tree, since
+# Project::regenerate_files writes back into the project root even when called
+# from the work dir.
 sub run {
   my ($self, $project, $opts) = @_;
 
