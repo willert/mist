@@ -249,18 +249,24 @@ sub _report_known_bad_versions {
     next unless Mist::Role::CPAN::PackageIndex::_version_cmp(
       $have, $bad->{below} ) < 0;
 
-    # Gated on the perl being asked about, never on the one pinned in the
-    # mistfile. The pin is where the project builds today; the target is where it
-    # is going, and that is the whole question doctor is run to answer. Being
-    # fine under the pin only means the entry bites later.
+    # above_perl describes when an entry bites; it does not decide whether to
+    # mention it. "This will cause problems later" is worth knowing the moment
+    # someone is in the project, not only once they sit down to evaluate a newer
+    # perl - so it is always reported, and the condition is stated instead.
+    my $applicability = q{};
     if ( my $above = $bad->{above_perl} ) {
       my ( $target, $floor ) = map { _numeric_perl( $_ ) } $target_version, $above;
-      next unless defined $target and defined $floor and $target > $floor;
+      my $crosses = defined $target && defined $floor && $target > $floor;
+      $applicability = sprintf "  Bites on perls newer than %s%s\n", $above,
+        ( defined $target
+          ? ( $crosses ? " - including the $target_version asked about here."
+                       : ", so not under the $target_version asked about here." )
+          : '.' );
     }
 
-    printf "%s %s is indexed, and %s below %s.\n\n%s\n  Fix: %s\n\n",
+    printf "%s %s is indexed, and %s below %s.\n\n%s%s\n  Fix: %s\n\n",
       $bad->{module}, $have, $bad->{what}, $bad->{below},
-      $bad->{why}, $bad->{fix};
+      $bad->{why}, $applicability, $bad->{fix};
     $found++;
   }
 

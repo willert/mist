@@ -184,6 +184,34 @@ KNOWN_BAD_VERSIONS_TABLE: {
     '...and gated on the perl, since Archive::Tar only refuses it above 5.20.3';
 }
 
+ABOVE_PERL_DESCRIBES_RATHER_THAN_FILTERS: {
+  # A conditional entry is reported whichever perl is asked about - "this will
+  # cause problems later" is worth knowing while working on the project, not only
+  # once someone sits down to evaluate a newer perl. The condition is stated in
+  # the report instead of deciding whether there is one.
+  my $check = \&App::Mist::Command::doctor::_report_known_bad_versions;
+
+  local @App::Mist::Command::doctor::KNOWN_BAD = ( {
+    module     => 'Some::Dist',
+    below      => '2.0',
+    above_perl => '5.20.3',
+    what       => 'explodes',
+    why        => "  because it does\n",
+    fix        => 'mist inject Some::Dist~2.0',
+  } );
+
+  no warnings 'redefine';
+  local *App::Mist::Command::doctor::_indexed_versions = sub { { 'Some::Dist' => '1.0' } };
+
+  my ( $under, $out_under ) = report_from( sub { $check->( $_[0], '5.20.3' ) }, undef );
+  ok $under, 'reported even when the perl asked about is below the threshold';
+  like $out_under, qr/not under the 5\.20\.3/, '...saying it does not bite there yet';
+
+  my ( $over, $out_over ) = report_from( sub { $check->( $_[0], '5.38.2' ) }, undef );
+  ok $over, 'and reported when it is above';
+  like $out_over, qr/including the 5\.38\.2/, '...saying it bites there';
+}
+
 PERL_VERSIONS_COMPARE_NUMERICALLY: {
   # The gate is evaluated against the perl being asked about, so the comparison
   # has to order 5.38.2 above 5.20.3 - which string comparison does not.
