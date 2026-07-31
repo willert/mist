@@ -28,10 +28,15 @@ sub execute {
   my $target = $opt->perl || '/usr/bin/perl';
   die "$0: no such perl: $target\n" unless -x $target;
 
+  my $found = 0;
+  $found += _report_stale_bin_layout( $ctx );
+  $found += _report_index_gaps( $ctx );
+  $found += _report_unset_module_maker( $ctx );
+
   my @problems = _ex_core_gap( $ctx, $target );
 
   if ( not @problems ) {
-    printf "No ex-core gap against %s.\n", $target;
+    printf "No ex-core gap against %s.\n", $target unless $found;
     return;
   }
 
@@ -73,6 +78,91 @@ and commit what lands in mpan-dist.
 ADVICE
 
   return;
+}
+
+# perl5/bin/mist-run is a symlink into a per-perl wrapper. A plain file there is
+# the pre-per-perl layout, left behind because `mist upgrade` deliberately does
+# not regenerate the bin/etc layer - so a project whose only recent installs went
+# through upgrade can carry a wrapper years older than its generations.
+sub _report_stale_bin_layout {
+  my ( $ctx ) = @_;
+  my $selector = $ctx->perl5_base_lib->file(qw/ bin mist-run /);
+  return 0 unless -e "$selector";
+  return 0 if -l "$selector";
+
+  print <<"REPORT";
+perl5/bin/mist-run is a plain file, not a selector symlink.
+
+  That is the layout from before per-perl wrappers. It still works, but the
+  wrapper predates whatever built the current generations, so it can be missing
+  fixes they assume. `mist upgrade` does not regenerate this layer by design;
+  a plain ./mpan-install does.
+
+REPORT
+  return 1;
+}
+
+# An index entry whose tarball is gone is real corruption: a build resolving that
+# module would be told where to find something that is not there. Superseded
+# tarballs with no entry are the opposite and are normal, so they are not
+# reported - `mist index` already accounts for those after a reindex.
+sub _report_index_gaps {
+  my ( $ctx ) = @_;
+
+  my $index = Mist::CPAN::PackageIndex->new({ cpan_dist_root => $ctx->mpan_dist });
+  my $entries = eval { $index->package_index->entries->get_hash } or return 0;
+
+  my $authors = $ctx->mpan_dist->subdir(qw/ authors id /);
+  my ( %missing, %seen_path );
+  for my $pkg ( keys %$entries ) {
+    for my $version ( keys %{ $entries->{ $pkg } } ) {
+      my $entry = $entries->{ $pkg }{ $version } or next;
+      my $path  = eval { $entry->path } or next;
+      next if $seen_path{ $path }++;
+      $missing{ $path } = 1 unless -e $authors->file( split m{/}, $path )->stringify;
+    }
+  }
+  return 0 unless %missing;
+
+  printf "%d index entr%s point at a tarball that is not there:\n\n",
+    scalar keys %missing, ( keys %missing == 1 ? 'y' : 'ies' );
+  print "  $_\n" for sort keys %missing;
+  print <<'REPORT';
+
+  A build resolving one of these is sent to a file that does not exist. Re-run
+  `mist index` to rebuild the index from what the mirror actually holds, and
+  re-vendor anything that turns out to be genuinely missing.
+
+REPORT
+  return 1;
+}
+
+# ModuleBuildTiny installs only script/ and dies at regeneration if bin/ exists -
+# mid-release, after the version bump. Only worth reporting when both halves are
+# true: the maker was never chosen, and the project has the directories the
+# default refuses.
+sub _report_unset_module_maker {
+  my ( $ctx ) = @_;
+
+  my $minil = $ctx->project_root->file( 'minil.toml' );
+  return 0 unless -f "$minil";
+  return 0 if $minil->slurp =~ m{^\s*module_maker}m;
+
+  my @script_dirs = grep { -d $ctx->project_root->subdir( $_ )->stringify }
+                    qw/ bin sbin /;
+  return 0 unless @script_dirs;
+
+  printf <<'REPORT', join( '/ and ', @script_dirs );
+minil.toml sets no module_maker, and this project has %s/.
+
+  Minilla then defaults to ModuleBuildTiny, which installs only script/ and
+  refuses outright when bin/ is present ("Module::Build::Tiny doesn't install
+  bin/ directory"). It refuses at *regeneration*, which runs mid-release after
+  the version bump - so the failure lands on whoever next cuts a release, with a
+  dirty tree. Set `module_maker = "ExtUtilsMakeMaker"` and regenerate.
+
+REPORT
+  return 1;
 }
 
 # Modules core in the perl this project pins but not in $target_perl, minus
