@@ -2,72 +2,28 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
-  - `./mpan-install --system-perl` builds against the perl already on the machine
-    and manages only the library tree: no perlbrew, no re-exec, and the mistfile's
-    pinned version is ignored. Intended for containers and hosts that would rather
-    track a distro perl with backported security fixes than maintain a perlbrew
-    build. The choice is recorded under `perl5/`, so later plain runs stay on it
-    rather than reverting the box to the pin; `--perlbrew=<version>` hands the
-    interpreter back and clears it. It refuses to run in a shell with a perlbrew
-    or local::lib active, rather than silently building against that perl and
-    recording it as the machine's own. A mistfile cannot declare `perl 'system'`:
-    opting out is a per-machine decision and a committed pin speaks for every
-    checkout, so it is now rejected with that explanation instead of being taken
-    literally as a perlbrew perl named `perl-system`.
+  - `./mpan-install --system-perl` builds against the perl already on the
+    machine instead of a perlbrew one, remembers that choice per host, refuses
+    an inherited perlbrew or local::lib, and keeps the machine's vendor and site
+    libraries out of the build.
 
-  - `mist doctor --for <version>` answers for a perl that is not installed
-    locally, which is the usual case - the box being deployed to is not the box
-    in front of you. mist now vendors a current `Module::CoreList`; the one
-    shipping with 5.20.3 dates from 2015 and stops at 5.23.2, so it could not
-    answer for anything modern. `--perl <path>` still asks a real binary, for a
-    perl newer than the bundled table knows.
+  - New `mist doctor`: opt-in diagnostics for build pitfalls that only surface
+    once a project is built somewhere else - the ex-core gap, cpanfile entries
+    the mirror cannot satisfy, and a table of releases known to break a
+    mirror-only install. `--for <version>` answers for a perl that is not
+    installed here, against a newly vendored `Module::CoreList`.
 
-  - New `mist doctor`: reports build pitfalls that only surface once a project is
-    built somewhere other than where it usually is. Its first check is the
-    ex-core gap - modules that are core in the project's pinned perl, are not
-    core in another one, and are not vendored in `mpan-dist`. A project pinned to
-    an old perl never had to vendor what that perl ships, so the gap is invisible
-    until something builds on a newer perl and then binds silently to whatever
-    the distribution packages. 76 modules left core between 5.20.3 and 5.38.
+  - The generated `perl5/bin/mist-run` wrapper is pure shell now; nothing
+    outside `./mpan-install` derives local::lib at runtime any more.
 
-  - Under `--system-perl`, a build no longer sees the machine's vendor or site
-    libraries. The allow-list is the perl's own core plus the environment being
-    built; everything else in the target perl's real `@INC` is stripped, which
-    also covers entries `%Config` cannot name (Debian contributes `/etc/perl`,
-    `.../perl-base` and `/usr/local/lib/site_perl`). Vendor is out because a
-    distro's maintenance attention is not spread evenly over every packaged
-    module; site is out because it is where a hand-run `cpanm` lands, with no
-    record of what or when. Known limit: perl ignores `PERL5OPT` under `-T`, so a
-    tainted build script or test sees the full `@INC` again.
-
-  - The generated `perl5/bin/mist-run` wrapper no longer runs perl to set itself
-    up. It re-derived local::lib's environment variables on every invocation,
-    producing byte-identical values to the ones the rc it had just sourced
-    already exports - and, before `--no-create` was added, created directory
-    trees under the target path as a side effect of merely asking. The wrapper is
-    now pure shell: source the rc, export three paths, exec. Nothing outside
-    `./mpan-install` needs local::lib at runtime any more.
-
-  - `mist compile`'s shebang scan also warns about taint mode. A `-T` script
-    cannot work in a mist project: taint makes perl ignore `PERL5LIB`, which is
-    the only way mist hands a script the project's libraries, so every vendored
-    module goes missing - and `#!/usr/bin/env perl -T` never starts at all,
-    because the kernel passes `env` the single word `perl -T`. Reported
-    separately from the shebang-style warning, whose suggested fix cannot be
-    applied to a tainted script.
+  - `mist compile`'s shebang scan warns about taint mode, which cannot work in a
+    mist project because taint makes perl ignore `PERL5LIB`.
 
   - A project that pins no perl version is deprecated and now warns, from both
-    `mist` and `./mpan-install`. It is the one configuration that silently
-    reinterprets an environment: the build follows whatever perl is on `PATH`,
-    and the guard that refuses an implicit interpreter switch short-circuits
-    when no perl is managed, so a later run from another shell re-activates onto
-    that perl without asking. Pin a version, or use `--system-perl`, which is
-    guarded and remembered.
+    `mist` and `./mpan-install`.
 
   - App::Mist declares the standard Perl 5 licence in its POD, so `META.json`
-    records `perl_5` instead of `unknown` and the release pipeline stops warning
-    that it cannot determine one. The terms are unchanged - the `LICENSE` file
-    has said the same since 2013; only the machine-readable metadata was missing.
+    records `perl_5` instead of `unknown`.
 
 0.51 2026-07-30T17:37:43Z
 
