@@ -25,9 +25,10 @@ Revision history for App::Mist
   - App::Mist declares the standard Perl 5 licence in its POD, so `META.json`
     records `perl_5` instead of `unknown`.
 
-  - `mist release --dry-run` says which version a real release would be. It skips
-    the bump, so the tarball and metadata it reports are still labelled with the
-    current version; that is now stated once rather than left to be re-derived.
+  - `mist release --dry-run` stops leaving its own output to be second-guessed:
+    it names the version a real release would be rather than only the un-bumped
+    current one, and says that the tarball it announces is built inside the work
+    dir and discarded with it.
 
 0.51 2026-07-30T17:37:43Z
 

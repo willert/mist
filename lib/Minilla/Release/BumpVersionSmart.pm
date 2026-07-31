@@ -22,15 +22,14 @@ sub run {
   }
 
   # A dry run must not write the bump, so metadata keeps the current version and
-  # every later step inherits it: the tarball is named for it and the metadata
-  # banner prints it. Name the version a real release would use, and say that
-  # the rest of the run is labelled with the old one - otherwise both have to be
-  # re-derived from the pipeline on every release.
+  # every later step inherits it. Name the version a real release would use, and
+  # say that the rest of the run is labelled with the old one - otherwise both
+  # have to be re-derived from the pipeline on every release.
   if ( $opts->{dry_run} ) {
     my $next = $self->default_new_version($project);
     $opts->{dry_run_version} = $next;
     infof("DRY-RUN.  A real release would bump %s to %s. The bump is not "
-        . "applied, so the tarball and metadata below still say %s.\n",
+        . "applied here, so everything below is still labelled %s.\n",
           $curver, $next, $curver);
     return;
   }
