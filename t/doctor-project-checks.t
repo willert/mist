@@ -123,6 +123,39 @@ UNSET_MODULE_MAKER: {
   ok !$fired4, 'a project with no minil.toml is silent';
 }
 
+UNSATISFIABLE_DECLARATIONS: {
+  my $check = \&App::Mist::Command::doctor::_report_unsatisfiable_declarations;
+
+  # A stray space makes the name match nothing, however well stocked the mirror
+  # is - and it masquerades as a missing distribution, so it is reported first
+  # and on its own terms. This is a real cpanfile in the estate.
+  my ( $ctx, undef, $keep ) = project(
+    'cpanfile' => "requires 'String::Truncate ';\n",
+  );
+  my ( $fired, $out ) = report_from( $check, $ctx );
+  ok $fired, 'a module name with stray whitespace is reported';
+  like $out, qr/stray whitespace/, '...naming the actual fault';
+  like $out, qr/String::Truncate /, '...quoting the entry verbatim';
+  unlike $out, qr/neither indexed/,
+    '...and not as a missing distribution, which is what it looks like';
+
+  # Core modules are not indexed and must not be reported as absent.
+  my ( $ctx2, undef, $keep2 ) = project(
+    'cpanfile' => "requires 'strict';\nrequires 'Carp';\n",
+  );
+  my ( $fired2, $out2 ) = report_from( $check, $ctx2 );
+  ok !$fired2, 'core modules are not reported as unvendored';
+  is $out2, q{}, '...silently';
+
+  # A non-core module with no mirror at all cannot be satisfied.
+  my ( $ctx3, undef, $keep3 ) = project(
+    'cpanfile' => "requires 'Some::Thing::Not::Core';\n",
+  );
+  my ( $fired3, $out3 ) = report_from( $check, $ctx3 );
+  ok $fired3, 'a non-core module the mirror does not carry is reported';
+  like $out3, qr/neither indexed by this mirror nor core/, '...as unsatisfiable';
+}
+
 KNOWN_BAD_VERSIONS_TABLE: {
   # The blacklist is data, so the table itself is what is worth asserting: each
   # entry has to carry enough to act on without looking anything up.

@@ -7,6 +7,7 @@ use App::Mist -command;
 
 use Config;
 use Module::CoreList;
+use Module::CPANfile;
 
 use Mist::CPAN::PackageIndex ();
 use Mist::Role::CPAN::PackageIndex ();
@@ -67,6 +68,7 @@ sub execute {
   $found += _report_stale_bin_layout( $ctx );
   $found += _report_index_gaps( $ctx );
   $found += _report_unset_module_maker( $ctx );
+  $found += _report_unsatisfiable_declarations( $ctx );
   $found += _report_known_bad_versions( $ctx );
 
   my @problems = _ex_core_gap( $ctx, $target, $opt->for );
@@ -114,6 +116,99 @@ and commit what lands in mpan-dist.
 ADVICE
 
   return;
+}
+
+# What the cpanfile asks for, against what the mirror can actually hand over. A
+# mirror-only install has no fallback, so a declaration the mirror cannot honour
+# is fatal - but it fails as a cpanm resolution error, which names the module and
+# not the reason.
+#
+# Malformed names are checked first and separately, because they otherwise
+# masquerade as the other two: `requires 'String::Truncate ';` reads as a missing
+# distribution when the distribution is right there and it is the name that is
+# wrong.
+sub _report_unsatisfiable_declarations {
+  my ( $ctx ) = @_;
+
+  my $prereqs = eval {
+    Module::CPANfile->load( $ctx->cpanfile->stringify )
+      ->prereqs->merged_requirements
+  } or return 0;
+
+  my $indexed = _indexed_versions( $ctx );
+  my $core    = $Module::CoreList::version{ $] + 0 } || {};
+
+  my ( @malformed, @absent, @below );
+  for my $declared ( $prereqs->required_modules ) {
+    next if $declared eq 'perl';
+
+    ( my $module = $declared ) =~ s/\A\s+|\s+\z//g;
+    if ( $module ne $declared ) {
+      # Reported once, under the fault that is actually there. Carrying on would
+      # also file it as absent or unsatisfiable, which is true of the malformed
+      # name and useless: the thing to fix is the name, and what the mirror holds
+      # cannot be judged until it is.
+      push @malformed, $declared;
+      next;
+    }
+    next unless length $module;
+
+    my $want = $prereqs->requirements_for_module( $declared );
+
+    if ( not exists $indexed->{ $module } ) {
+      push @absent, $module unless exists $core->{ $module };
+      next;
+    }
+
+    next unless defined $want and $want =~ /\d/;
+    push @below, sprintf '%s wants %s, mirror indexes %s',
+      $module, $want, $indexed->{ $module }
+      unless eval { $prereqs->accepts_module( $declared, $indexed->{ $module } ) };
+  }
+
+  my $found = 0;
+
+  if ( @malformed ) {
+    printf "%d cpanfile entr%s carr%s stray whitespace in the module name:\n\n",
+      scalar @malformed, ( @malformed == 1 ? 'y' : 'ies' ),
+      ( @malformed == 1 ? 'ies' : 'y' );
+    printf "  requires '%s';\n", $_ for @malformed;
+    print <<'REPORT';
+
+  The name is used verbatim, so it matches nothing in the index however well
+  stocked the mirror is. Trim it.
+
+REPORT
+    $found++;
+  }
+
+  if ( @absent ) {
+    printf "%d required module%s neither indexed by this mirror nor core here:\n\n",
+      scalar @absent, ( @absent == 1 ? ' is' : 's are' );
+    print "  $_\n" for @absent;
+    print <<'REPORT';
+
+  A mirror-only install has nowhere else to look, so this fails at resolution.
+  Vendor them with `mist inject`, or drop the requirement.
+
+REPORT
+    $found++;
+  }
+
+  if ( @below ) {
+    printf "%d cpanfile requirement%s the mirror cannot satisfy:\n\n",
+      scalar @below, ( @below == 1 ? '' : 's' );
+    print "  $_\n" for @below;
+    print <<'REPORT';
+
+  The floor was raised without the matching version being vendored - usually a
+  `mist merge` or `mist inject` that did not follow the cpanfile edit.
+
+REPORT
+    $found++;
+  }
+
+  return $found;
 }
 
 sub _report_known_bad_versions {
