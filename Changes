@@ -2,6 +2,8 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+0.52 2026-07-31T12:06:57Z
+
   - `./mpan-install --system-perl` builds against the perl already on the
     machine instead of a perlbrew one, remembers that choice per host, refuses
     an inherited perlbrew or local::lib, and keeps the machine's vendor and site
