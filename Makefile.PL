@@ -38,6 +38,7 @@ my %WriteMakefileArgs = (
   "Getopt::Long" => "2.42",
   "Minilla" => "v3.1.2",
   "Module::CPANfile" => "1.0002",
+  "Module::CoreList" => "5.20260720",
   "Module::Install" => 0,
   "Module::Path" => 0,
   "Moo" => 0,
