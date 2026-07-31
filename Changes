@@ -15,6 +15,14 @@ Revision history for App::Mist
     checkout, so it is now rejected with that explanation instead of being taken
     literally as a perlbrew perl named `perl-system`.
 
+  - New `mist doctor`: reports build pitfalls that only surface once a project is
+    built somewhere other than where it usually is. Its first check is the
+    ex-core gap - modules that are core in the project's pinned perl, are not
+    core in another one, and are not vendored in `mpan-dist`. A project pinned to
+    an old perl never had to vendor what that perl ships, so the gap is invisible
+    until something builds on a newer perl and then binds silently to whatever
+    the distribution packages. 76 modules left core between 5.20.3 and 5.38.
+
   - Under `--system-perl`, a build no longer sees the machine's vendor or site
     libraries. The allow-list is the perl's own core plus the environment being
     built; everything else in the target perl's real `@INC` is stripped, which
