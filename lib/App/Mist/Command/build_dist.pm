@@ -47,7 +47,7 @@ Any extra arguments are passed through to C<minil dist>.
 
 =head1 SEE ALSO
 
-L<App::Mist::Command::release>, L<App::Mist::Command::local_release>
+L<App::Mist::Command::release>, L<App::Mist::Command::prerelease>
 
 =head1 AUTHORS
 

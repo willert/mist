@@ -2,6 +2,16 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+  - `mist local_release` is gone, replaced by `mist prerelease`. It advances a
+    trial version on every run (`0.52` to `0.52_01`, then `_02`) instead of
+    holding one version in flight, so every iteration a sibling consumes is a
+    distinct artifact that cannot satisfy a requirement for the release it leads
+    to; `mist release` ends the line by promoting `0.52_02` to `0.53`.
+
+  - `mist doctor` reports a `$VERSION` declared with a bare underscore. Perl
+    reads it as a digit separator and discards it, so `our $VERSION = 0.52_01;`
+    is an ordinary `0.5201` and not the trial release it was meant to be.
+
 0.52 2026-07-31T12:06:57Z
 
   - `./mpan-install --system-perl` builds against the perl already on the

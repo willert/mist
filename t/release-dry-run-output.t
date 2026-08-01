@@ -7,7 +7,7 @@ use Test::More;
 use Capture::Tiny qw/ capture /;
 
 use Minilla::Release::TagPublish;
-use Minilla::Release::TagLocal;
+use Minilla::Release::TagPrerelease;
 use Minilla::Release::MakeDist;
 
 # A dry run skips the version-bump step, so $project->version is the un-bumped
@@ -28,7 +28,7 @@ use Minilla::Release::MakeDist;
 
 my $proj = FakeProject->new;
 
-for my $step ( qw/ Minilla::Release::TagPublish Minilla::Release::TagLocal / ) {
+for my $step ( qw/ Minilla::Release::TagPublish Minilla::Release::TagPrerelease / ) {
   my ( $out, $err ) = capture {
     $step->run( $proj, { dry_run => 1 } );
   };

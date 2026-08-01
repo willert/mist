@@ -508,19 +508,21 @@ edit-the-changelog prompt; an interactive release still gets that prompt. That
 fail-fast covers the changelog prompt only - it is not a general guarantee of
 non-interactive operation. If the current version's tag is already on origin the
 version-bump step prompts for the next version (defaulting silently when there is
-no terminal, after writing the bumped version into the source files); the
-intended C<local_release> -E<gt> C<release> workflow sidesteps this, since the
-tag is still local-only at release time and the bump is skipped. Prefer running a
-real release on a terminal.
+no terminal, after writing the bumped version into the source files). Prefer
+running a real release on a terminal.
 
-For a lightweight release that only bumps the version and tags the commit
--- without building or testing a tarball -- use
-L<mist local_release|App::Mist::Command::local_release>. Extra arguments
-are passed through to Minilla.
+Releasing at the end of a prerelease cycle does not prompt: the current version
+is a trial release, so the next version is computed by dropping the trial
+component rather than being asked for - C<0.52_02> releases as C<0.53>.
+
+To hand an unreleased change to a sibling project for testing, use
+L<mist prerelease|App::Mist::Command::prerelease>, which advances the trial
+version and tags locally without building, testing or pushing a tarball. Extra
+arguments are passed through to Minilla.
 
 =head1 SEE ALSO
 
-L<App::Mist::Command::local_release>, L<App::Mist::Command::build_dist>
+L<App::Mist::Command::prerelease>, L<App::Mist::Command::build_dist>
 
 =head1 AUTHORS
 

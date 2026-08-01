@@ -51,7 +51,7 @@ There is no separate lint step. Build/release is via Minilla (`minil`), but rele
 
 ### Minilla integration
 
-`lib/Minilla/` and `lib/Mist/Minilla/` are *not* mist itself — they are Minilla plugins/overrides used when mist-managed projects also use Minilla for releases. `App::Mist::Command::local_release` and `release` shell out into this. Unrelated to the install path; ignore unless working on release tooling.
+`lib/Minilla/` and `lib/Mist/Minilla/` are *not* mist itself — they are Minilla plugins/overrides used when mist-managed projects also use Minilla for releases. `App::Mist::Command::prerelease` and `release` shell out into this. Unrelated to the install path; ignore unless working on release tooling.
 
 ## Conventions and gotchas
 
