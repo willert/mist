@@ -226,6 +226,35 @@ BARE_UNDERSCORE_VERSION: {
   is $out6, q{}, '...silently, so documenting the trap stays free';
 }
 
+TOP_LEVEL_MERGES_ONLY: {
+  # A sibling's own merges are folded in when it is merged, and appear in the
+  # mistfile indented inside the parent's block. They are that sibling's
+  # relationship to declare, not this project's, so only column-0 blocks count.
+  my ( $ctx, undef, $keep ) = project(
+    'cpanfile' => "requires 'strict';\n",
+    'mistfile' => join( "\n",
+      q{perl '5.20.3';},
+      '### <<<[Time::Naive] - keep this line intact',
+      q{merge 'Time::Naive' => sub {},},
+      '### [Time::Naive]>>> - keep this line intact',
+      '### <<<[WeCARE::Env::DBIC] - keep this line intact',
+      q{merge 'WeCARE::Env::DBIC' => sub {},},
+      '  ### <<<[Time::Naive] - keep this line intact',
+      q{  merge 'Time::Naive' => sub {},},
+      '  ### [Time::Naive]>>> - keep this line intact',
+      '### [WeCARE::Env::DBIC]>>> - keep this line intact',
+      '' ),
+  );
+
+  my @merged = App::Mist::Command::doctor::_merged_dists( $ctx );
+  is_deeply \@merged, [ 'Time::Naive', 'WeCARE::Env::DBIC' ],
+    'only top-level merge blocks are this project\'s to declare';
+
+  my ( $ctx2, undef, $keep2 ) = project( 'cpanfile' => "requires 'strict';\n" );
+  is_deeply [ App::Mist::Command::doctor::_merged_dists( $ctx2 ) ], [],
+    'a project with no mistfile has nothing merged';
+}
+
 TRIAL_DISTRIBUTION_DISCRIMINATOR: {
   # The whole intelligence of the vendored-prerelease check is here: which
   # version it reads. Matching the *package* versions in the index reported 7 of

@@ -98,6 +98,7 @@ sub execute {
   $found += _report_unsatisfiable_declarations( $ctx );
   $found += _report_bare_underscore_version( $ctx );
   $found += _report_vendored_prerelease( $ctx );
+  $found += _report_undeclared_merges( $ctx );
   $found += _report_known_bad_versions( $ctx, $label );
 
   my @problems = _ex_core_gap( $ctx, $target, $opt->for );
@@ -356,6 +357,85 @@ minil.toml sets no module_maker, and this project has %s/.
   bin/ directory"). It refuses at *regeneration*, which runs mid-release after
   the version bump - so the failure lands on whoever next cuts a release, with a
   dirty tree. Set `module_maker = "ExtUtilsMakeMaker"` and regenerate.
+
+REPORT
+  return 1;
+}
+
+# Top-level merge blocks in the mistfile. Nested blocks - a sibling's own merges,
+# folded in when it was merged - are indented, and are not this project's
+# relationship to declare.
+sub _merged_dists {
+  my ( $ctx ) = @_;
+  my $mistfile = $ctx->project_root->file( 'mistfile' );
+  return () unless -f -r "$mistfile";
+  return map { m{\A\#\#\# <<<\[([^\]]+)\]} ? $1 : () } $mistfile->slurp( chomp => 1 );
+}
+
+# Which merged distributions nothing in the cpanfile names.
+#
+# The block name is only used to LOCATE the distribution in the index; the
+# verdict is always taken from the modules that distribution provides. Block
+# names are labels and several in this estate do not match their module's
+# casing, so judging on them reported six projects that were perfectly fine.
+# A block whose distribution cannot be found is skipped rather than guessed at.
+sub _undeclared_merges {
+  my ( $ctx ) = @_;
+
+  my @blocks = _merged_dists( $ctx ) or return ();
+
+  my $index = Mist::CPAN::PackageIndex->new({ cpan_dist_root => $ctx->mpan_dist });
+  my $entries = eval { $index->package_index->entries->get_hash } or return ();
+
+  my %provides;   # tarball basename (lc) -> [ packages ]
+  for my $pkg ( keys %$entries ) {
+    for my $v ( keys %{ $entries->{ $pkg } } ) {
+      my $entry = $entries->{ $pkg }{ $v } or next;
+      my $path  = eval { $entry->path } or next;
+      my ( $file ) = $path =~ m{([^/]+)\z} or next;
+      push @{ $provides{ lc $file } }, $pkg;
+    }
+  }
+
+  my $cpanfile = $ctx->project_root->file( 'cpanfile' );
+  return () unless -f -r "$cpanfile";
+  my %named = eval {
+    map { $_ => 1 } Module::CPANfile->load( "$cpanfile" )
+                      ->prereqs->merged_requirements->required_modules;
+  } or return ();   # a malformed cpanfile is reported by its own check
+
+  my @undeclared;
+  for my $block ( @blocks ) {
+    ( my $dist_name = lc $block ) =~ s/::/-/g;
+    my @pkgs = map { @{ $provides{ $_ } } }
+               grep { m{\A\Q$dist_name\E-[0-9]} } keys %provides;
+    next unless @pkgs;                        # not in this mirror; nothing to judge
+    next if grep { $named{ $_ } } @pkgs;      # any provided module named is enough
+    push @undeclared, $block;
+  }
+  return @undeclared;
+}
+
+sub _report_undeclared_merges {
+  my ( $ctx ) = @_;
+  my @undeclared = _undeclared_merges( $ctx ) or return 0;
+
+  printf "%d merged distribution%s named in cpanfile:\n\n", scalar @undeclared,
+    ( @undeclared == 1 ? ' is not' : 's are not' );
+  print "  $_\n" for @undeclared;
+  print <<'REPORT';
+
+  `./mpan-install` only ever reaches a distribution the cpanfile names. cpanm
+  re-resolves a module it is *named* against the index, but one reached
+  transitively is measured against its parent's declared floor - and an
+  installed copy that satisfies that floor is never compared against the index
+  at all. So merging one of these vendors it and installs nothing: the merge
+  appears to work, and the version in `perl5/` never moves.
+
+  Add a `requires` line for whichever module the project actually uses. No
+  version is needed - naming it is what makes cpanm resolve it. `mist upgrade`
+  is the other way there, since it names every laggard explicitly rather than
+  relying on declarations.
 
 REPORT
   return 1;

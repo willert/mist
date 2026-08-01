@@ -8,10 +8,12 @@ Revision history for App::Mist
     distinct artifact that cannot satisfy a requirement for the release it leads
     to; `mist release` ends the line by promoting `0.52_02` to `0.53`.
 
-  - `mist merge` warns when nothing in `cpanfile` names the distribution it just
+  - `mist merge` notes when nothing in `cpanfile` names the distribution it just
     vendored, because `./mpan-install` only reaches a distribution it is named -
     so the merge would appear to work and install nothing. Judged on the modules
     the built distribution provides, and it says nothing about versions.
+    `mist doctor` reports the same condition for every top-level merge already
+    in the mistfile, with the reasoning the note leaves out.
 
   - `mist prerelease` ends by stating what it did: the version, the local commit
     and tag, that nothing was pushed, and the `mist merge` line that consumes it.
