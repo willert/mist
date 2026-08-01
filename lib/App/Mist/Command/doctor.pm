@@ -8,6 +8,7 @@ use App::Mist -command;
 use Config;
 use Module::CoreList;
 use Module::CPANfile;
+use Module::Metadata;
 use version 0.77 ();
 
 use Mist::CPAN::PackageIndex ();
@@ -99,6 +100,7 @@ sub execute {
   $found += _report_bare_underscore_version( $ctx );
   $found += _report_vendored_prerelease( $ctx );
   $found += _report_undeclared_merges( $ctx );
+  $found += _report_unreadable_modules( $ctx );
   $found += _report_known_bad_versions( $ctx, $label );
 
   my @problems = _ex_core_gap( $ctx, $target, $opt->for );
@@ -357,6 +359,63 @@ minil.toml sets no module_maker, and this project has %s/.
   bin/ directory"). It refuses at *regeneration*, which runs mid-release after
   the version bump - so the failure lands on whoever next cuts a release, with a
   dirty tree. Set `module_maker = "ExtUtilsMakeMaker"` and regenerate.
+
+REPORT
+  return 1;
+}
+
+# Whether the release will be able to read this project's modules at all.
+#
+# Deliberately not a reimplementation: this asks Module::Metadata, which is the
+# same scanner Minilla runs over lib/ via ->provides when it builds the dist
+# metadata. The rule is subtle enough that a local copy would drift - POD is
+# skipped, a comment evals as a no-op, and the scan stops at the first genuine
+# declaration, so only a module carrying none of its own can be caught out by a
+# string or heredoc that mentions the version variable and an equals sign.
+#
+# Worth catching here because the release hits it *after* the version bump has
+# been written to disk, so the failure lands mid-pipeline on a dirty tree.
+sub _unreadable_modules {
+  my ( $ctx ) = @_;
+
+  my $lib = $ctx->project_root->subdir( 'lib' );
+  return () unless -d "$lib";
+
+  my @broken;
+  $lib->recurse( callback => sub {
+    my ( $file ) = @_;
+    return if $file->is_dir or $file !~ m{\.pm\z};
+    my $error;
+    {
+      local $SIG{__WARN__} = sub { $error ||= $_[0] };
+      eval { Module::Metadata->new_from_file( "$file" ); 1 } and return;
+      $error ||= $@;
+    }
+    $error =~ s/\s+\z//;
+    $error = ( split /\n/, $error )[0] // 'unparseable';
+    push @broken, [ $file->relative( $ctx->project_root ), $error ];
+  } );
+  return @broken;
+}
+
+sub _report_unreadable_modules {
+  my ( $ctx ) = @_;
+  my @broken = _unreadable_modules( $ctx ) or return 0;
+
+  printf "%d module%s Module::Metadata cannot read:\n\n", scalar @broken,
+    ( @broken == 1 ? ' that' : 's that' );
+  printf "  %s\n    %s\n", @$_ for @broken;
+  print <<'REPORT';
+
+  Minilla runs this same scanner over lib/ to build the dist metadata, so a
+  release fails here - and it fails *after* the version bump has been written,
+  leaving a dirty tree mid-pipeline.
+
+  The usual cause is a string or heredoc that mentions the version variable
+  followed by an equals sign, in a module that declares no version of its own:
+  the scanner keeps looking for a declaration and evaluates that line as code.
+  POD and comments are safe, so move the text into either, reword it, or give
+  the module a version of its own.
 
 REPORT
   return 1;

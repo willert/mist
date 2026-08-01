@@ -226,6 +226,58 @@ BARE_UNDERSCORE_VERSION: {
   is $out6, q{}, '...silently, so documenting the trap stays free';
 }
 
+MODULE_METADATA_CAN_READ_THE_MODULES: {
+  my $check = \&App::Mist::Command::doctor::_report_unreadable_modules;
+
+  # The three conditions have to coincide: a string (not POD, not a comment),
+  # mentioning the version variable with an equals sign, in a module declaring
+  # no version of its own. Asserted through Module::Metadata itself rather than
+  # a local copy of its rule, which is the point of the check.
+  my $hazard = join "\n",
+    'package Some::M;',
+    'sub explain {',
+    "  print <<'TEXT';",
+    '  never write our $VERSION = 0.52_01; unquoted',
+    'TEXT',
+    '}',
+    '1;', '';
+
+  my ( $ctx, undef, $keep ) = project(
+    'cpanfile'      => "requires 'strict';\n",
+    'lib/Some/M.pm' => $hazard,
+  );
+  my ( $fired, $out ) = report_from( $check, $ctx );
+  ok $fired, 'a module the release scanner cannot read is reported';
+  like $out, qr{lib/Some/M\.pm}, '...naming the file';
+  # Matched on a short contiguous phrase: the prose is hard-wrapped and carries
+  # emphasis marks, so anything longer straddles a break or an asterisk.
+  like $out, qr/version bump/,
+    '...and why it matters, since the release fails on a dirty tree';
+
+  # The same text in a comment is harmless: it evaluates as a no-op.
+  my ( $ctx2, undef, $keep2 ) = project(
+    'cpanfile'      => "requires 'strict';\n",
+    'lib/Some/M.pm' => "package Some::M;\n"
+                     . '# never write our $VERSION = 0.52_01; unquoted' . "\n1;\n",
+  );
+  my ( $fired2 ) = report_from( $check, $ctx2 );
+  ok !$fired2, 'the same text in a comment is silent';
+
+  # And so is a module that declares a version: the scan stops there.
+  ( my $with_version = $hazard ) =~ s{\Apackage Some::M;}
+    {package Some::M;\nour \$VERSION = '1.00';};
+  my ( $ctx3, undef, $keep3 ) = project(
+    'cpanfile'      => "requires 'strict';\n",
+    'lib/Some/M.pm' => $with_version,
+  );
+  my ( $fired3 ) = report_from( $check, $ctx3 );
+  ok !$fired3, 'a module declaring its own version is silent';
+
+  my ( $ctx4, undef, $keep4 ) = project( 'cpanfile' => "requires 'strict';\n" );
+  my ( $fired4 ) = report_from( $check, $ctx4 );
+  ok !$fired4, 'a project with no lib/ is silent';
+}
+
 TOP_LEVEL_MERGES_ONLY: {
   # A sibling's own merges are folded in when it is merged, and appear in the
   # mistfile indented inside the parent's block. They are that sibling's

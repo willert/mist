@@ -18,6 +18,12 @@ Revision history for App::Mist
   - `mist prerelease` ends by stating what it did: the version, the local commit
     and tag, that nothing was pushed, and the `mist merge` line that consumes it.
 
+  - `mist doctor` reports a module the release scanner cannot read, by asking
+    `Module::Metadata` rather than reimplementing its rule. A module declaring
+    no version of its own has any string mentioning the version variable and an
+    equals sign evaluated as code, and the release fails on it after the version
+    bump has already been written.
+
   - `mist doctor` reports a vendored trial release, which is otherwise an
     ordinary tarball with an ordinary index entry and would ship if `mpan-dist`
     were committed. Keyed on the distribution version, never the package
