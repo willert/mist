@@ -8,6 +8,15 @@ Revision history for App::Mist
     distinct artifact that cannot satisfy a requirement for the release it leads
     to; `mist release` ends the line by promoting `0.52_02` to `0.53`.
 
+  - `mist prerelease` ends by stating what it did: the version, the local commit
+    and tag, that nothing was pushed, and the `mist merge` line that consumes it.
+
+  - `mist doctor` reports a vendored trial release, which is otherwise an
+    ordinary tarball with an ordinary index entry and would ship if `mpan-dist`
+    were committed. Keyed on the distribution version, never the package
+    versions inside it - stable CPAN releases routinely carry those at
+    underscore versions.
+
   - `mist doctor` reports a `$VERSION` declared with a bare underscore. Perl
     reads it as a digit separator and discards it, so `our $VERSION = 0.52_01;`
     is an ordinary `0.5201` and not the trial release it was meant to be.

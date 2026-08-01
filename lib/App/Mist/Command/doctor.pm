@@ -8,6 +8,7 @@ use App::Mist -command;
 use Config;
 use Module::CoreList;
 use Module::CPANfile;
+use version 0.77 ();
 
 use Mist::CPAN::PackageIndex ();
 use Mist::Role::CPAN::PackageIndex ();
@@ -96,6 +97,7 @@ sub execute {
   $found += _report_unset_module_maker( $ctx );
   $found += _report_unsatisfiable_declarations( $ctx );
   $found += _report_bare_underscore_version( $ctx );
+  $found += _report_vendored_prerelease( $ctx );
   $found += _report_known_bad_versions( $ctx, $label );
 
   my @problems = _ex_core_gap( $ctx, $target, $opt->for );
@@ -354,6 +356,56 @@ minil.toml sets no module_maker, and this project has %s/.
   bin/ directory"). It refuses at *regeneration*, which runs mid-release after
   the version bump - so the failure lands on whoever next cuts a release, with a
   dirty tree. Set `module_maker = "ExtUtilsMakeMaker"` and regenerate.
+
+REPORT
+  return 1;
+}
+
+# Is this index path a trial distribution - one `mist prerelease` produced?
+#
+# Keyed on the DISTRIBUTION version from the tarball name, never on the package
+# versions inside it. Plenty of stable CPAN releases ship modules carrying
+# underscore versions: measured across the estate, matching package versions
+# reported 7 of 31 projects, almost all of them healthy - Net::SFTP::Foreign
+# ships submodules at 1.68_05 inside a stable 1.93 tarball, and
+# ExtUtils::Installed, B::Utils and FindBin::libs do the same. Keying on the
+# distribution takes it to the projects actually holding a trial build.
+sub _is_trial_distribution {
+  my ( $path ) = @_;
+  my ( $file ) = ( $path // '' ) =~ m{([^/]+)\z} or return 0;
+  my ( $dist_version ) = $file =~ m{-([^-]+)\.tar\.gz\z} or return 0;
+  return eval { version->parse( $dist_version )->is_alpha } ? 1 : 0;
+}
+
+# A prerelease is indistinguishable from a real release once it is vendored: an
+# ordinary tarball with an ordinary index entry. The discipline of not committing
+# one is otherwise carried entirely by whoever remembers, and the moment that
+# memory is worth least is exactly when a consumer is close to its first deploy.
+sub _report_vendored_prerelease {
+  my ( $ctx ) = @_;
+
+  my $index = Mist::CPAN::PackageIndex->new({ cpan_dist_root => $ctx->mpan_dist });
+  my $entries = eval { $index->package_index->entries->get_hash } or return 0;
+
+  my %trial;
+  for my $pkg ( keys %$entries ) {
+    for my $v ( keys %{ $entries->{ $pkg } } ) {
+      my $entry = $entries->{ $pkg }{ $v } or next;
+      my $path  = eval { $entry->path } or next;
+      $trial{ ( $path =~ m{([^/]+)\z} )[0] } = 1 if _is_trial_distribution( $path );
+    }
+  }
+  return 0 unless %trial;
+
+  printf "%d vendored distribution%s:\n\n", scalar keys %trial,
+    ( keys %trial == 1 ? ' is a trial release' : 's are trial releases' );
+  print "  $_\n" for sort keys %trial;
+  print <<'REPORT';
+
+  `mist prerelease` versions exist to hand a change to a sibling before it is
+  released. Once vendored they are ordinary tarballs, so nothing but this check
+  tells one from a real release - and committing mpan-dist would ship it.
+  Re-merge once the provider has been released, or discard the vendored trial.
 
 REPORT
   return 1;

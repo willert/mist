@@ -226,6 +226,31 @@ BARE_UNDERSCORE_VERSION: {
   is $out6, q{}, '...silently, so documenting the trap stays free';
 }
 
+TRIAL_DISTRIBUTION_DISCRIMINATOR: {
+  # The whole intelligence of the vendored-prerelease check is here: which
+  # version it reads. Matching the *package* versions in the index reported 7 of
+  # 31 projects across the estate, almost all of them healthy, because stable
+  # CPAN releases routinely ship modules at underscore versions. Reading the
+  # DISTRIBUTION version off the tarball name takes it to 1.
+  my $trial = \&App::Mist::Command::doctor::_is_trial_distribution;
+
+  ok $trial->('L/LO/LOCAL/WeCARE-Test-DBIC-Mocked-0.03_01.tar.gz'),
+    'a prerelease distribution is recognised';
+  ok $trial->('A/AB/ABC/Foo-Bar-1.20_03.tar.gz'),
+    '...whatever the counter';
+
+  # Real counterexamples, taken from the estate measurement. Each ships modules
+  # carrying underscore versions inside a stable distribution.
+  ok !$trial->('N/NA/NANIS/Net-SFTP-Foreign-1.93.tar.gz'),
+    'a stable dist whose submodules use underscore versions is not one';
+  ok !$trial->('B/BI/BINGOS/ExtUtils-MakeMaker-7.70.tar.gz'),
+    '...nor the dist shipping ExtUtils::Installed 1.999_001';
+  ok !$trial->('A/AB/ABC/Foo-Bar-0.03.tar.gz'), 'a plain release is not one';
+
+  ok !$trial->('A/AB/ABC/not-a-tarball'), 'a non-tarball path is not one';
+  ok !$trial->(undef),                    'and neither is nothing at all';
+}
+
 KNOWN_BAD_VERSIONS_TABLE: {
   # The blacklist is data, so the table itself is what is worth asserting: each
   # entry has to carry enough to act on without looking anything up.

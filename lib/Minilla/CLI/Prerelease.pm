@@ -4,6 +4,7 @@ use strict;
 use warnings;
 use utf8;
 
+use Cwd ();
 use Minilla::Util qw(parse_options);
 use Minilla::Logger;
 use Minilla::Project;
@@ -59,6 +60,41 @@ sub run {
   }
 
   $_->run( $project, $opts ) for @klasses;
+
+  _report_outcome( $project, $opts );
+  return;
+}
+
+# The run otherwise ends on an echoed `git tag` and stops, leaving its most
+# important property - that it committed and tagged LOCALLY and pushed nothing -
+# to be taken on faith by whoever has to decide it is safe to run unattended.
+#
+# Shaped after `mist merge`, which closes with the commands to run next, and
+# after `mist release --dry-run`, which prints a scrapeable line for the step
+# that follows it.
+sub _report_outcome {
+  my ( $project, $opts ) = @_;
+
+  # Deliberately not clear_metadata: rebuilding it prints another
+  # Name/Abstract/Version banner, and the commit step has already refreshed it.
+  # The run prints enough of those without this one adding a fourth.
+  my $version = eval { $project->version };
+  return unless defined $version;
+
+  if ( $opts->{dry_run} ) {
+    infof("DRY-RUN.  Would prerelease %s. Nothing was written, committed or tagged.\n",
+          $opts->{dry_run_version} // $version);
+    return;
+  }
+
+  my $commit = `git rev-parse --short HEAD 2>/dev/null` // '';
+  chomp $commit;
+
+  infof("\nPrereleased %s: local commit %s, local tag %s. Nothing pushed.\n",
+        $version, ( length $commit ? $commit : '(unknown)' ),
+        $project->format_tag( $version ));
+  infof("Consume it from the consuming project with:\n  mist merge %s\n",
+        Cwd::getcwd());
   return;
 }
 

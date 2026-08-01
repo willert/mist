@@ -139,6 +139,13 @@ FIRST_ITERATION: {
   is_deeply [ tags_in( $proj ) ], ['0.10_01'], 'the iteration is tagged';
   like changes_in( $proj ), qr/\Q{{\E\$NEXT\Q}}\E/,
     'Changes keeps its placeholder, so one entry covers the whole cycle';
+
+  # The run otherwise ends on an echoed `git tag`, leaving the property that
+  # decides whether it is safe to run unattended to be taken on faith.
+  like $run->{output}, qr/Nothing pushed/,
+    '...and says outright that it pushed nothing';
+  like $run->{output}, qr/mist merge \Q$proj\E/,
+    '...and names the command that consumes it';
 }
 
 # RegenerateFiles writes META.json/Makefile.PL/README.md, and CommitLocal runs
