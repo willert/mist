@@ -70,6 +70,22 @@ C<mist release>, which is why the cycle has to end there.
 C<Changes> keeps its C<{{$NEXT}}> placeholder, so the command is re-runnable
 and one entry covers an entire prerelease cycle.
 
+=head2 A failed run leaves the version advanced
+
+The version is written before the steps that regenerate metadata, commit and
+tag, so a failure in any of those leaves the working tree with a bumped and
+uncommitted C<$VERSION>. Re-running advances it again - the trial counter
+therefore counts I<attempts>, not successful iterations, and a cycle that hit
+two failures arrives at C<_03> having produced one usable prerelease. Nothing
+is published and versions are free, so this is untidy rather than harmful;
+C<git checkout> the main module to reset it.
+
+The first run in a project that does not yet track its generated files is the
+common instance. C<RegenerateFiles> writes F<META.json>, F<Makefile.PL> and
+F<README.md>, and the commit step uses C<git commit -a>, which does not pick up
+untracked files - so they are left behind and the I<next> run is refused by
+C<CheckUntrackedFiles>. Commit them once and the cycle runs clean.
+
 =head2 Pre-releases are not for production
 
 A prerelease vendored into a consumer's C<mpan-dist/> is committable like any
