@@ -9,26 +9,17 @@ Revision history for App::Mist
     to; `mist release` ends the line by promoting `0.52_02` to `0.53`.
 
   - `mist merge` notes when nothing in `cpanfile` names the distribution it just
-    vendored, because `./mpan-install` only reaches a distribution it is named -
-    so the merge would appear to work and install nothing. Judged on the modules
-    the built distribution provides, and it says nothing about versions.
-    `mist doctor` reports the same condition for every top-level merge already
-    in the mistfile, with the reasoning the note leaves out.
+    vendored, since `./mpan-install` only ever reaches one it is named;
+    `mist doctor` reports the same for merges already in the mistfile.
 
   - `mist prerelease` ends by stating what it did: the version, the local commit
     and tag, that nothing was pushed, and the `mist merge` line that consumes it.
 
-  - `mist doctor` reports a module the release scanner cannot read, by asking
-    `Module::Metadata` rather than reimplementing its rule. A module declaring
-    no version of its own has any string mentioning the version variable and an
-    equals sign evaluated as code, and the release fails on it after the version
-    bump has already been written.
+  - `mist doctor` reports a module `Module::Metadata` cannot read, which fails a
+    release after the version bump has already been written.
 
   - `mist doctor` reports a vendored trial release, which is otherwise an
-    ordinary tarball with an ordinary index entry and would ship if `mpan-dist`
-    were committed. Keyed on the distribution version, never the package
-    versions inside it - stable CPAN releases routinely carry those at
-    underscore versions.
+    ordinary tarball and would ship if `mpan-dist` were committed.
 
   - `mist doctor` reports a `$VERSION` declared with a bare underscore. Perl
     reads it as a digit separator and discards it, so `our $VERSION = 0.52_01;`
