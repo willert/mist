@@ -32,12 +32,18 @@ sub run {
   # reports is_alpha. Everything downstream keys on that, so a silent stable
   # version here would produce a prerelease indistinguishable from a release.
   my $written = $project->metadata->version;
+  # This message deliberately does not spell out an assignment. This module
+  # declares no version of its own, so Module::Metadata->provides - which
+  # Minilla runs over lib/ at release time - keeps scanning for one and evals
+  # the first line carrying that variable and an equals sign. POD and comments
+  # are safe (POD is skipped; a comment evals as a no-op), but a heredoc body is
+  # code, and the obvious phrasing here killed a release.
   die <<"UNQUOTED" unless version->parse( "$written" )->is_alpha;
 prerelease: wrote version $written, which is not a trial release.
 
-  Perl discards underscores in unquoted numeric literals, so
-  `our \$VERSION = ${written};` compiles to an ordinary decimal. Quote the
-  assignment in the main module and re-run.
+  Perl reads underscores in unquoted numeric literals as digit separators and
+  discards them, so an unquoted declaration of $written is really an ordinary
+  decimal. Quote the version in the main module and re-run.
 UNQUOTED
 
   infof("Prerelease %s\n", $written);

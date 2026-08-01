@@ -492,7 +492,14 @@ REPORT
 }
 
 # Underscores are digit separators in Perl numeric literals and are discarded, so
-# an unquoted `our $VERSION = 0.52_01;` compiles to the ordinary decimal 0.5201.
+# an unquoted declaration of 0.52_01 is really the ordinary decimal 0.5201.
+#
+# Note the phrasing of this check's *strings*: they never spell out an
+# assignment to the version variable. This module declares no version of its
+# own, so Module::Metadata->provides - which Minilla runs over lib/ at release
+# time - keeps scanning for one and evals the first line carrying that variable
+# and an equals sign. Comments like this one are safe (they eval as a no-op) and
+# so is POD, which is skipped; a format string or heredoc body is code.
 # Whoever wrote it meant a trial release and silently did not get one: is_alpha is
 # false, nothing downstream can tell it from a stable release, and every guard
 # keying on pre-release status quietly does nothing. Quoting the value is the
@@ -536,7 +543,7 @@ sub _report_bare_underscore_version {
   for my $hit ( @found ) {
     my ( $where, $line, $literal ) = @$hit;
     ( my $actual = $literal ) =~ s/_//g;
-    printf "  %s:%d  \$VERSION = %s   compiles to %s\n",
+    printf "  %s:%d  declared %s, compiles to %s\n",
       $where, $line, $literal, $actual;
   }
   print <<'REPORT';
@@ -544,8 +551,8 @@ sub _report_bare_underscore_version {
   Perl reads underscores in numeric literals as digit separators and discards
   them, so this is not a trial release - it is an ordinary version, and
   version->is_alpha says so. Nothing downstream can distinguish it from a
-  stable release. Quote it (`our $VERSION = '0.52_01';`) to get the trial
-  release that was meant, or drop the underscore to get the number.
+  stable release. Quote the value to get the trial release that was meant, or
+  drop the underscore to get the number.
 
 REPORT
   return 1;
