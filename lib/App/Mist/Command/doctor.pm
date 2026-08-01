@@ -95,6 +95,7 @@ sub execute {
   $found += _report_index_gaps( $ctx );
   $found += _report_unset_module_maker( $ctx );
   $found += _report_unsatisfiable_declarations( $ctx );
+  $found += _report_bare_underscore_version( $ctx );
   $found += _report_known_bad_versions( $ctx, $label );
 
   my @problems = _ex_core_gap( $ctx, $target, $opt->for );
@@ -353,6 +354,66 @@ minil.toml sets no module_maker, and this project has %s/.
   bin/ directory"). It refuses at *regeneration*, which runs mid-release after
   the version bump - so the failure lands on whoever next cuts a release, with a
   dirty tree. Set `module_maker = "ExtUtilsMakeMaker"` and regenerate.
+
+REPORT
+  return 1;
+}
+
+# Underscores are digit separators in Perl numeric literals and are discarded, so
+# an unquoted `our $VERSION = 0.52_01;` compiles to the ordinary decimal 0.5201.
+# Whoever wrote it meant a trial release and silently did not get one: is_alpha is
+# false, nothing downstream can tell it from a stable release, and every guard
+# keying on pre-release status quietly does nothing. Quoting the value is the
+# whole fix.
+#
+# Only an underscore *after* the decimal point is reported. One in the integer
+# part is the ordinary thousands separator (1_000), where discarding it is
+# exactly what was meant.
+sub _report_bare_underscore_version {
+  my ( $ctx ) = @_;
+
+  my $lib = $ctx->project_root->subdir( 'lib' );
+  return 0 unless -d "$lib";
+
+  my @found;
+  $lib->recurse( callback => sub {
+    my ( $file ) = @_;
+    return if $file->is_dir or $file !~ m{\.pm\z};
+    my @lines = eval { $file->slurp( chomp => 1 ) } or return;
+    my $in_pod = 0;
+    for my $n ( 0 .. $#lines ) {
+      my $line = $lines[ $n ];
+      # Prose about this problem quotes the broken form by definition - this
+      # check's own comment did, and it reported itself on the first real run.
+      if ( $line =~ m{\A=cut\b} )    { $in_pod = 0; next }
+      if ( $line =~ m{\A=[a-zA-Z]} ) { $in_pod = 1; next }
+      next if $in_pod;
+
+      # A quoted value cannot match: the character class admits no quote.
+      $line =~ m{ \$VERSION \s* = \s* ( v? [0-9] [0-9_.]* ) \s* ; }x or next;
+      my ( $literal, $at ) = ( $1, $-[0] );   # $-[0] before any further match
+      next unless $literal =~ m{ \. [0-9]* _ }x;
+      next if index( substr( $line, 0, $at ), '#' ) >= 0;
+      push @found, [ $file->relative( $ctx->project_root ), $n + 1, $literal ];
+    }
+  } );
+  return 0 unless @found;
+
+  printf "%d version declaration%s an unquoted underscore:\n\n",
+    scalar @found, ( @found == 1 ? ' uses' : 's use' );
+  for my $hit ( @found ) {
+    my ( $where, $line, $literal ) = @$hit;
+    ( my $actual = $literal ) =~ s/_//g;
+    printf "  %s:%d  \$VERSION = %s   compiles to %s\n",
+      $where, $line, $literal, $actual;
+  }
+  print <<'REPORT';
+
+  Perl reads underscores in numeric literals as digit separators and discards
+  them, so this is not a trial release - it is an ordinary version, and
+  version->is_alpha says so. Nothing downstream can distinguish it from a
+  stable release. Quote it (`our $VERSION = '0.52_01';`) to get the trial
+  release that was meant, or drop the underscore to get the number.
 
 REPORT
   return 1;

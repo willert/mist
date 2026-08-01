@@ -156,6 +156,76 @@ UNSATISFIABLE_DECLARATIONS: {
   like $out3, qr/neither indexed by this mirror nor core/, '...as unsatisfiable';
 }
 
+BARE_UNDERSCORE_VERSION: {
+  my $check = \&App::Mist::Command::doctor::_report_bare_underscore_version;
+
+  # The whole point: this compiles to 0.5201, not a trial release.
+  my ( $ctx, undef, $keep ) = project(
+    'cpanfile'      => "requires 'strict';\n",
+    'lib/Some/M.pm' => "package Some::M;\nour \$VERSION = 0.52_01;\n1;\n",
+  );
+  my ( $fired, $out ) = report_from( $check, $ctx );
+  ok $fired, 'an unquoted underscore version is reported';
+  like $out, qr/0\.52_01/,        '...quoting the literal as written';
+  like $out, qr/0\.5201/,         '...and what it actually compiles to';
+  like $out, qr{lib/Some/M\.pm:2}, '...with the file and line';
+  like $out, qr/is_alpha/,        '...naming the property that is silently lost';
+
+  # The correct spelling, which is what almost every dist has.
+  my ( $ctx2, undef, $keep2 ) = project(
+    'cpanfile'      => "requires 'strict';\n",
+    'lib/Some/M.pm' => "package Some::M;\nour \$VERSION = '0.52_01';\n1;\n",
+  );
+  my ( $fired2, $out2 ) = report_from( $check, $ctx2 );
+  ok !$fired2, 'a quoted trial version is silent';
+  is $out2, q{}, '...saying nothing at all';
+
+  # A plain version is not a candidate either.
+  my ( $ctx3, undef, $keep3 ) = project(
+    'cpanfile'      => "requires 'strict';\n",
+    'lib/Some/M.pm' => "package Some::M;\nour \$VERSION = '0.52';\n1;\n",
+  );
+  my ( $fired3 ) = report_from( $check, $ctx3 );
+  ok !$fired3, 'a plain quoted version is silent';
+
+  # An underscore in the integer part is the thousands separator, where
+  # discarding it is exactly what was meant - reporting it would be crying wolf.
+  my ( $ctx4, undef, $keep4 ) = project(
+    'cpanfile'      => "requires 'strict';\n",
+    'lib/Some/M.pm' => "package Some::M;\nour \$VERSION = 1_000;\n1;\n",
+  );
+  my ( $fired4 ) = report_from( $check, $ctx4 );
+  ok !$fired4, 'a thousands separator is not reported';
+
+  # No lib/ at all is not a complaint.
+  my ( $ctx5, undef, $keep5 ) = project( 'cpanfile' => "requires 'strict';\n" );
+  my ( $fired5 ) = report_from( $check, $ctx5 );
+  ok !$fired5, 'a project with no lib/ is silent';
+
+  # Prose about this problem quotes the broken form by definition. The check's
+  # own explanatory comment did exactly that and reported itself the first time
+  # it ran for real, so comments and POD are not code.
+  my ( $ctx6, undef, $keep6 ) = project(
+    'cpanfile'      => "requires 'strict';\n",
+    'lib/Some/M.pm' => join( "\n",
+      'package Some::M;',
+      '# an unquoted `our $VERSION = 0.52_01;` compiles to 0.5201',
+      q{our $VERSION = '1.00';},
+      '',
+      '=head1 VERSION',
+      '',
+      'Do not write our $VERSION = 0.52_01; here either.',
+      '',
+      '=cut',
+      '',
+      '1;',
+      '' ),
+  );
+  my ( $fired6, $out6 ) = report_from( $check, $ctx6 );
+  ok !$fired6, 'the broken form quoted in a comment or POD is not reported';
+  is $out6, q{}, '...silently, so documenting the trap stays free';
+}
+
 KNOWN_BAD_VERSIONS_TABLE: {
   # The blacklist is data, so the table itself is what is worth asserting: each
   # entry has to carry enough to act on without looking anything up.
