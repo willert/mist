@@ -136,6 +136,8 @@ sub execute {
       . "as the mistfile might have changed, and the merged distribution is\n"
       . "vendored but not installed yet\n";
 
+  _warn_unless_declared( $ctx, $dist_info );
+
  MISTFILE_DONE:
 
   $project->cleanup if $project;
@@ -150,6 +152,47 @@ sub execute {
 # always carries at least two spaces: the anchor is what keeps this from binding
 # to a subordinate block, where the next merge of the dist owning the enclosing
 # block would regenerate the subtree and silently drop what we wrote.
+# `./mpan-install` only ever reaches a distribution the cpanfile NAMES. cpanm
+# re-resolves a named module against the index, but a dependency reached
+# transitively is tested against its parent's declared floor, and an installed
+# copy satisfying that floor is never compared against the index at all. So a
+# merged distribution nobody declared is vendored and then silently not
+# installed - the merge appears to work and changes nothing.
+#
+# Checked against the modules the built distribution actually provides, never
+# the merge block's name: that name is a label, and several in this estate do
+# not match their module's real casing. Naming any one provided module suffices,
+# since cpanm resolves module -> distribution and installs the whole thing.
+#
+# Deliberately says nothing about versions. Whether a declaration should carry
+# one is a judgement about what this project requires of the world, not
+# something a merge can decide.
+sub _warn_unless_declared {
+  my ( $ctx, $dist_info ) = @_;
+
+  my $cpanfile = $ctx->project_root->file( 'cpanfile' );
+  return unless -f -r "$cpanfile";
+
+  my $provided = eval { $dist_info->modules } or return;
+  return unless keys %$provided;
+
+  my $declared = eval {
+    require Module::CPANfile;
+    my %named = map { $_ => 1 }
+      Module::CPANfile->load( "$cpanfile" )
+                      ->prereqs->merged_requirements->required_modules;
+    \%named;
+  } or return;
+
+  return if grep { $declared->{ $_ } } keys %$provided;
+
+  printf STDERR "Note: nothing in cpanfile names %s, so ./mpan-install will not "
+              . "install it.\n      Add a bare `requires` line for the module "
+              . "this project uses.\n",
+    eval { $dist_info->as_module_name } || 'this distribution';
+  return;
+}
+
 sub _splice_merge_block {
   # Fixed arity, checked: Path::Class' slurp returns a list of lines in list
   # context, so passing one straight into this call silently shifts the mistfile
