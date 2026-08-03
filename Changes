@@ -2,6 +2,22 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+0.54 2026-08-03T15:47:57Z
+
+  - Every activation writes `perl5/etc/mist.active-generation`, one plain file
+    naming the active generation, so a restarter can watch it instead of
+    recursing into the environment tree; it is rewritten in full each time,
+    never merely touched, because inotify-based watchers do not surface a bare
+    mtime bump.
+
+  - `mist local` refreshes the activation stamp after installing into the live
+    environment, where no activation runs.
+
+  - `./mpan-install --parent` no longer dies when the perl launching the
+    installer differs from the pinned one: staging now runs after the perlbrew
+    re-exec, so the parent generation is looked up under the pinned perl's arch
+    instead of the launcher's.
+
 0.53 2026-08-01T23:40:24Z
 
   - `mist local_release` is gone, replaced by `mist prerelease`. It advances a
