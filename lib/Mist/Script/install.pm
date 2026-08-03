@@ -93,23 +93,12 @@ our $LOCAL_LIB_DIR = Mist::Generation::build_dir( $gen_container, $gen_name );
 #                resume the existing ...-build as-is: never discard, never seed, so
 #                an iterative debug loop on a broken closure build keeps every dist
 #                that already built. Overrides the discard --no-resume / --rebuild
-#                would do. (The strict "nothing to continue" check is below, after
-#                the perlbrew re-exec, so it tests the target perl's arch and not
-#                the arch of the throwaway pre-re-exec pass.)
+#                would do. (The staging itself and the strict "nothing to
+#                continue" check are below, after the perlbrew re-exec, so both
+#                work with the target perl's arch and not the arch of the
+#                throwaway pre-re-exec pass.)
 my $discard_leftover = !$continue_last_build
   && ( ( defined $resume and not $resume ) || $rebuild );
-
-Mist::Generation::stage(
-  build_dir  => $LOCAL_LIB_DIR,
-  perl5_base => $PERL5_BASE_LIB,
-  container  => $gen_container,
-  arch_path  => $arch_path,
-  gen_name   => $gen_name,
-  branch     => $branch,
-  parent     => $parent,
-  discard    => $discard_leftover,
-  no_seed    => ( $rebuild || $continue_last_build ),
-);
 
 our $PREPEND_DISTS ||= eval {[ DISTRIBUTION->distinfo->get_prepended_modules ]};
 die '$PREPEND_DISTS not set' . $@ unless $PREPEND_DISTS;
@@ -178,6 +167,23 @@ Mist::Script::perl->init
 # test the system perl's arch and wrongly fire (or pass).
 die "No in-progress build to continue at $LOCAL_LIB_DIR\n"
   if $continue_last_build and not -d $LOCAL_LIB_DIR;
+
+# Stage the build dir only now, after the re-exec, for the same reason: staging
+# works entirely in $arch_path-derived names, so the throwaway pass would seed a
+# launcher-arch build dir no later pass uses - and an explicit --parent, whose
+# existence seed_source checks, would die looking for a generation of the
+# launcher perl's arch before the re-exec ever happened.
+Mist::Generation::stage(
+  build_dir  => $LOCAL_LIB_DIR,
+  perl5_base => $PERL5_BASE_LIB,
+  container  => $gen_container,
+  arch_path  => $arch_path,
+  gen_name   => $gen_name,
+  branch     => $branch,
+  parent     => $parent,
+  discard    => $discard_leftover,
+  no_seed    => ( $rebuild || $continue_last_build ),
+);
 
 {
   # Fail fast if the target perl's Module::CoreList doesn't know about $].

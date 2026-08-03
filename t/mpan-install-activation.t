@@ -463,6 +463,26 @@ PARENT_BREAKS_PERLLOCAL_LINK: {
     'a normal seeded file is hard-linked (shared inode) with the parent' );
 }
 
+PARENT_RESOLVES_ACROSS_REEXEC: {
+  # --parent used to be validated in the throwaway pre-re-exec pass, under
+  # whatever perl launched ./mpan-install: with a system perl on PATH the check
+  # looked for a generation of *that* perl's arch and died before the re-exec.
+  # Staging now happens after the re-exec, so the parent resolves under the
+  # pinned perl no matter which perl launches the installer.
+  my $box = make_sandbox( $installer_ok );
+  is( ( run_install( $box, '--branch=base' ) )[0], 0, 'base generation builds' );
+
+  SKIP: {
+    skip 'no /usr/bin/perl on this box', 2 unless -x '/usr/bin/perl';
+    local $ENV{PATH} = "/usr/bin:$ENV{PATH}";   # `env perl` = the system perl
+    my ( $exit, $out ) = run_install( $box, '--branch=child', '--parent=base' );
+    is $exit, 0, 'a --parent install launched under the system perl succeeds'
+      or diag $out;
+    unlike $out, qr/Parent generation .* doesn't exist/,
+      'and never looks for the parent under the launcher arch';
+  }
+}
+
 NAMED_BRANCH_REINSTALL_SEEDS_FROM_ITSELF: {
   # A named generation is a stable, separately-named env. Re-installing it must
   # update *it* (seed from itself) and carry its accumulated state forward - even
