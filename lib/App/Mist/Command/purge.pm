@@ -161,7 +161,10 @@ App::Mist::Command::purge - remove superseded perl5 build generations
 Each C<./mpan-install> run builds an immutable, copy-on-write generation under
 F<perl5/generations/>, and the C<perl5/E<lt>archE<gt>> selector symlink picks
 the active one. Old generations are kept on purpose - rollback is a single
-symlink repoint - but they accumulate over many install cycles.
+symlink repoint - but they accumulate over many install cycles. After a
+rollback by hand, also rewrite F<perl5/etc/mist.active-generation> with the
+new target: mist refreshes this activation stamp whenever it changes the
+active environment, and restarters may watch its mtime instead of the tree.
 
 C<purge> reclaims that space. By default it sweeps every installed perl; it
 keeps the active generation of each (whatever each C<perl5/E<lt>archE<gt>>

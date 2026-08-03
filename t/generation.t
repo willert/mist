@@ -284,11 +284,25 @@ ACTIVATE: {
   ok( -l $generic, 'activation makes the selector a symlink' );
   is( readlink $generic, $rel, '...pointing at the generation, relative to perl5/' );
 
+  my $stamp = File::Spec->catfile( $base, 'etc', 'mist.active-generation' );
+  my $read_stamp = sub {
+    open my $fh, '<', $stamp or return undef; local $/; <$fh> };
+  is( $read_stamp->(), "$rel\n",
+    'activation writes the stamp restarters watch, naming the generation' );
+
   # A swap is just a repoint, which is what makes rollback free.
   mkpath( File::Spec->catdir( $gens, "$arch-2" ) );
   my $rel2 = File::Spec->catdir( 'generations', "$arch-2" );
   Mist::Generation::activate( $generic, $rel2 );
   is( readlink $generic, $rel2, 'a later generation is activated by repointing' );
+  is( $read_stamp->(), "$rel2\n", 'the stamp follows the swap' );
+
+  # An in-place change (mist local) stamps without passing a generation name:
+  # the name is read from the selector, the mtime bump is the signal.
+  unlink $stamp;
+  Mist::Generation::stamp_active_generation( $generic );
+  is( $read_stamp->(), "$rel2\n",
+    'a bare stamp call reads the active generation from the selector' );
 }
 
 ACTIVATE_MIGRATES_A_LEGACY_LIB_DIR: {
@@ -311,6 +325,8 @@ ACTIVATE_MIGRATES_A_LEGACY_LIB_DIR: {
   ok( -l $generic, 'a legacy real lib dir becomes a selector symlink' );
   is_deeply( [ glob "${generic}.legacy-*" ], [],
     'and the read-only old directory entry is still fully reclaimed' );
+  ok( -f File::Spec->catfile( $base, 'etc', 'mist.active-generation' ),
+    'the migration path also writes the activation stamp' );
 }
 
 ACTIVATE_REFUSES_WHAT_IT_CANNOT_CLASSIFY: {

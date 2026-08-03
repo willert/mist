@@ -284,10 +284,8 @@ sub activate {
 
   if ( -l $generic or not -e $generic ) {
     activate_symlink( $gen_relpath, $generic );
-    return;
   }
-
-  if ( -d $generic ) {
+  elsif ( -d $generic ) {
     my $aside = sprintf '%s.legacy-%d', $generic, $$;
     rename( $generic, $aside )
       or die "Failed to move the legacy lib dir aside ($generic): $!\n"
@@ -303,10 +301,46 @@ sub activate {
          . "The old copy is hard-linked into the new generation, so it costs no\n"
          . "disk; remove it by hand when convenient.\n";
     }
-    return;
+  }
+  else {
+    die "$generic exists but is neither a symlink nor a directory\n";
   }
 
-  die "$generic exists but is neither a symlink nor a directory\n";
+  stamp_active_generation( $generic, $gen_relpath );
+  return;
+}
+
+# The activation stamp perl5/etc/mist.active-generation: one plain file whose
+# mtime moves whenever the environment behind a selector changes, so a restarter
+# can watch it instead of recursing into the whole tree - thousands of files
+# behind a symlink, which many watchers resolve and descend into by default and
+# cannot be told not to. Its content names the active generation, relative to
+# perl5/ like the selector target. A caller that changes the active generation's
+# contents in place rather than swapping it (mist local) passes only the
+# selector; the name is then read from the selector and stays the same - the
+# mtime bump is the point. Written beside the final name and renamed over it, so
+# a watcher never reads a half-written stamp. A failure only warns: the change
+# the stamp reports has already happened, and a missed signal must not be
+# escalated into a failed activation.
+sub stamp_active_generation {
+  my ( $generic, $gen_relpath ) = @_;
+
+  $gen_relpath = readlink $generic unless defined $gen_relpath;
+  $gen_relpath = '' unless defined $gen_relpath;   # a legacy real dir has no name
+
+  my $etc = File::Spec->catdir(
+    ( File::Spec->splitpath( $generic ) )[1], 'etc' );
+  File::Path::mkpath( $etc, { error => \my $mkpath_errors } ) unless -d $etc;
+
+  my $stamp = File::Spec->catfile( $etc, 'mist.active-generation' );
+  my $tmp   = "${stamp}.tmp.$$";
+  if ( open my $fh, '>', $tmp ) {
+    print $fh "${gen_relpath}\n";
+    return $stamp if close $fh and rename $tmp, $stamp;
+  }
+  warn "Could not write the activation stamp ${stamp}: $!\n";
+  unlink $tmp;
+  return undef;
 }
 
 # Pure classifier for what a purge may remove. Given generation directory names,

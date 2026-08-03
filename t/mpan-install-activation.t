@@ -169,6 +169,11 @@ CLEAN_INSTALL_ACTIVATES: {
   ok scalar( glob File::Spec->catfile( gen_dir( $box ), '.mist-built-*' ) ),
     'the generation carries a .mist-built-<ts> completion marker';
 
+  my $stamp = File::Spec->catfile( $box, qw/ perl5 etc mist.active-generation / );
+  ok -f $stamp, 'the activation stamp exists under perl5/etc';
+  is _slurp( $stamp ), readlink( gen_link( $box ) ) . "\n",
+    'and it names the generation the selector points at';
+
   is clean_run( "$sel perl -e 'exit 0'" ), 0,
     'the activated wrapper runs a command under its own env';
 }

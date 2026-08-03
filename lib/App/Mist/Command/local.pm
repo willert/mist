@@ -5,6 +5,7 @@ use 5.010;
 
 use App::Mist -command;
 
+use Mist::Generation;
 use Mist::Role::cpanminus;
 use Mist::PackageManager::MPAN;
 
@@ -33,6 +34,12 @@ sub execute {
   Mist::Role::cpanminus->run_bundled_cpanm_script(
     @cpanm_options, @cmd_args, @modules
   );
+
+  # No activation runs here - the install mutated the active generation in
+  # place - so refresh the stamp restarters watch. The recorded name is
+  # unchanged; the mtime bump is the signal.
+  Mist::Generation::stamp_active_generation(
+    $ctx->perl5_base_lib->subdir( Mist::Generation::arch_path() )->stringify );
 }
 
 1;
@@ -63,6 +70,10 @@ use L<mist inject|App::Mist::Command::inject> and declare it in F<cpanfile>.
 
 Arguments beginning with C<-> are passed through to C<cpanm> as options;
 the remaining arguments are taken as module names.
+
+A successful install also refreshes the activation stamp
+F<perl5/etc/mist.active-generation>: the named generation is unchanged, but
+the mtime bump lets restarters watching the stamp pick up the new modules.
 
 =head1 SEE ALSO
 
