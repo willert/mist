@@ -318,8 +318,10 @@ sub activate {
 # perl5/ like the selector target. A caller that changes the active generation's
 # contents in place rather than swapping it (mist local) passes only the
 # selector; the name is then read from the selector and stays the same - the
-# mtime bump is the point. Written beside the final name and renamed over it, so
-# a watcher never reads a half-written stamp. A failure only warns: the change
+# rewrite itself is the signal. Every call writes the stamp anew beside the
+# final name and renames it over - never a bare utime touch, which inotify-based
+# watchers do not surface - so a watcher always gets a real event and never
+# reads a half-written stamp. A failure only warns: the change
 # the stamp reports has already happened, and a missed signal must not be
 # escalated into a failed activation.
 sub stamp_active_generation {

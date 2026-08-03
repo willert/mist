@@ -37,7 +37,8 @@ sub execute {
 
   # No activation runs here - the install mutated the active generation in
   # place - so refresh the stamp restarters watch. The recorded name is
-  # unchanged; the mtime bump is the signal.
+  # unchanged; the full rewrite is the signal (a bare mtime touch would be
+  # invisible to inotify-based watchers).
   Mist::Generation::stamp_active_generation(
     $ctx->perl5_base_lib->subdir( Mist::Generation::arch_path() )->stringify );
 }
@@ -73,7 +74,8 @@ the remaining arguments are taken as module names.
 
 A successful install also refreshes the activation stamp
 F<perl5/etc/mist.active-generation>: the named generation is unchanged, but
-the mtime bump lets restarters watching the stamp pick up the new modules.
+the stamp is rewritten in full, so restarters watching it pick up the new
+modules (a bare mtime touch would be invisible to inotify-based watchers).
 
 =head1 SEE ALSO
 
