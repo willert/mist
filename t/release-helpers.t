@@ -10,6 +10,7 @@ use File::Temp ();
 use Cwd ();
 use Config;
 use Path::Class ();
+use Capture::Tiny qw/ capture_stderr /;
 
 # Loading App::Mist::Command::release triggers App::Mist's BEGIN, which resolves
 # the project perl5/ relative to $RealBin - absent in the clean-room dist work
@@ -356,12 +357,15 @@ is $after, $before, 'cwd is restored after a with_changes call';
      $ws->subdir( 'release-candidates', 'abc' )->stringify,
     '_candidate_dir is <root>/<id>';
 
-  # _gc_release_candidates wipes every prior candidate
+  # _gc_release_candidates: unstamped candidates are debris - no green
+  # dist-test ever vouched for them - and are evicted no matter what else holds.
   $root->subdir( $_ )->mkpath for qw/ one two /;
   ok -d $root->subdir( 'one' )->stringify, 'precondition: candidate "one" exists';
-  $R->can('_gc_release_candidates')->( $ctx );
+  my $kept;
+  capture_stderr { $kept = $R->can('_gc_release_candidates')->( $ctx ) };
   ok !-d $root->subdir( 'one' )->stringify, '_gc_release_candidates removed "one"';
   ok !-d $root->subdir( 'two' )->stringify, '... and "two"';
+  is $kept, undef, '... and returned no candidate to reuse';
 
   # _remove_release_candidate removes just the named one
   my $solo = $R->can('_candidate_dir')->( $ctx, 'solo' );
@@ -411,6 +415,121 @@ is $after, $before, 'cwd is restored after a with_changes call';
   like $R->can('_candidate_staleness')->( $ctx, "$hollow" ),
     qr/no installed modules/,
     'current fingerprint but empty candidate -> refused, not promoted';
+}
+
+# ---------------------------------------------------------------------------
+# _gc_release_candidates: keyed eviction. A stamped candidate matching the
+# current environment survives the GC and is returned for reuse; a stale
+# fingerprint, an over-age stamp, and $evict_all (--fresh) each evict. With
+# several valid candidates the most recently stamped wins.
+# ---------------------------------------------------------------------------
+{
+  my $R = 'App::Mist::Command::release';
+
+  my $tmp  = File::Temp->newdir( CLEANUP => 1 );
+  my $base = Path::Class::dir( "$tmp" );
+  my $ws   = $base->subdir( 'workspace' );
+  $ws->mkpath;
+
+  my $proj = $base->subdir( 'proj' );
+  $proj->subdir( 'mpan-dist', 'modules' )->mkpath;
+  my $cpanfile = $proj->file( 'cpanfile' );
+  my $mistfile = $proj->file( 'mistfile' );
+  my $mpan     = $proj->subdir( 'mpan-dist' );
+  my $index    = $mpan->file(qw/ modules 02packages.details.txt.gz /)->stringify;
+  spew( "$cpanfile", "requires 'Foo';\n" );
+  spew( "$mistfile", "perl '5.20.3';\n" );
+  spew( $index, "idx-v1" );
+
+  my $ctx = FakeCtx->new(
+    workspace    => $ws,
+    cpanfile     => $cpanfile,
+    project_root => $proj,
+    mpan_dist    => $mpan,
+  );
+
+  # A reusable candidate needs the full two-way promise: an installed closure
+  # (one .pm suffices for the presence check) plus a current fingerprint stamp.
+  my $stamp_candidate = sub {
+    my ( $id ) = @_;
+    my $dir = $R->can('_candidate_dir')->( $ctx, $id );
+    $dir->subdir( 'lib', 'perl5' )->mkpath;
+    $dir->subdir( 'lib', 'perl5' )->file( 'Dummy.pm' )->spew( "1;\n" );
+    $R->can('_write_candidate_fingerprint')->( $ctx, "$dir" );
+    return $dir;
+  };
+  my $gc = sub {
+    my ( $evict_all ) = @_;
+    my $kept;
+    capture_stderr {
+      $kept = $R->can('_gc_release_candidates')->( $ctx, $evict_all );
+    };
+    return $kept;
+  };
+
+  my $valid = $stamp_candidate->( 'aaa' );
+  my $kept  = $gc->();
+  ok defined $kept, 'a stamped, matching candidate survives the GC';
+  is $kept->basename, 'aaa', '... and is the one returned for reuse';
+  ok -d $valid->stringify, '... with its directory still on disk';
+
+  $kept = $gc->( 1 );
+  is $kept, undef, '$evict_all (--fresh) returns no candidate';
+  ok !-d $valid->stringify, '... and deletes even a valid one';
+
+  my $stale = $stamp_candidate->( 'bbb' );
+  spew( "$cpanfile", "requires 'Foo';\nrequires 'Bar';\n" );
+  $kept = $gc->();
+  is $kept, undef, 'a candidate stamped for a changed environment is not kept';
+  ok !-d $stale->stringify, '... and is deleted';
+
+  # Age bound: backdate the stamp past the reuse window. The mtime is the
+  # "last validated" clock, so utime is the honest way to age a candidate.
+  my $aged = $stamp_candidate->( 'ccc' );
+  my $old  = time
+    - ( App::Mist::Command::release::CANDIDATE_MAX_AGE_DAYS() + 1 ) * 86400;
+  utime $old, $old, $R->can('_fingerprint_file')->( "$aged" ) or die "utime: $!";
+  like $R->can('_candidate_staleness')->( $ctx, "$aged" ), qr/days ago/,
+    'an over-age stamp reads as stale, naming the age';
+  $kept = $gc->();
+  is $kept, undef, '... and the GC evicts it';
+  ok !-d $aged->stringify, '... deleting the directory';
+
+  my $older = $stamp_candidate->( 'ddd' );
+  my $newer = $stamp_candidate->( 'eee' );
+  my $past  = time - 1_000;
+  utime $past, $past, $R->can('_fingerprint_file')->( "$older" ) or die "utime: $!";
+  $kept = $gc->();
+  is $kept->basename, 'eee', 'with two valid candidates the newest stamp wins';
+  ok !-d $older->stringify, '... the older one is evicted as superseded';
+  ok -d $newer->stringify, '... and the winner stays on disk';
+}
+
+# ---------------------------------------------------------------------------
+# _extract_fresh: boolean sibling of _extract_candidate - same copy-and-return
+# contract, for the same reason (the arrayref is forwarded to Minilla verbatim,
+# and Minilla does not know --fresh).
+# ---------------------------------------------------------------------------
+{
+  my $extract = \&App::Mist::Command::release::_extract_fresh;
+
+  my ( $fresh, @rest ) = $extract->( [] );
+  is $fresh, 0, 'no --fresh -> 0';
+  is_deeply \@rest, [], '... and empty rest';
+
+  ( $fresh, @rest ) = $extract->( [ '--fresh' ] );
+  is $fresh, 1, '--fresh extracted as 1';
+  is_deeply \@rest, [], '... and removed from the forwarded args';
+
+  ( $fresh, @rest ) = $extract->( [ '--dry-run', '--fresh', '--trial' ] );
+  is $fresh, 1, '--fresh extracted from among other options';
+  is_deeply \@rest, [ '--dry-run', '--trial' ],
+    '... leaving the others in their original order';
+
+  my $orig = [ '--fresh', '--dry-run' ];
+  $extract->( $orig );
+  is_deeply $orig, [ '--fresh', '--dry-run' ],
+    'the caller-supplied arrayref is not mutated';
 }
 
 # ---------------------------------------------------------------------------

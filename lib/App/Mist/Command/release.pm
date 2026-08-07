@@ -26,8 +26,12 @@ sub execute {
   # --candidate=<id> promotes a build a previous --dry-run left on disk (see the
   # "Reusing a dry-run's build" POD section). Pull it off a copy of the args;
   # @minil_args is what we forward to Minilla, with --candidate removed because
-  # Minilla does not know it. --dry-run and everything else pass through.
+  # Minilla does not know it. --fresh (dry-run only: rebuild instead of reusing
+  # a cached candidate) is extracted the same way. --dry-run and everything else
+  # pass through.
   my ( $candidate, @minil_args ) = _extract_candidate( $args );
+  my $fresh;
+  ( $fresh, @minil_args ) = _extract_fresh( \@minil_args );
   my $dry_run = _args_request_dry_run( \@minil_args );
 
   # --candidate takes a value, and two malformed forms slip past Getopt's
@@ -43,6 +47,11 @@ sub execute {
 
   die "mist release: --dry-run and --candidate are mutually exclusive.\n"
     if $dry_run and defined $candidate;
+
+  # --fresh evicts even a still-valid candidate before the dry-run builds; on a
+  # promote or a normal release there is nothing it could mean.
+  die "mist release: --fresh only applies to --dry-run.\n"
+    if $fresh and not $dry_run;
 
   if ( defined $candidate ) {
     # Used unsanitised as a directory name below; keep it to the shape
@@ -86,8 +95,11 @@ sub execute {
   # release never mutates - or, on a failed install, corrupts - mist's own perl5,
   # the env the mist CLI itself runs under.
   #   normal release   throwaway tempdir, installed fresh, gone at exit
-  #   --dry-run        a persisted candidate dir under the project workspace,
-  #                    installed fresh and kept for a later --candidate promote
+  #   --dry-run        a persisted candidate dir under the project workspace:
+  #                    a prior candidate whose fingerprint still matches is
+  #                    reused (install skipped), otherwise one is installed
+  #                    fresh; kept for a later --candidate promote and for
+  #                    later dry-runs
   #   --candidate=ID   an existing candidate dir, REUSED as-is (install skipped)
   #                    after a fingerprint check proves it still matches the
   #                    current cpanfile/mistfile/mpan-dist/perl
@@ -106,11 +118,22 @@ sub execute {
     $reuse   = 1;
   }
   elsif ( $dry_run ) {
-    _gc_release_candidates( $ctx );    # ephemeral: a new dry-run supersedes them
-    $candidate = _new_candidate_id();
-    my $dir = _candidate_dir( $ctx, $candidate );
-    $dir->mkpath;
-    $lib_dir = $dir->stringify;
+    my $kept = _gc_release_candidates( $ctx, $fresh );
+    if ( $kept ) {
+      $candidate = $kept->basename;
+      $lib_dir   = $kept->stringify;
+      $reuse     = 1;
+      printf STDERR
+          "mist release: reusing the validated closure of candidate %s\n"
+        . "  (environment unchanged since %s - pass --fresh to rebuild)\n",
+        $candidate, scalar localtime _candidate_stamp_mtime( $kept );
+    }
+    else {
+      $candidate = _new_candidate_id();
+      my $dir = _candidate_dir( $ctx, $candidate );
+      $dir->mkpath;
+      $lib_dir = $dir->stringify;
+    }
   }
   else {
     $tmp     = File::Temp->newdir( CLEANUP => 1 );
@@ -181,22 +204,26 @@ sub execute {
     }
 
     # The build validated. Stamp the candidate with the current fingerprint -
-    # its presence also marks the dry-run as having completed - and print the
-    # exact promote command. The "mist release --candidate=" prefix is stable so
-    # it can be scraped from the output.
+    # its presence also marks the dry-run as having completed, and rewriting it
+    # on a reuse run resets the age window's clock to this proof - then print
+    # the exact promote command. The "mist release --candidate=" prefix is
+    # stable so it can be scraped from the output.
     _write_candidate_fingerprint( $ctx, $lib_dir );
     printf STDERR
-        "\nmist release: dry-run validated; build kept as release candidate.\n"
+        "\nmist release: dry-run validated; %s.\n"
       . "Release this validated build with: mist release --candidate=%s\n",
+        ( $reuse ? 'reused candidate re-stamped'
+                 : 'build kept as release candidate' ),
         $candidate;
     return;
   }
 
   $minil->run( dist => '--no-test', @minil_args );
 
-  # A promoted candidate has served its purpose; retire it so it can't be reused
-  # against a now-released (and version-bumped) tree.
-  _remove_release_candidate( $ctx, $candidate ) if $reuse;
+  # The promoted candidate stays cached. Its fingerprint ignores the dist's own
+  # version, so the closure it holds remains valid across the release bump and
+  # the next release cycle's dry-run reuses it. Retiring a candidate is the
+  # dry-run GC's job - environment change, age or --fresh, never promotion.
 }
 
 # The contained lib's @INC paths, arch-first to match local::lib / perl's own
@@ -253,26 +280,58 @@ sub _extract_candidate {
   return ( $id, @rest );
 }
 
+# Boolean sibling of _extract_candidate: pull --fresh off a copy of @$args
+# (Minilla does not know it either) and return ( $bool, @args_without_fresh ).
+sub _extract_fresh {
+  my $args = shift;
+  my @rest = @$args;
+  my $fresh = 0;
+  local $SIG{__WARN__} = sub {};
+  Getopt::Long::Parser->new( config => [ 'pass_through' ] )
+    ->getoptionsfromarray( \@rest, 'fresh' => \$fresh );
+  return ( $fresh ? 1 : 0, @rest );
+}
+
 # Release candidates live under the per-project mist workspace (~/.mist/<proj>/),
 # out of the source tree entirely - no gitignore needed, and the dir persists
 # between the dry-run process and the later promote process.
 sub _candidates_root { $_[0]->workspace->subdir( 'release-candidates' ) }
 sub _candidate_dir   { _candidates_root( $_[0] )->subdir( $_[1] ) }
 
-# Ephemeral by design: each --dry-run wipes every prior candidate first, so only
-# the most recent build is ever promotable. Botch one and you re-dry-run.
+# Keyed eviction, not a wipe: a candidate whose stamp still matches the current
+# environment (and sits inside the age window) is kept and returned for reuse;
+# everything else - debris without a stamp, stale fingerprints, over-age builds
+# - is deleted, each with its reason. $evict_all (--fresh) retires even a valid
+# candidate. At most one survives: should interrupted runs ever leave several
+# valid ones, the most recently stamped wins.
 sub _gc_release_candidates {
-  my $ctx  = shift;
+  my ( $ctx, $evict_all ) = @_;
   my $root = _candidates_root( $ctx );
   return unless -d $root->stringify;
-  my $gone = 0;
-  for my $child ( $root->children ) {
+  my @fresh;
+  for my $child ( sort { $a->basename cmp $b->basename } $root->children ) {
     next unless $child->is_dir;
+    my $why = $evict_all ? 'a fresh build was requested'
+                         : _candidate_staleness( $ctx, $child );
+    if ( not $why ) {
+      push @fresh, $child;
+      next;
+    }
+    printf STDERR "mist release: evicted candidate %s - %s\n",
+      $child->basename, $why;
     $child->rmtree;
-    $gone++;
   }
-  printf STDERR "mist release: cleared %d prior release candidate(s)\n", $gone
-    if $gone;
+  @fresh =
+    sort { _candidate_stamp_mtime( $b ) <=> _candidate_stamp_mtime( $a ) }
+    @fresh;
+  my $keep = shift @fresh;
+  for my $surplus ( @fresh ) {
+    printf STDERR
+      "mist release: evicted candidate %s - superseded by a newer build\n",
+      $surplus->basename;
+    $surplus->rmtree;
+  }
+  return $keep;
 }
 
 sub _remove_release_candidate {
@@ -357,6 +416,22 @@ sub _write_candidate_fingerprint {
   close $fh;
 }
 
+# Reuse trust window. The fingerprint covers the inputs that decide the closure
+# but not the toolchain underneath it (compiler, glibc, system libraries), so a
+# fingerprint match alone must not vouch for a candidate forever. Two weeks
+# spans a release burst comfortably; anything older rebuilds. The clock resets
+# on every green dry-run, which rewrites the stamp.
+use constant CANDIDATE_MAX_AGE_DAYS => 14;
+
+# The stamp file's mtime is the "last validated" clock: the stamp is
+# (re)written on every green dry-run, so age measures the latest proof, not the
+# first build.
+sub _candidate_stamp_mtime {
+  my $dir = shift;
+  my @st = stat _fingerprint_file( $dir );
+  return @st ? $st[9] : 0;
+}
+
 # Returns a reason string (true) if the candidate must NOT be reused, or '' when
 # it is fresh. Fail closed: a missing/unreadable fingerprint counts as stale.
 sub _candidate_staleness {
@@ -370,6 +445,10 @@ sub _candidate_staleness {
   chomp $stored;
   return 'cpanfile, mistfile, mpan-dist or perl changed since the dry-run'
     if $stored ne _release_fingerprint( $ctx );
+  my $age_days = ( time - _candidate_stamp_mtime( $dir ) ) / ( 24 * 60 * 60 );
+  return sprintf 'last validated %.0f days ago (reuse window is %d days)',
+      $age_days, CANDIDATE_MAX_AGE_DAYS
+    if $age_days > CANDIDATE_MAX_AGE_DAYS;
   # The fingerprint only attests to the inputs that decide the closure, never
   # that the closure was installed. A candidate holding just a fingerprint passes
   # every other check and then starves DistTest of its own prereqs - after
@@ -440,7 +519,7 @@ App::Mist::Command::release - tag, test and package a full release
 =head1 SYNOPSIS
 
   mist release
-  mist release --dry-run
+  mist release --dry-run [--fresh]
   mist release --candidate=<ID>
 
 =head1 DESCRIPTION
@@ -492,15 +571,33 @@ time to build, and dry-run-then-release otherwise pays for it twice. Only the
 install is skipped - the release still bumps the version, rebuilds the tarball at
 the new version, and re-runs the clean-room dist-test against the reused lib.
 
-The candidate ID is ephemeral. Each C<--dry-run> first deletes any earlier
-candidates, so only the most recent is promotable, and a candidate is removed
-once promoted. Before reusing one, C<--candidate> checks a fingerprint stored
-with it - the F<cpanfile>, F<mistfile>, the mpan-dist index, and the perl
-version and architecture. If any of those changed since the dry-run (or the
-fingerprint is missing because the dry-run did not finish), the promote
-B<refuses> and asks for a fresh C<--dry-run> rather than releasing against a
-stale dependency set. The dist's own version is not part of the fingerprint, so
-the version bump a release performs does not invalidate the candidate.
+The candidate persists and is keyed by a fingerprint stored with it - the
+F<cpanfile>, F<mistfile>, the mpan-dist index, and the perl version and
+architecture. A later C<--dry-run> whose environment still matches that
+fingerprint B<reuses> the candidate's installed closure instead of installing
+it again: only the clean-room dist-test runs, against the then-current tree,
+and a green run re-stamps the candidate. A dry-run whose environment changed
+evicts the stale candidate and builds a fresh one; pass C<--fresh> to force
+that rebuild even when the fingerprint still matches. Promoting a candidate
+does not retire it - the dist's own version is not part of the fingerprint, so
+the version bump a release performs does not invalidate it, and the next
+release cycle's dry-run picks it up again.
+
+The fingerprint is written only after a green clean-room dist-test, so a
+candidate always carries a two-way promise: its closure was built for the
+current environment, B<and> at least one version of the project has passed its
+test suite against it. A candidate without that stamp - a dry-run that did not
+finish, or one whose dist-test failed - is never reused and is deleted at the
+next dry-run. A failed dry-run against a reused candidate keeps the earlier
+stamp: the earlier proof stands, and the promote-side dist-test still validates
+whatever tree is actually released.
+
+Reuse is bounded in time as well: a candidate whose last green dry-run is more
+than 14 days old is refused even on a matching fingerprint, because the
+fingerprint does not cover the toolchain underneath the closure (compiler,
+system libraries). Whatever the reason - changed environment, age, or a missing
+stamp - a stale candidate is never reused, and C<--candidate> B<refuses> to
+promote it, asking for a fresh C<--dry-run> instead.
 
 A real release run without a terminal (CI, a background job) also fails fast on
 a missing C<{{$NEXT}}> entry instead of hanging on the interactive
