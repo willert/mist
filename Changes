@@ -2,6 +2,17 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+0.55 2026-08-07T22:58:42Z
+
+  - Release candidates persist as a cache keyed by their environment
+    fingerprint: a later `mist release --dry-run` whose environment still
+    matches reuses the candidate's installed closure instead of rebuilding it,
+    with only the clean-room dist-test running, and promotion no longer
+    retires the candidate. Stale candidates are evicted at the next dry-run,
+    each with its reason - environment change, a missing stamp, or age (reuse
+    stops 14 days after the last green dist-test); `--fresh` forces a rebuild
+    despite a matching fingerprint.
+
 0.54 2026-08-03T15:47:57Z
 
   - Every activation writes `perl5/etc/mist.active-generation`, one plain file
