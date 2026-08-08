@@ -124,6 +124,24 @@ WHY
     fix        => 'mist merge <path-to-perl-mason>   (Mason 2.9901; do not chase Devel::Declare versions)',
   },
   {
+    module     => 'thanks',
+    below      => '0.006',
+    above_perl => '5.20.3',
+    what       => 'fails its own test suite, distro-dependently',
+    why        => <<'WHY',
+  The dist blocks module loading by seeding %INC, and its tests assert the
+  block works on strict itself. Modern perls load strict regardless - and
+  so do distro-patched builds of older ones: Ubuntu's 5.38.2 fails the
+  suite where a perlbrew 5.38.2 of the same version passes, so a green
+  local side-build proves nothing for the deploy box. Reaches closures as
+  a test-phase dependency of MooseX::ErsatzMethod - or as a fossil
+  `prepend 'thanks'` in a merge block whose sibling dropped that dep long
+  ago, which is how sig-cms met it. Last release 2013; below 0.006 means
+  every release that exists.
+WHY
+    fix        => "drop the stale prepend (re-merge the sibling); notest 'thanks' only while one remains",
+  },
+  {
     module     => 'PPI',
     below      => '1.291',
     above_perl => '5.20.3',
