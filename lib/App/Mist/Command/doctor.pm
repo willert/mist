@@ -49,6 +49,87 @@ WHY
 WHY
     fix        => 'mist inject Module::CPANTS::Analyse~1.03   (carries the test patch)',
   },
+  {
+    module     => 'Variable::Magic',
+    below      => '0.63',
+    above_perl => '5.37.2',
+    what       => 'fails its op-info test',
+    why        => <<'WHY',
+  Perl 5.37.3 introduced the OP_PADSV_STORE optimization; t/18-opinfo.t in
+  releases before 0.63 expects the sassign op that optimization replaces.
+  The failure takes B::Hooks::EndOfScope, namespace::clean and the whole
+  Moose stack down with it, and none of the bail-outs name Variable::Magic
+  as the root.
+WHY
+    fix        => 'mist inject Variable::Magic~0.63   (or newer; 0.64 verified)',
+  },
+  {
+    module     => 'Test::Without::Module',
+    below      => '0.21',
+    above_perl => '5.20.3',
+    what       => 'fails its error-message self-test',
+    why        => <<'WHY',
+  The "Can't locate" diagnostic changed shape ("@INC contains:" became
+  "@INC entries checked:" when a hook sits in @INC); 0.21's changelog names
+  the 5.38 wording explicitly. Blocks Clone::Choose, Hash::Merge and
+  DBIx::Class behind it.
+WHY
+    fix        => 'mist inject Test::Without::Module~0.21   (or newer; 0.23 verified)',
+  },
+  {
+    module     => 'Test::Trap',
+    below      => 'v0.3.5',
+    above_perl => '5.20.3',
+    what       => 'fails its own test suite',
+    why        => <<'WHY',
+  v0.3.5's changelog: "No changes to the libraries, just to the tests. Perl
+  best practices form a moving target" - bareword filehandles and the
+  empty-string untaint change (RT #143716). Blocks MooseX::Getopt and
+  Catalyst::Runtime behind it.
+WHY
+    fix        => 'mist inject Test::Trap~v0.3.5',
+  },
+  {
+    module     => 'Moose',
+    below      => '2.4000',
+    above_perl => '5.20.3',
+    what       => 'fails one warning-text test',
+    why        => <<'WHY',
+  t/basics/require_superclasses.t expects the old wording of the
+  unresolvable-@ISA warning; 5.38 says "While trying to resolve method
+  call..." instead. One subtest out of seventeen thousand, and the whole
+  Moose ecosystem refuses to install over it. The first release with the
+  updated expectation was not pinned down; 2.4000 is verified good and
+  deployed on the estate.
+WHY
+    fix        => 'mist inject --from <sibling> Moose   (2.4000 vendored in erb)',
+  },
+  {
+    module     => 'Devel::Declare',
+    below      => '0.006022',
+    above_perl => '5.31.6',
+    what       => 'does not compile at all',
+    why        => <<'WHY',
+  stolen_chunk_of_toke.c uses perl API macros (isALNUM_utf8,
+  isIDFIRST_lazy_if, is_utf8_mark) that perl 5.31.7 removed. 0.006020 took
+  the fix upstream; 0.006022 is the stable release carrying it, and the
+  dist's last release. Blocks Method::Signatures::Simple and the whole
+  Mason 2 stack behind it.
+WHY
+    fix        => 'mist inject Devel::Declare~0.006022',
+  },
+  {
+    module     => 'PPI',
+    below      => '1.291',
+    above_perl => '5.20.3',
+    what       => 'fails its number-literal tests',
+    why        => <<'WHY',
+  Tests around bare 0b/0x literals expect an older tokenizer error shape.
+  The first fixed release was not pinned down; 1.291 is verified good and
+  deployed on the estate. Blocks Exparse::Interpreter::Core behind it.
+WHY
+    fix        => 'mist inject --from <sibling> PPI   (1.291 vendored in erb)',
+  },
 );
 
 # A perl version as a comparable number: 5.38.2 -> 5.038002, the shape
