@@ -113,10 +113,15 @@ WHY
   stolen_chunk_of_toke.c uses perl API macros (isALNUM_utf8,
   isIDFIRST_lazy_if, is_utf8_mark) that perl 5.31.7 removed. 0.006020 took
   the fix upstream; 0.006022 is the stable release carrying it, and the
-  dist's last release. Blocks Method::Signatures::Simple and the whole
-  Mason 2 stack behind it.
+  dist's last release. Know before injecting it: every release that DOES
+  compile there (0.006020+) silently loses declarators whenever use utf8
+  is in scope - a one-token bug in S_scan_word's UTF-8 branch, unreported
+  and unfixed upstream, dormant since 2019. There is no good Devel::Declare
+  on a modern perl. The estate's actual exit is Mason 2.9901, which moved
+  the method keyword to Function::Parameters and dropped this dist from
+  the closure entirely.
 WHY
-    fix        => 'mist inject Devel::Declare~0.006022',
+    fix        => 'mist merge <path-to-perl-mason>   (Mason 2.9901; do not chase Devel::Declare versions)',
   },
   {
     module     => 'PPI',
@@ -176,6 +181,7 @@ sub execute {
   my $found = 0;
   $found += _report_stale_bin_layout( $ctx );
   $found += _report_index_gaps( $ctx );
+  $found += _report_foreign_resolution_of_vendored_dists( $ctx );
   $found += _report_unset_module_maker( $ctx );
   $found += _report_unsatisfiable_declarations( $ctx );
   $found += _report_bare_underscore_version( $ctx );
@@ -412,6 +418,68 @@ sub _report_index_gaps {
   A build resolving one of these is sent to a file that does not exist. Re-run
   `mist index` to rebuild the index from what the mirror actually holds, and
   re-vendor anything that turns out to be genuinely missing.
+
+REPORT
+  return 1;
+}
+
+# An in-house dist and a CPAN release can share a name - deliberately so for a
+# fork like Mason 2.99xx, whose version lane exists to win the index race. The
+# alarm condition is the race going the other way: a package that a vendor/
+# tarball provides resolving to an authors/id/ path means a foreign release
+# outran the in-house one, and every cold build silently installs CPAN's bytes.
+# Vendor-origin index entries carry ../../vendor/ paths, so origin is read from
+# the index itself; the vendor directory listing supplies the dist names that
+# count as ours.
+sub _report_foreign_resolution_of_vendored_dists {
+  my ( $ctx ) = @_;
+
+  my $vendor = $ctx->mpan_dist->subdir('vendor');
+  return 0 unless -d $vendor->stringify;
+
+  my %ours;
+  for my $child ( $vendor->children ) {
+    next unless $child->basename =~ /^(.+)-[^-]+\.tar\.gz$/;
+    push @{ $ours{ $1 } }, $child->basename;
+  }
+  return 0 unless %ours;
+
+  my $index = Mist::CPAN::PackageIndex->new({ cpan_dist_root => $ctx->mpan_dist });
+  my $entries = eval { $index->package_index->entries->get_hash } or return 0;
+
+  my %foreign;
+  for my $pkg ( keys %$entries ) {
+    my ( $best_version, $best_entry );
+    for my $version ( keys %{ $entries->{ $pkg } } ) {
+      my $entry = $entries->{ $pkg }{ $version } or next;
+      if ( not defined $best_version
+        or Mist::Role::CPAN::PackageIndex::_version_cmp( $version, $best_version ) > 0 ) {
+        ( $best_version, $best_entry ) = ( $version, $entry );
+      }
+    }
+    my $path = eval { $best_entry->path } or next;
+    next if $path =~ m{^\.\./\.\./vendor/};
+    my ( $dist ) = $path =~ m{([^/]+)-[^-]+\.tar\.gz$} or next;
+    $foreign{ $pkg } = { path => $path, dist => $dist, version => $best_version }
+      if $ours{ $dist };
+  }
+  return 0 unless %foreign;
+
+  printf "%d package%s of a vendored dist resolve%s to a CPAN tarball:\n\n",
+    scalar keys %foreign, ( keys %foreign == 1 ? '' : 's' ),
+    ( keys %foreign == 1 ? 's' : '' );
+  for my $pkg ( sort keys %foreign ) {
+    my $f = $foreign{ $pkg };
+    printf "  %s %s <= %s  (vendor holds %s)\n",
+      $pkg, $f->{version}, $f->{path}, join( ', ', @{ $ours{ $f->{dist} } } );
+  }
+  print <<'REPORT';
+
+  The index prefers a foreign release over the in-house dist of the same name,
+  so every cold build installs CPAN's bytes instead of ours. For a fork on a
+  2.99xx-style version lane this means an upstream release outran the lane.
+  Fix: remove the stray tarball from authors/ (or vendor a higher in-house
+  version), then re-run `mist index`.
 
 REPORT
   return 1;
