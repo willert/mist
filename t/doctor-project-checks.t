@@ -418,7 +418,7 @@ KNOWN_BAD_INERT_WHEN_UNREFERENCED: {
   my ( $fired, $out ) = report_from( sub { $check->( $_[0], '5.38.2' ) }, $ctx );
   ok $fired, 'an unreferenced KNOWN_BAD dist is still reported every run';
   like $out, qr/nothing declared installs it/, '...as inert dead weight';
-  like $out, qr/awaits an eviction verb/, '...naming the missing verb';
+  like $out, qr/removal is manual by decision/, '...naming the sanctioned removal path';
   unlike $out, qr/Fix:/, '...without prescribing a fix that changes nothing';
 
   ( $ctx, $root, $keep ) = project(

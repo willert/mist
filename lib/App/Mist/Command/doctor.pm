@@ -378,7 +378,9 @@ sub _report_known_bad_versions {
     unless ( _known_bad_is_referenced( $ctx, $bad->{module} ) ) {
       printf "%s %s is vendored and indexed, but nothing declared installs it -\n"
            . "  no cpanfile requires, no mistfile prepend (transitive prereqs are\n"
-           . "  not traced). Inert; destroying it awaits an eviction verb.\n\n",
+           . "  not traced). Inert; removal is manual by decision: rm the\n"
+           . "  tarball(s), then `mist index` - the rebuild is total. If anything\n"
+           . "  still needs the dist, the next ./mpan-install dies resolving it.\n\n",
         $bad->{module}, $have;
       $found++;
       next;
