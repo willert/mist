@@ -379,6 +379,10 @@ ABOVE_PERL_DESCRIBES_RATHER_THAN_FILTERS: {
   no warnings 'redefine';
   local *App::Mist::Command::doctor::_indexed_versions = sub { { 'Some::Dist' => '1.0' } };
 
+  # Referencedness is not what this block tests - pin it to "referenced" so
+  # the full report with its applicability line is what comes out.
+  local *App::Mist::Command::doctor::_known_bad_is_referenced = sub { 1 };
+
   my ( $under, $out_under ) = report_from( sub { $check->( $_[0], '5.20.3' ) }, undef );
   ok $under, 'reported even when the perl asked about is below the threshold';
   like $out_under, qr/not under the 5\.20\.3/, '...saying it does not bite there yet';
@@ -386,6 +390,50 @@ ABOVE_PERL_DESCRIBES_RATHER_THAN_FILTERS: {
   my ( $over, $out_over ) = report_from( sub { $check->( $_[0], '5.38.2' ) }, undef );
   ok $over, 'and reported when it is above';
   like $out_over, qr/including the 5\.38\.2/, '...saying it bites there';
+}
+
+KNOWN_BAD_INERT_WHEN_UNREFERENCED: {
+  # A KNOWN_BAD dist that nothing declared installs gets the inert note - still
+  # reported every run, but without a fix that would change nothing. Referenced
+  # means a cpanfile requires or a mistfile prepend; either restores the full
+  # alarm. Transitive prereqs are out of scope and the note says so.
+  my $check = \&App::Mist::Command::doctor::_report_known_bad_versions;
+
+  local @App::Mist::Command::doctor::KNOWN_BAD = ( {
+    module     => 'Some::Dist',
+    below      => '2.0',
+    above_perl => '5.20.3',
+    what       => 'explodes',
+    why        => "  because it does\n",
+    fix        => 'mist inject Some::Dist~2.0',
+  } );
+
+  no warnings 'redefine';
+  local *App::Mist::Command::doctor::_indexed_versions = sub { { 'Some::Dist' => '1.0' } };
+
+  my ( $ctx, $root, $keep ) = project(
+    'cpanfile' => "requires 'strict';\n",
+    'mistfile' => "\n",
+  );
+  my ( $fired, $out ) = report_from( sub { $check->( $_[0], '5.38.2' ) }, $ctx );
+  ok $fired, 'an unreferenced KNOWN_BAD dist is still reported every run';
+  like $out, qr/nothing declared installs it/, '...as inert dead weight';
+  like $out, qr/awaits an eviction verb/, '...naming the missing verb';
+  unlike $out, qr/Fix:/, '...without prescribing a fix that changes nothing';
+
+  ( $ctx, $root, $keep ) = project(
+    'cpanfile' => "requires 'Some::Dist';\n",
+    'mistfile' => "\n",
+  );
+  ( $fired, $out ) = report_from( sub { $check->( $_[0], '5.38.2' ) }, $ctx );
+  like $out, qr/Fix: mist inject/, 'a cpanfile requires restores the full alarm';
+
+  ( $ctx, $root, $keep ) = project(
+    'cpanfile' => "requires 'strict';\n",
+    'mistfile' => "prepend 'Some::Dist';\n",
+  );
+  ( $fired, $out ) = report_from( sub { $check->( $_[0], '5.38.2' ) }, $ctx );
+  like $out, qr/Fix: mist inject/, 'a mistfile prepend restores the full alarm';
 }
 
 PERL_VERSIONS_COMPARE_NUMERICALLY: {

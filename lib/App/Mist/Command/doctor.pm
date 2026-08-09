@@ -198,6 +198,13 @@ sub execute {
     $target = $opt->perl || '/usr/bin/perl';
     die "$0: no such perl: $target\n" unless -x $target;
     $label = _version_of( $target );
+
+    # An unasked-for perl in the report reads like a bug ("why 5.40.1?"), so
+    # when the target is the built-in default, say so and name the way out.
+    printf "Checking against %s (perl %s), the default target;\n"
+         . "--for <version> asks about a deploy perl instead.\n\n",
+      $target, $label
+      unless $opt->perl;
   }
 
   my $found = 0;
@@ -364,6 +371,19 @@ sub _report_known_bad_versions {
     next unless Mist::Role::CPAN::PackageIndex::_version_cmp(
       $have, $bad->{below} ) < 0;
 
+    # A KNOWN_BAD dist that nothing declared installs is inert dead weight: the
+    # full alarm's fix would prescribe actions that change nothing, and mist has
+    # no verb to remove a vendored dist yet. Still reported every run - the
+    # tarball is still there - but as what it is.
+    unless ( _known_bad_is_referenced( $ctx, $bad->{module} ) ) {
+      printf "%s %s is vendored and indexed, but nothing declared installs it -\n"
+           . "  no cpanfile requires, no mistfile prepend (transitive prereqs are\n"
+           . "  not traced). Inert; destroying it awaits an eviction verb.\n\n",
+        $bad->{module}, $have;
+      $found++;
+      next;
+    }
+
     # above_perl describes when an entry bites; it does not decide whether to
     # mention it. "This will cause problems later" is worth knowing the moment
     # someone is in the project, not only once they sit down to evaluate a newer
@@ -386,6 +406,39 @@ sub _report_known_bad_versions {
   }
 
   return $found;
+}
+
+# Whether the declaration layer still installs a module: a cpanfile requires
+# (cpanm re-resolves those against the index) or a mistfile prepend, including
+# one nested in a merge block's subtree - those enter the cpanm call stack.
+# Transitive prereqs of declared dists are not traced; the inert report hedges
+# accordingly. Undecidable (unreadable cpanfile, unparseable mistfile) keeps
+# the full alarm: going quiet on an error would hide exactly the case doctor
+# exists to catch.
+sub _known_bad_is_referenced {
+  my ( $ctx, $module ) = @_;
+
+  my $verdict = eval {
+    my @named;
+
+    my $cpanfile = $ctx->project_root->file( 'cpanfile' );
+    if ( -f -r "$cpanfile" ) {
+      require Module::CPANfile;
+      push @named, Module::CPANfile->load( "$cpanfile" )
+        ->prereqs->merged_requirements->required_modules;
+    }
+
+    # Call-stack entries are cpanm args: skip option flags and the ccflags
+    # marker hashrefs, and strip the ~version suffix off a module spec.
+    push @named,
+      map  { ( split /~/, $_ )[0] }
+      grep { not ref $_ and not /^-/ }
+      map  { @$_ } $ctx->dist->build_cpanm_call_stack;
+
+    ( grep { $_ eq $module } @named ) ? 1 : 0;
+  };
+
+  return defined $verdict ? $verdict : 1;
 }
 
 # perl5/bin/mist-run is a symlink into a per-perl wrapper. A plain file there is
