@@ -159,7 +159,7 @@ builds the dependency tree into a fresh generation and leaves the current one
 activatable, and C<mist purge> reclaims superseded ones -- it reads
 F<mpan-dist/> and never writes it, so it is not C<-R> with the re-merging
 removed. For the B<mirror>, C<mist clean> drops tarballs the index no longer
-references and C<mist merge> re-vendors one dist from its source checkout.
+references and C<mist merge> re-vendors one dist from its source project.
 Nothing re-resolves the mirror wholesale: it is a committed artifact of pinned
 tarballs, and rebuilding it from live sibling working trees is what made C<-R>
 unreproducible.

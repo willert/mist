@@ -13,16 +13,17 @@ use Minilla::Project;
 # a decision rather than an accident:
 #
 #   no DistTest    - the artifact a consumer receives is built later by
-#                    `mist merge` from this checkout, so a clean-room test here
-#                    would validate something nobody installs. LocalTest runs
-#                    the suite in-tree, which is the fast gate a dev loop wants.
+#                    `mist merge --trial` from the tag this cuts, so a
+#                    clean-room test here would validate something nobody
+#                    installs. LocalTest runs the suite in-tree, which is the
+#                    fast gate a dev loop wants.
 #   no MakeDist    - same reason; there is no tarball to build here.
 #   no UploadToCPAN- a prerelease is never published.
 #   no RewriteChanges - {{$NEXT}} stays intact so the command is re-runnable and
 #                    one Changes entry covers a whole prerelease cycle.
 #   CommitLocal / TagPrerelease rather than Commit / TagPublish - nothing is
-#                    pushed; the deliverable is a versioned commit in this
-#                    repository for `mist merge` to build from.
+#                    pushed; the deliverable is a versioned tag in this
+#                    repository for `mist merge --trial` to build from.
 sub run {
   my ( $self, @args ) = @_;
 
@@ -93,7 +94,7 @@ sub _report_outcome {
   infof("\nPrereleased %s: local commit %s, local tag %s. Nothing pushed.\n",
         $version, ( length $commit ? $commit : '(unknown)' ),
         $project->format_tag( $version ));
-  infof("Consume it from the consuming project with:\n  mist merge %s\n",
+  infof("Consume it from the consuming project with:\n  mist merge --trial %s\n",
         Cwd::getcwd());
   return;
 }

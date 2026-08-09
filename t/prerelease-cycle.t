@@ -144,7 +144,7 @@ FIRST_ITERATION: {
   # decides whether it is safe to run unattended to be taken on faith.
   like $run->{output}, qr/Nothing pushed/,
     '...and says outright that it pushed nothing';
-  like $run->{output}, qr/mist merge \Q$proj\E/,
+  like $run->{output}, qr/mist merge --trial \Q$proj\E/,
     '...and names the command that consumes it';
 }
 
