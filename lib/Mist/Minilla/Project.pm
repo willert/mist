@@ -5,13 +5,14 @@ use utf8;
 
 use File::Path ();
 use Minilla::Logger;
+use Mist::Minilla::WorkDir;
 
 use Moo;
 extends 'Minilla::Project';
 
 sub _build_work_dir {
   my $self = shift;
-  Minilla::WorkDir->new(
+  Mist::Minilla::WorkDir->new(
     project  => $self, cleanup => 0,
   );
 }

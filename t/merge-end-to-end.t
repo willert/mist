@@ -119,7 +119,11 @@ WriteMakefile(
 MAKEFILE
 
 spew( "requires 'strict';\n",              $sibling, 'cpanfile' );
-spew( "Revision history\n\n{{\$NEXT}}\n\n        - initial\n", $sibling, 'Changes' );
+# Released shape: an empty {{$NEXT}} above the real release line, as a tag
+# always carries it. The dist assertions below prove the empty placeholder is
+# dropped rather than stamped with a varying build time.
+spew( "Revision history\n\n{{\$NEXT}}\n\n0.01 2026-01-01T00:00:00Z\n\n        - initial\n",
+  $sibling, 'Changes' );
 spew( "Same terms as Perl itself.\n",      $sibling, 'LICENSE' );
 spew( "# Merge-Probe\n",                   $sibling, 'README.md' );
 
@@ -184,6 +188,18 @@ ok( $tarball, "the tagged 0.01 is vendored into mpan-dist, not the drifted 0.99"
 my ( $wrong ) = glob File::Spec->catfile(
   $consumer, 'mpan-dist', '*', 'Merge-Probe-0.99.tar.gz' );
 ok( ! $wrong, '...and the working-tree version is nowhere' );
+
+SKIP: {
+  skip 'no tarball to inspect', 2 unless $tarball;
+  require Archive::Tar;
+  my $dist_changes = Archive::Tar->new( $tarball, 1 )
+    ->get_content( 'Merge-Probe-0.01/Changes' ) // '';
+  unlike( $dist_changes, qr/\{\{\$NEXT\}\}/,
+    "the empty {{\$NEXT}} placeholder is dropped from the dist's Changes" );
+  my @release_lines = $dist_changes =~ /^(0\.01 \S+)/mg;
+  is_deeply( \@release_lines, [ '0.01 2026-01-01T00:00:00Z' ],
+    '...and no build-time release line is fabricated above the real one' );
+}
 
 my ( $leftover ) = glob File::Spec->catdir( $home, '.mist', '*', 'merge-src', '*' );
 ok( ! $leftover, 'the tag checkout is removed after the merge' )
