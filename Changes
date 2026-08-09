@@ -2,6 +2,29 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+0.56 2026-08-09T02:10:21Z
+
+  - `mist merge` now merges releases. A bare merge builds the sibling's
+    newest stable release tag, checked out into a detached worktree, so a
+    vendored tarball always corresponds to a tagged state of its source and
+    the mirror keeps CPAN's name-to-content immutability. `--trial` reaches
+    the tags `mist prerelease` cuts (its closing hint now says so),
+    `--release X.YY` pins an exact version, and `--dev` is the old
+    working-tree build, demoted to an escape hatch that warns about
+    uncommitted edits and untracked files. Every merge reports the tag it
+    built and how far the sibling's working tree has drifted past it.
+    A tag build drops the empty {{$NEXT}} placeholder from the dist's
+    Changes instead of stamping build time into it, so rebuilding a tag
+    no longer fabricates a varying release line. First field use retired
+    a 2019 freeze-frame on its maiden run.
+
+  - `mist doctor`: KNOWN_BAD entries from the sig-cms 5.38 port and the
+    foreign-resolution tripwire; the `thanks` verdict is removal, never
+    notest, with the one-line %INC seed that replaces a real use. The
+    report names its default target perl when none was asked for, and a
+    KNOWN_BAD dist that nothing declared installs is reported as inert
+    dead weight instead of alarmed with fixes that change nothing.
+
 0.55 2026-08-07T22:58:42Z
 
   - Release candidates persist as a cache keyed by their environment

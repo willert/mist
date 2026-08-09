@@ -11,7 +11,7 @@ use ExtUtils::MakeMaker 6.64;
 my %WriteMakefileArgs = (
     NAME     => 'App::Mist',
     DISTNAME => 'App-Mist',
-    VERSION  => '0.55',
+    VERSION  => '0.56',
     EXE_FILES => [glob('bin/*'), glob('sbin/*'), glob('script/*')],
     CONFIGURE_REQUIRES => {
   "ExtUtils::MakeMaker" => "6.64"
