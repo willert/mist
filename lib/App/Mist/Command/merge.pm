@@ -11,6 +11,7 @@ use File::Spec::Functions qw/ catfile /;
 use File::Basename qw/ basename /;
 use File::Copy qw/ copy /;
 use File::Path ();
+use version 0.77 ();
 
 use Mist::ParseDistribution;
 use Mist::PackageManager::MPAN;
@@ -24,6 +25,14 @@ use Capture::Tiny ':all';
 
 sub usage_desc { '%c merge %o <project-path>' }
 
+sub opt_spec {
+  return (
+    [ 'trial'     => 'newest release tag including trial (_NN) prereleases' ],
+    [ 'release=s' => 'exactly this released version, stable or trial' ],
+    [ 'dev'       => "the sibling's working tree instead of a release tag" ],
+  );
+}
+
 sub execute {
   my ( $self, $opt, $args ) = @_;
   my $ctx = $self->app->ctx;
@@ -33,16 +42,23 @@ sub execute {
   die "$0: No Minilla directory to merge\n"
     unless $args and ref $args eq 'ARRAY' and @$args;
 
+  die "$0: --dev, --trial and --release are mutually exclusive\n"
+    if 1 < grep { defined and length } $opt->dev, $opt->trial, $opt->release;
+
   my $path = dir( pop @$args )->absolute->resolve;
 
   die "$0: ${path} is not Minilla distribution\n"
     unless -d q{}. $path and -f -r q{}. $path->file('cpanfile');
 
-  printf "Merging distribution located in %s\n", $path;
+  # $source_guard holds the tag checkout alive until execute is left, on every
+  # exit path including die; everything below must read from $source, never
+  # $path, or a tag merge silently mixes in working-tree state.
+  my ( $source, $selected, $source_guard ) =
+    $self->_resolve_source( $ctx, $opt, $path );
 
   my $current_pwd = dir( getcwd());
   try {
-    chdir( "$path" );
+    chdir( "$source" );
     check_git;
     capture_stdout {
       $project = Mist::Minilla::Project->new;
@@ -56,7 +72,16 @@ sub execute {
     chdir "$current_pwd";
   };
 
-  exit 1 unless $dist;
+  die "$0: no distribution could be built from ${source}\n" unless $dist;
+
+  if ( defined $opt->release and length $opt->release ) {
+    ( my $want = $opt->release ) =~ s/^v//;
+    my ( $built ) = basename( "$dist" ) =~ /-v?([0-9][0-9._]*)\.tar\.gz$/;
+    die sprintf "$0: tag %s built version %s, not the requested %s\n",
+        $selected->{tag}, $built // 'unknown', $opt->release
+      unless defined $built
+         and eval { version->parse( $built ) == version->parse( $want ) };
+  }
 
   printf "Injecting distribution %s\n", $dist;
 
@@ -73,7 +98,7 @@ sub execute {
     mirror_only  => 1,    # merge resolves strictly from the pinned mpans
   });
 
-  my $other_mistfile = $path->file( 'mistfile' );
+  my $other_mistfile = $source->file( 'mistfile' );
   my $other_env = do{
     if ( -f -r "$other_mistfile" ) {
       Mist::Environment->new( "$other_mistfile" )->parse
@@ -82,8 +107,8 @@ sub execute {
   };
 
   $package_manager->add_mirror(
-    sprintf( 'file://%s/', $path->subdir( 'mpan-dist' ))
-  ) if -d -r $path->subdir( 'mpan-dist' )->stringify;
+    sprintf( 'file://%s/', $source->subdir( 'mpan-dist' ))
+  ) if -d -r $source->subdir( 'mpan-dist' )->stringify;
 
   $package_manager->begin_work;
 
@@ -291,6 +316,163 @@ sub _write_mistfile {
   return;
 }
 
+# Decide which state of the sibling gets built, and hand back a directory that
+# every later read goes through. For tag modes that is a detached git worktree
+# under the consumer's mist workspace: dist build, mistfile and mpan-dist mirror
+# then all come from the same released tree by construction, instead of a tag
+# build quietly slurping a working-tree mistfile. Returns the source dir, the
+# selected-tag record (undef for --dev), and a guard whose destruction removes
+# the checkout.
+sub _resolve_source {
+  my ( $self, $ctx, $opt, $path ) = @_;
+
+  if ( $opt->dev ) {
+    printf "Merging working tree of %s\n", $path;
+    _warn_working_tree_state( $path );
+    return ( $path, undef, undef );
+  }
+
+  my @tags = split /\n/, _git( $path, qw/ tag --merged HEAD / );
+
+  my $selected = _select_release_tag(
+    \@tags, trial => $opt->trial, release => $opt->release,
+  );
+
+  unless ( $selected ) {
+    if ( defined $opt->release and length $opt->release ) {
+      my @shaped = grep { /^v?\d+(?:\.\d+)+(?:_\d+)?$/ } @tags;
+      die sprintf "$0: no release tag for version %s in %s\n%s",
+        $opt->release, $path,
+        @shaped ? sprintf( "    available: %s\n", join ', ', @shaped )
+                : "    (the project has no release tags at all)\n";
+    }
+    my $newest_trial = _select_release_tag( \@tags, trial => 1 );
+    die $newest_trial
+      ? sprintf( "$0: no stable release tag in %s - newest is trial %s\n"
+               . "    use --trial for it, or --dev for the working tree\n",
+                 $path, $newest_trial->{tag} )
+      : sprintf( "$0: no release tags in %s - use --dev to merge the working"
+               . " tree\n", $path );
+  }
+
+  my $tag = $selected->{tag};
+
+  printf "Merging %s at release tag %s%s\n",
+    $path, $tag, $selected->{trial} ? ' (trial)' : '';
+
+  my $ahead = _git( $path, 'rev-list', '--count', "${tag}..HEAD" );
+  my $dirty = length _git( $path, qw/ status --porcelain / );
+  printf "    the sibling's working tree is %s - use --dev for its current state\n",
+    join ' and ', ( $ahead ? "${ahead} commit(s) ahead" : () ),
+                  ( $dirty ? 'dirty' : () )
+    if $ahead or $dirty;
+
+  ( my $checkout_name = $tag ) =~ s/[^\w.-]+/-/g;
+  my $checkout = $ctx->workspace->subdir( 'merge-src' )->subdir( $checkout_name );
+  $checkout->parent->mkpath;
+
+  # A leftover from an aborted merge: the guard could not run, but the metadata
+  # in the sibling's .git survives, so worktree add would refuse the path.
+  _remove_tag_checkout( $path, $checkout ) if -d "$checkout";
+
+  _git( $path, qw/ worktree add --detach /, "$checkout", $tag );
+
+  my $guard = App::Mist::Command::merge::_CleanupGuard->new( sub {
+    _remove_tag_checkout( $path, $checkout );
+  });
+
+  return ( dir( "$checkout" ), $selected, $guard );
+}
+
+sub _remove_tag_checkout {
+  my ( $repo, $checkout ) = @_;
+
+  # Best-effort by design: cleanup must never turn a finished merge into a
+  # failure, and half-removed state falls to the next merge's stale sweep.
+  eval { _git( $repo, qw/ worktree remove --force /, "$checkout" ) };
+  File::Path::rmtree( "$checkout" ) if -d "$checkout";
+  eval { _git( $repo, qw/ worktree prune / ) };
+  return;
+}
+
+# Pick the tag to merge from a list of tag names. Only version-shaped tags
+# count: an optional leading `v`, dotted digits, an optional _NN trial suffix -
+# anything else (release-checkpoint-*, wip, ...) is invisible here. Ordering
+# and equality go through version.pm, because that is what the CPAN-shaped
+# mirror resolves versions with: 0.9 beats 0.10, and 0.52_01 sorts between
+# 0.52 and 0.53, exactly as a consumer's requirement floor would see them.
+sub _select_release_tag {
+  croak sprintf 'BUG: _select_release_tag takes a tag list and options'
+    unless ref $_[0] eq 'ARRAY';
+
+  my ( $tags, %opt ) = @_;
+
+  my @candidates;
+  for my $tag ( @$tags ) {
+    my ( $vstr ) = $tag =~ /^v?(\d+(?:\.\d+)+(?:_\d+)?)$/ or next;
+    my $version = eval { version->parse( $vstr ) } or next;
+    push @candidates, {
+      tag => $tag, version => $version, trial => ( $vstr =~ /_/ ? 1 : 0 ),
+    };
+  }
+
+  if ( defined $opt{release} and length $opt{release} ) {
+    ( my $want_str = $opt{release} ) =~ s/^v//;
+    my $want = eval { version->parse( $want_str ) }
+      or die "$0: --release '$opt{release}' does not look like a version\n";
+    my ( $hit ) = sort { $a->{tag} cmp $b->{tag} }
+      grep { $_->{version} == $want } @candidates;
+    return $hit;
+  }
+
+  my @eligible = $opt{trial} ? @candidates
+                             : grep { not $_->{trial} } @candidates;
+  my ( $best ) = sort {
+    $b->{version} <=> $a->{version} or $a->{tag} cmp $b->{tag}
+  } @eligible;
+  return $best;
+}
+
+# The dist is built from git's tracked-file list with working-tree content, so
+# the two failure modes are asymmetric: uncommitted edits ride along invisibly,
+# while untracked files are silently absent from the tarball. Say both out loud.
+sub _warn_working_tree_state {
+  my ( $path ) = @_;
+
+  my @untracked = split /\n/,
+    _git( $path, qw/ ls-files --others --exclude-standard / );
+  my @modified  = split /\n/,
+    _git( $path, qw/ diff HEAD --name-only / );
+
+  printf STDERR "Warning: uncommitted changes will be merged: %s\n",
+    join ', ', @modified if @modified;
+  printf STDERR "Warning: untracked files will be MISSING from the merged"
+    . " dist: %s\n", join ', ', @untracked if @untracked;
+  return;
+}
+
+sub _git {
+  my ( $repo, @cmd ) = @_;
+
+  my ( $stdout, $stderr, $exit ) = capture {
+    system 'git', '-C', "$repo", @cmd;
+  };
+  croak sprintf "git %s failed in %s:\n%s",
+    join( ' ', @cmd ), $repo, $stderr || $stdout
+    if $exit != 0;
+
+  chomp $stdout;
+  return $stdout;
+}
+
+{
+  package # hide from PAUSE
+    App::Mist::Command::merge::_CleanupGuard;
+
+  sub new { my ( $class, $code ) = @_; return bless { code => $code }, $class }
+  sub DESTROY { my $self = shift; $self->{code}->() if $self->{code}; return }
+}
+
 1;
 
 __END__
@@ -303,7 +485,10 @@ App::Mist::Command::merge - merge another mist-managed project into this one
 
 =head1 SYNOPSIS
 
-  mist merge ../other-project
+  mist merge ../other-project                 # newest stable release tag
+  mist merge --trial ../other-project         # newest tag, trials included
+  mist merge --release 0.52 ../other-project  # exactly this version
+  mist merge --dev ../other-project           # the working tree, as-is
 
 =head1 DESCRIPTION
 
@@ -311,7 +496,51 @@ Pulls another mist-managed project, given by its path on disk, into the
 current one. C<merge> builds and injects that project's distribution --
 together with the dependency call-stack from its own F<mistfile> -- into
 F<mpan-dist/>, and then splices a marker-delimited block into the local
-F<mistfile>:
+F<mistfile>.
+
+By default the state merged is the sibling's newest B<stable release tag>
+reachable from its checked-out C<HEAD>: version-shaped tags (C<0.53>,
+C<v0.53>) ordered by Perl version semantics, ignoring trial prereleases
+(C<0.52_01>) and tags that are not versions at all. Stable tags are the
+artifacts that went through C<mist release>'s clean-room validation, so the
+bare command means "the last known good version". The tag is checked out
+into a detached git worktree under the per-project mist workspace, and
+everything C<merge> reads - the distribution build, the sibling's
+F<mistfile>, its F<mpan-dist/> mirror - comes from that checkout, so the
+merged result corresponds exactly to a released state. The checkout is
+removed when the merge finishes, and C<merge> reports when the sibling's
+working tree has moved past the tag it built.
+
+Three options select another state; they are mutually exclusive:
+
+=over 4
+
+=item C<--trial>
+
+The newest release tag I<including> trial prereleases as cut by
+L<mist prerelease|App::Mist::Command::prerelease>. This is the flag for the
+prerelease cycle: run C<prerelease> in the sibling, C<merge --trial> here,
+iterate; each iteration is a distinct version, so the mirror never sees the
+same tarball name with different content.
+
+=item C<--release VERSION>
+
+Exactly this released version, stable or trial, spelled with or without a
+leading C<v>. The merge fails if no such tag exists or if the tag's tree
+builds a different version than asked for.
+
+=item C<--dev>
+
+The sibling's working tree, unmediated by any tag. The dist is built from
+git's tracked-file list with working-tree I<content>: uncommitted edits ride
+along, untracked files are silently absent - C<merge> warns about both. The
+result can correspond to no commit of the sibling and its tarball name can
+collide with a later real release, so keep a C<--dev> merge out of committed
+history.
+
+=back
+
+The block spliced into the local F<mistfile> looks like this:
 
   ### <<<[Other::Dist] - keep this line intact
   merge 'Other::Dist' => sub { ... };

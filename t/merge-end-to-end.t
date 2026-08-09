@@ -15,10 +15,13 @@ use FindBin ();
 # rewrite, t/merge-cascade.t the cpanm option surface and mirror cascade,
 # t/staging-lib.t that the source wires the staging lib in. None of them run
 # App::Mist::Command::merge::execute, which is the path that builds a sibling
-# through Minilla and then installs it. This does, and asserts the invariant that
-# changed when merge stopped installing into the live environment:
+# through Minilla and then installs it. This does, and asserts two invariants:
 #
 #   merge vendors into mpan-dist and rewrites the mistfile; it creates no perl5/.
+#
+#   a bare merge builds the sibling's newest stable release tag, not its working
+#   tree - the sibling is tagged 0.01 and then drifted to an uncommitted 0.99,
+#   and 0.01 is what has to arrive. The tag checkout is removed afterwards.
 #
 # HOME is redirected into the sandbox so the per-project ~/.mist workspace (and
 # cpanm's own home) land there and not in the real one.
@@ -133,9 +136,19 @@ for my $cmd (
   "$git config user.name Probe",
   "$git add -A",
   "$git commit -q -m 'probe dist'",
+  "$git tag 0.01",
 ) {
   my $status = system "cd $sibling && $cmd >/dev/null 2>&1";
   plan skip_all => "could not prepare the sibling git repo ($cmd)" if $status != 0;
+}
+
+# Post-tag drift: an uncommitted version bump in the sibling's working tree.
+# If the merge builds the working tree instead of the tag, 0.99 arrives and the
+# tarball assertion below fails.
+{
+  my $drifted = slurp( $sibling, qw/ lib Merge Probe.pm / );
+  $drifted =~ s/'0\.01'/'0.99'/;
+  spew( $drifted, $sibling, qw/ lib Merge Probe.pm / );
 }
 
 # --- the consumer: a mist project with no perl pin, so no perlbrew re-exec ---
@@ -159,9 +172,22 @@ is( $exit, 0, 'mist merge succeeds against a real sibling' )
 ok( ! -e File::Spec->catdir( $consumer, 'perl5' ),
   'merge creates no perl5/ - it vendors, it does not install' );
 
+like( $output, qr/at release tag 0\.01/,
+  'the merge announces which release tag it builds' );
+like( $output, qr/working tree is dirty - use --dev/,
+  '...and that the sibling has drifted past it' );
+
 my ( $tarball ) = glob File::Spec->catfile(
-  $consumer, 'mpan-dist', '*', 'Merge-Probe-*.tar.gz' );
-ok( $tarball, "the sibling's dist is vendored into mpan-dist" );
+  $consumer, 'mpan-dist', '*', 'Merge-Probe-0.01.tar.gz' );
+ok( $tarball, "the tagged 0.01 is vendored into mpan-dist, not the drifted 0.99" );
+
+my ( $wrong ) = glob File::Spec->catfile(
+  $consumer, 'mpan-dist', '*', 'Merge-Probe-0.99.tar.gz' );
+ok( ! $wrong, '...and the working-tree version is nowhere' );
+
+my ( $leftover ) = glob File::Spec->catdir( $home, '.mist', '*', 'merge-src', '*' );
+ok( ! $leftover, 'the tag checkout is removed after the merge' )
+  or diag( "leftover checkout: $leftover" );
 
 my $mistfile = slurp( $consumer, 'mistfile' );
 like( $mistfile, qr/^### <<<\[Merge::Probe\] - keep this line intact$/m,

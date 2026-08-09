@@ -38,9 +38,9 @@ in-tree, then commits and tags locally. Nothing is built, uploaded or pushed.
 
 It exists for one cycle: a sibling project needs a change from this one, and
 wants to test it before it is released. Run C<prerelease> here, then
-C<mist merge> in the sibling - which builds a distribution from this
-project's I<current checkout> - and the sibling can install and exercise it.
-Iterate as often as needed; finish with L<mist release|App::Mist::Command::release>.
+C<mist merge --trial> in the sibling - which builds the prerelease tag just
+cut - and the sibling can install and exercise it. Iterate as often as
+needed; finish with L<mist release|App::Mist::Command::release>.
 
 =head2 Version numbering
 
@@ -64,7 +64,7 @@ component: from C<0.52_02> it releases C<0.53>.
 
 It builds no tarball and runs no clean-room test, so it does B<not> validate
 the artifact a consumer receives - C<mist merge> builds that separately, from
-this checkout. The first genuine validation of a distribution is
+the tag this command cuts. The first genuine validation of a distribution is
 C<mist release>, which is why the cycle has to end there.
 
 C<Changes> keeps its C<{{$NEXT}}> placeholder, so the command is re-runnable
@@ -89,8 +89,10 @@ C<CheckUntrackedFiles>. Commit them once and the cycle runs clean.
 =head2 Pre-releases are not for production
 
 A prerelease vendored into a consumer's C<mpan-dist/> is committable like any
-other tarball, and nothing prevents it reaching a deployment. Keep the merge
-uncommitted until the real release lands, or re-merge and commit that.
+other tarball, and nothing prevents it reaching a deployment. A bare
+C<mist merge> never selects a trial tag - vendoring one takes an explicit
+C<--trial> or C<--release>. Keep the merge uncommitted until the real
+release lands, or re-merge and commit that.
 
 =head1 SEE ALSO
 
