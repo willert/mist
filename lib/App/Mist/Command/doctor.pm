@@ -127,19 +127,23 @@ WHY
     module     => 'thanks',
     below      => '0.006',
     above_perl => '5.20.3',
-    what       => 'fails its own test suite, distro-dependently',
+    what       => 'broken on modern perls; must be removed, never notest-ed',
     why        => <<'WHY',
-  The dist blocks module loading by seeding %INC, and its tests assert the
-  block works on strict itself. Modern perls load strict regardless - and
-  so do distro-patched builds of older ones: Ubuntu's 5.38.2 fails the
-  suite where a perlbrew 5.38.2 of the same version passes, so a green
-  local side-build proves nothing for the deploy box. Reaches closures as
-  a test-phase dependency of MooseX::ErsatzMethod - or as a fossil
-  `prepend 'thanks'` in a merge block whose sibling dropped that dep long
-  ago, which is how sig-cms met it. Last release 2013; below 0.006 means
-  every release that exists.
+  The dist's one feature is seeding %INC so a module counts as loaded, and
+  its tests assert that block works on strict itself - which modern perls
+  and distro-patched builds of older ones no longer tolerate: Ubuntu's
+  5.38.2 fails the suite where a perlbrew 5.38.2 of the same version
+  passes, so a green local side-build proves nothing for the deploy box,
+  and on 5.40+ the `no thanks` form breaks outright (mist's own
+  prerelease carried one and had to swap it out). A notest install only
+  moves the failure to runtime on exactly those boxes: the tests are the
+  messenger, the feature is the problem. Reaches closures as a test-phase
+  dependency of MooseX::ErsatzMethod - or as a fossil `prepend 'thanks'`
+  in a merge block whose sibling dropped that dep long ago, which is how
+  sig-cms met it. Last release 2013; below 0.006 means every release that
+  exists.
 WHY
-    fix        => "drop the stale prepend (re-merge the sibling); notest 'thanks' only while one remains",
+    fix        => q{remove it: `mist merge` the sibling to drop a fossil prepend; a real `no thanks 'X'` is one line: BEGIN { $INC{'X.pm'} //= __FILE__ }},
   },
   {
     module     => 'PPI',
