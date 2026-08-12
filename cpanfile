@@ -7,7 +7,6 @@ requires "App::cpanminus" => "1.7";
 
 requires "Capture::Tiny";
 requires "Digest::MD5";
-requires "Module::Path";
 requires "Sort::Key";
 
 requires "Path::Class";

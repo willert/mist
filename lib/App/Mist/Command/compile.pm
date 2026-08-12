@@ -6,7 +6,6 @@ use 5.010;
 use App::Mist -command;
 
 use App::Mist::Utils qw/ append_module_source append_text_file /;
-use Module::Path qw/ module_path /;
 
 use Try::Tiny;
 use File::Copy;

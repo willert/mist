@@ -29244,7 +29244,6 @@ $PREREQUISITE_DISTS = [
                         'Module::CPANfile~1.0002',
                         'Module::CoreList~5.20260720',
                         'Module::Install',
-                        'Module::Path',
                         'Moo',
                         'MooX::HandlesVia',
                         'MooX::late',

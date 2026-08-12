@@ -10,7 +10,7 @@ BEGIN { @EXPORT_OK = qw/ append_module_source append_text_file / }
 use Data::Dumper;
 use Carp;
 
-use Module::Path qw/ module_path /;
+use Module::Metadata;
 use Scalar::Util qw/ blessed looks_like_number /;
 use Digest::MD5  qw/ md5_hex /;
 
@@ -68,7 +68,13 @@ NO_THANKS
 
   $header_appended{ $fh } = 1;
 
-  my $path = module_path( $module )
+  # Module::Metadata rather than Module::Path: it is core, is already a
+  # dependency (doctor.pm asks it about $VERSION scanning), and resolves a
+  # module name through @INC the same way. Module::Path 0.19 is the last
+  # release, from 2015, and its own test suite fails on Debian, whose
+  # perl-base / usr-share split puts one core module at two paths - which
+  # made mist unbootstrappable there.
+  my $path = Module::Metadata->find_module_by_name( $module )
     or croak "Can't find module ${module}";
 
   open my $module_source, "<", $path
