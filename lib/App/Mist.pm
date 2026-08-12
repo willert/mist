@@ -59,6 +59,11 @@ our $VERSION = '0.56';
 
 use App::Mist::Context;
 
+# Set only by the argv parse below, and deliberately not readable from the
+# environment: this is an emergency escape, and an env var would let one export
+# turn every later invocation into one silently. It has to be typed each time.
+our $FORCE_SYSTEM_PERL = 0;
+
 sub ctx {
   my $self = shift;
   $self->{ctx} //= App::Mist::Context->new;
@@ -71,10 +76,27 @@ sub ctx {
 # re-apply a relative path on top of the already-changed cwd.
 sub run {
   my $class = shift;
-  for my $path ( $class->_shift_chdir_paths( \@ARGV ) ) {
-    next unless length $path;          # -C "" leaves the cwd unchanged, like git
-    chdir $path or die "mist: cannot chdir to '$path': $!\n";
+
+  # Leading global options only, in any order. Restricted to the front rather
+  # than swept from the whole argv because `mist run -- <cmd> <args>` passes
+  # everything after the separator through untouched, and a global option
+  # stripped out of a wrapped command's arguments would be a silent corruption.
+  while ( @ARGV ) {
+    if ( $ARGV[0] eq '--force-system-perl' ) {
+      shift @ARGV;
+      $FORCE_SYSTEM_PERL = 1;
+      next;
+    }
+
+    my @paths = $class->_shift_chdir_paths( \@ARGV );
+    last unless @paths;
+
+    for my $path ( @paths ) {
+      next unless length $path;        # -C "" leaves the cwd unchanged, like git
+      chdir $path or die "mist: cannot chdir to '$path': $!\n";
+    }
   }
+
   return $class->SUPER::run( @_ );
 }
 
@@ -116,6 +138,24 @@ May be given more than once; as with C<git -C>, a non-absolute C<< <path> >> is
 taken relative to the preceding one, and an empty C<< -C '' >> leaves the
 directory unchanged. The forms C<-C path>, C<-C=path> and C<-Cpath> are all
 accepted.
+
+=head2 --force-system-perl
+
+Run the subcommand under the perl on C<PATH> instead of re-executing under the
+perl the mistfile pins. For a host that cannot provide a perlbrew context and
+needs one command to go through anyway.
+
+This is an escape, not a mode. C<./mpan-install --system-perl> is the supported
+way for a machine to build against its own perl, and it records that choice;
+this flag records nothing, must be typed on every invocation, cannot be set
+from the environment, and warns each time it is used.
+
+It is refused for C<compile>, C<build_dist>, C<release> and C<prerelease>.
+Those emit artifacts that other checkouts and other people consume, and nothing
+in the result records which perl resolved it - so an unpinned one is a mistake
+that is invisible afterwards and reaches every consumer.
+
+Contradictory with C<--perlbrew>, which names an interpreter to use.
 
 =head1 AUTHORS
 

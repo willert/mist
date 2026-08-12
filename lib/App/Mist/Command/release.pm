@@ -21,6 +21,7 @@ sub execute {
   my ( $self, $opt, $args ) = @_;
   my $ctx = $self->app->ctx;
 
+  $ctx->refuse_forced_system_perl( 'release' );
   $ctx->ensure_correct_perlbrew_context;
 
   # --candidate=<id> promotes a build a previous --dry-run left on disk (see the

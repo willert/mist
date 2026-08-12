@@ -14,6 +14,7 @@ sub execute {
   my ( $self, $opt, $args ) = @_;
   my $ctx = $self->app->ctx;
 
+  $ctx->refuse_forced_system_perl( 'build_dist' );
   $ctx->ensure_correct_perlbrew_context;
 
   my $minil = Minilla::CLI->new();

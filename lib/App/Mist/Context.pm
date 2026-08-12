@@ -348,9 +348,54 @@ sub BUILD {
   chdir $self->project_root->stringify;
 }
 
+# Refuses --force-system-perl for the commands that produce artifacts other
+# people consume.
+#
+# The flag exists for a host that cannot provide a perlbrew context; it does not
+# exist to cut a release from one. What `compile`, `build_dist`, `release` and
+# `prerelease` emit is committed or published, and the perl that resolved it is
+# not recorded anywhere in the result - so a wrong one is invisible afterwards
+# and reaches every consumer. That is the case the original scoping was right
+# about, and it stays refused.
+sub refuse_forced_system_perl {
+  my ( $self, $command ) = @_;
+
+  return unless $App::Mist::FORCE_SYSTEM_PERL;
+
+  die <<"REFUSED";
+mist: --force-system-perl is not accepted for `${command}`.
+
+The flag is an escape for a host that cannot provide a perlbrew context. This
+command produces artifacts that other checkouts and other people consume, and
+nothing in the result records which perl resolved it - so building it under an
+unpinned perl is a mistake nobody can see afterwards.
+
+Run this on a host with the pinned perl available.
+REFUSED
+}
+
 sub ensure_correct_perlbrew_context {
   my $self = shift;
   my $pb_version_override = shift;
+
+  # The operator has said, for this one invocation, that no perlbrew context is
+  # coming. Skipping the re-exec leaves everything else intact: local_lib is
+  # derived from an argument-less Mist::Generation::arch_path(), the same call
+  # ./mpan-install makes, so the tree resolved here is exactly the one a
+  # --system-perl install built.
+  if ( $App::Mist::FORCE_SYSTEM_PERL ) {
+    die "mist: --force-system-perl and --perlbrew are contradictory\n"
+      if defined $pb_version_override and length $pb_version_override;
+
+    warn sprintf <<'WARNING', $Config{version};
+mist: running under the system perl %s because --force-system-perl was given.
+      The pinned perl was not used. Whatever this produces was resolved by a
+      perl nobody has checked against the pin - read the resulting diff before
+      committing it.
+WARNING
+
+    return;
+  }
 
   my $pb_root    = $self->perlbrew_root;
   my $pb_version = ( defined $pb_version_override and length $pb_version_override )
@@ -360,6 +405,20 @@ sub ensure_correct_perlbrew_context {
   my $pb_exec = qx{ which perlbrew } || "${pb_root}/bin/perlbrew";
   chomp $pb_exec;
 
+  # The only thing the CLI ever reads from the marker, and it reads it for the
+  # message alone - never to decide behaviour. Keeping it to an -e test is what
+  # stops the two halves growing a second, drifting definition of what
+  # --system-perl means; that drift is why this bug existed.
+  my $marker = $self->project_root->file( 'perl5', '.mist-system-perl' );
+  my $host_note = -e $marker ? <<"HOST_NOTE" : q{};
+
+This host is recorded as building against its own perl:
+  ${marker}
+That is a supported mode for ./mpan-install. It does not extend to the
+build-master commands, which run under the pinned perl so that what they
+produce is reproducible.
+HOST_NOTE
+
   system( "$pb_exec version >/dev/null" ) == 0 or die <<"MSG";
 No local installation of perlbrew was found ($?). You can install it
 as root via:
@@ -367,6 +426,11 @@ as root via:
   curl -kL http://install.perlbrew.pl | sudo -E bash
 or just for this account simply via:
   curl -kL http://install.perlbrew.pl | bash
+${host_note}
+If you cannot provide one, `mist --force-system-perl <command>` runs anyway
+under the perl on PATH. It is an escape, not a second mode: what it produces
+was resolved by a perl nobody has checked against the pin, and it is refused
+outright for compile, build_dist, release and prerelease.
 MSG
 
   my @pb_versions = qx# bash -c '

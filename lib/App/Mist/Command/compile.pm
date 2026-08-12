@@ -19,6 +19,12 @@ sub execute {
   my ( $self, $opt, $args ) = @_;
 
   my $ctx  = $self->app->ctx;
+
+  # Note that compile does not call ensure_correct_perlbrew_context at all - it
+  # only reads the pin as a string and bakes it in. So this refusal is the only
+  # thing standing between an unpinned perl and a committed mpan-install.
+  $ctx->refuse_forced_system_perl( 'compile' );
+
   my $home = $ctx->project_root;
   my $mpan = $ctx->mpan_dist;
 

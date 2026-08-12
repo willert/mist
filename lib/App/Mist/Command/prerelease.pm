@@ -13,6 +13,7 @@ sub execute {
   my ( $self, $opt, $args ) = @_;
   my $ctx = $self->app->ctx;
 
+  $ctx->refuse_forced_system_perl( 'prerelease' );
   $ctx->ensure_correct_perlbrew_context;
   Minilla::CLI->new()->run( prerelease => @$args );
 }
