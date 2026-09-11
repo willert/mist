@@ -157,6 +157,35 @@ WHY
 WHY
     fix        => 'mist inject --from <sibling> PPI   (1.291 vendored in erb)',
   },
+  {
+    module     => 'Data::Clone',
+    below      => '0.005',
+    above_perl => '5.36.3',
+    what       => 'fails its stack test',
+    why        => <<'WHY',
+  t/07_stack.t dies under perl 5.38 (exit 2 before any plan), so the dist
+  never installs and everything above it bails out - HTML::FormHandler in
+  the sig-ng closure. 0.005's changelog says only "Fix against Perl 5.38";
+  the first affected perl was not pinned down, so the gate sits at the last
+  5.36. 0.006 is a packaging-only release on top of the fix.
+WHY
+    fix        => 'mist inject Data::Clone~0.005   (0.006 vendored in sig-cms and erb)',
+  },
+  {
+    module     => 'B::Hooks::Parser',
+    below      => '0.20',
+    above_perl => '5.28.3',
+    what       => 'does not compile',
+    why        => <<'WHY',
+  Releases before 0.20 carry a copy of perl's tokenizer that uses API macros
+  perl removed in 5.29.10 (isIDFIRST_lazy_if, isALNUM_utf8, is_utf8_mark);
+  the build dies in Parser.o. Hook::AfterRuntime depends on it, and the
+  env::boilerplate after_runtime immutability on that, so a Moose app pinned
+  to an old perl meets this on its first build under a modern one. 0.20 uses
+  the core functions directly on such perls; 0.21 fixes threaded builds.
+WHY
+    fix        => 'mist inject B::Hooks::Parser~0.21   (0.21 vendored in sig-cms)',
+  },
 );
 
 # A perl version as a comparable number: 5.38.2 -> 5.038002, the shape

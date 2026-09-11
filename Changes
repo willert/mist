@@ -2,6 +2,9 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+  - doctor: Data::Clone below 0.005 and B::Hooks::Parser below 0.20 join the
+    known-bad table, both found the slow way in the sig-ng 5.38 port
+
 0.56 2026-08-09T02:10:21Z
 
   - `mist merge` now merges releases. A bare merge builds the sibling's
