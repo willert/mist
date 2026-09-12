@@ -4,8 +4,8 @@ package App::Mist::Command::build_dist;
 use 5.010;
 
 use App::Mist -command;
-use Minilla::CLI;
 use Minilla::Util qw(cmd);
+use Mist::Minilla::CLI ();
 
 # no thanks 'CPAN::Uploader'; <-- breaks on perl 5.40 and above
 BEGIN { $INC{'CPAN/Uploader.pm'} //= __FILE__; }
@@ -17,9 +17,8 @@ sub execute {
   $ctx->refuse_forced_system_perl( 'build_dist' );
   $ctx->ensure_correct_perlbrew_context;
 
-  my $minil = Minilla::CLI->new();
   cmd( mist => run => 'prove' ); # exits on fail
-  $minil->run( dist => '--no-test', @$args );
+  Mist::Minilla::CLI::run_command( dist => '--no-test', @$args );
 }
 
 1;

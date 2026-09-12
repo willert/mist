@@ -4,8 +4,8 @@ package App::Mist::Command::release;
 use 5.010;
 
 use App::Mist -command;
-use Minilla::CLI;
 use Minilla::Project;
+use Mist::Minilla::CLI ();
 
 use Config;
 use File::Find ();
@@ -188,8 +188,10 @@ sub execute {
   local $ENV{PERL_MINILLA_SKIP_CHECK_CHANGE_LOG};
   $ENV{PERL_MINILLA_SKIP_CHECK_CHANGE_LOG} = 1 if $dry_run or not -t STDIN;
 
-  my $minil = Minilla::CLI->new();
-  $minil->run( release => @minil_args );
+  # Through Mist::Minilla::CLI, not Minilla::CLI->run: a step that refuses
+  # (untracked files, a wrong release branch) dies here, so a dry-run never
+  # reaches the stamp below and a real release never builds its tarball.
+  Mist::Minilla::CLI::run_command( release => @minil_args );
 
   if ( $dry_run ) {
     # A dry-run whose tests pass but whose candidate is empty is promotable on
@@ -219,7 +221,7 @@ sub execute {
     return;
   }
 
-  $minil->run( dist => '--no-test', @minil_args );
+  Mist::Minilla::CLI::run_command( dist => '--no-test', @minil_args );
 
   # The promoted candidate stays cached. Its fingerprint ignores the dist's own
   # version, so the closure it holds remains valid across the release bump and

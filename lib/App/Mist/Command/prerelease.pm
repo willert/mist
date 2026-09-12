@@ -4,7 +4,7 @@ package App::Mist::Command::prerelease;
 use 5.010;
 
 use App::Mist -command;
-use Minilla::CLI;
+use Mist::Minilla::CLI ();
 
 # no thanks 'CPAN::Uploader'; <-- breaks on perl 5.40 and above
 BEGIN { $INC{'CPAN/Uploader.pm'} //= __FILE__; }
@@ -15,7 +15,7 @@ sub execute {
 
   $ctx->refuse_forced_system_perl( 'prerelease' );
   $ctx->ensure_correct_perlbrew_context;
-  Minilla::CLI->new()->run( prerelease => @$args );
+  Mist::Minilla::CLI::run_command( prerelease => @$args );
 }
 
 1;

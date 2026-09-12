@@ -2,6 +2,11 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+  - `mist release`, `prerelease` and `build_dist` exit nonzero when a
+    Minilla step refuses (untracked files, a wrong release branch, no
+    origin). Minilla::CLI swallowed the refusal, so a dry-run re-stamped
+    its candidate and printed "validated" after the untracked-files check
+    had said no, and a real release would have built its tarball.
   - doctor: Data::Clone below 0.005 and B::Hooks::Parser below 0.20 join the
     known-bad table, both found the slow way in the sig-ng 5.38 port
 
