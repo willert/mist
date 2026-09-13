@@ -12,6 +12,24 @@ taken relative to the preceding one, and an empty `-C ''` leaves the
 directory unchanged. The forms `-C path`, `-C=path` and `-Cpath` are all
 accepted.
 
+## --force-system-perl
+
+Run the subcommand under the perl on `PATH` instead of re-executing under the
+perl the mistfile pins. For a host that cannot provide a perlbrew context and
+needs one command to go through anyway.
+
+This is an escape, not a mode. `./mpan-install --system-perl` is the supported
+way for a machine to build against its own perl, and it records that choice;
+this flag records nothing, must be typed on every invocation, cannot be set
+from the environment, and warns each time it is used.
+
+It is refused for `compile`, `build_dist`, `release` and `prerelease`.
+Those emit artifacts that other checkouts and other people consume, and nothing
+in the result records which perl resolved it - so an unpinned one is a mistake
+that is invisible afterwards and reaches every consumer.
+
+Contradictory with `--perlbrew`, which names an interpreter to use.
+
 # AUTHORS
 
 Sebastian Willert <s.willert@wecare.de>

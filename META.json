@@ -62,7 +62,6 @@
             "Module::CPANfile" : "1.0002",
             "Module::CoreList" : "5.20260720",
             "Module::Install" : "0",
-            "Module::Path" : "0",
             "Moo" : "0",
             "MooX::HandlesVia" : "0",
             "MooX::late" : "0",
@@ -85,7 +84,7 @@
          "web" : "https://github.com/willert/mist"
       }
    },
-   "version" : "0.56",
+   "version" : "0.57",
    "x_contributors" : [
       "Sebastian Willert <willert@cpan.org>",
       "Sebastian Willert <willert@gmail.com>",

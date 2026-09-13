@@ -2,6 +2,8 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+0.57 2026-09-13T00:22:58Z
+
   - `mist release`, `prerelease` and `build_dist` exit nonzero when a
     Minilla step refuses (untracked files, a wrong release branch, no
     origin). Minilla::CLI swallowed the refusal, so a dry-run re-stamped
