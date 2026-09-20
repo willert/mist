@@ -45,6 +45,7 @@ sub run {
                   UploadToCPAN
 
                   RewriteChanges
+                  RewriteTranslatedChanges
                   Commit
                   TagPublish
               );

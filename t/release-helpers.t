@@ -587,4 +587,71 @@ CANDIDATE_MUST_HOLD_A_CLOSURE: {
   ok $holds->( "$dir" ), 'accepts a plain string path too';
 }
 
+TRANSLATED_CHANGELOG_GATE: {
+  my $blocker = \&App::Mist::Command::release::_translated_changelog_blocker;
+
+  my $changes = "{{\$NEXT}}\n\n    - pending\n\n0.0900 2026-08-01T10:00:00Z\n";
+  my $back    = Cwd::getcwd();
+
+  my $run = sub {
+    my ( %files ) = @_;
+    my $tmp = File::Temp->newdir( CLEANUP => 1 );
+    chdir $tmp->dirname or die "chdir: $!";
+    for my $name ( keys %files ) {
+      open my $fh, '>:raw', $name or die "open $name: $!";
+      print {$fh} $files{ $name };
+      close $fh;
+    }
+    my $result = $blocker->();
+    chdir $back or die "chdir back: $!";
+    return $result;
+  };
+
+  is $run->( Changes => $changes ), undef,
+    'a project with no translated changelog is never blocked';
+
+  is $run->( Changes => $changes,
+             'Changes.de_DE' => "0.0900 2026-08-01T10:00:00Z\n\n    - alt\n" ),
+    undef, 'a translation with no marker has opted out, and is not blocked';
+
+  is $run->( Changes => $changes,
+             'Changes.de_DE' => "{{\$HEAD}}\n\n    - uebersetzt\n" ),
+    undef, 'a filled marker lets the release through';
+
+  like $run->( Changes => $changes,
+               'Changes.de_DE' => "{{\$HEAD}}\n\n0.0900 2026-08-01T10:00:00Z\n" ),
+    qr/Changes\.de_DE has no entry under \{\{\$HEAD\}\}/,
+    'an empty marker blocks the release before anything mutates';
+
+  # A file that cannot be parsed must not be asked whether a translation is
+  # owed - the structural answer comes first and on its own.
+  my $faulty = $run->( Changes => $changes,
+    'Changes.de_DE' => "{{\$HEAD}}\n\n{{\$HEAD}}\n\n0.0900 2026-08-01T10:00:00Z\n" );
+  like $faulty, qr/has 2 \{\{\$HEAD\}\} markers/,
+    'a structural fault blocks with its own message';
+  unlike $faulty, qr/no entry under/,
+    'and does not also guess at a missing translation';
+}
+
+UNTRANSLATED_RELEASE_ERROR: {
+  my $err = \&App::Mist::Command::release::_untranslated_release_error;
+
+  my $one = $err->( 'Changes.de_DE' );
+  like $one, qr/^mist release: Changes\.de_DE has no entry under \{\{\$HEAD\}\}/,
+    'names the file that is owed a translation';
+  like $one, qr/Translate this release's pending entry/,
+    'says what to do';
+
+  # The opt-out is also the one-line edit that makes the error go away, so the
+  # message has to price it rather than list it as an equal option.
+  like $one, qr/retires the\s+translated changelog permanently/,
+    'spells out what deleting the marker costs';
+  like $one, qr/not a fix for\s+this release/,
+    'and refuses to present it as a remedy';
+
+  my $many = $err->( 'Changes.de_DE', 'Changes.fr' );
+  like $many, qr/^mist release: Changes\.de_DE, Changes\.fr have no entry/,
+    'lists every owed file, and agrees with itself grammatically';
+}
+
 done_testing;

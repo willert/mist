@@ -6,6 +6,9 @@ use 5.010;
 use App::Mist -command;
 use Minilla::Project;
 use Mist::Minilla::CLI ();
+use Mist::TranslatedChanges qw/
+  translated_changelogs head_block_state changelog_marker_faults
+/;
 
 use Config;
 use File::Find ();
@@ -77,6 +80,16 @@ sub execute {
     die "mist release: Changes has no entry under {{\$NEXT}}.\n"
       . "Add this release's changes under the {{\$NEXT}} line first"
       . ( $dry_run ? " (a real release would block here too).\n" : ".\n" );
+  }
+
+  # Translated changelogs (Changes.<locale>) gate here too, and unconditionally:
+  # unlike {{$NEXT}} there is no Minilla prompt-to-edit for them to fall through
+  # to on a terminal. Both gates run before the pipeline so a refusal costs
+  # nothing - RewriteTranslatedChanges itself only runs after the version has
+  # been bumped and Changes rewritten, where dying would strand a half-released
+  # working tree.
+  if ( my $blocker = _translated_changelog_blocker() ) {
+    die $blocker;
   }
 
   # Seal the clean-room dist-test to the project's pinned mpan-dist mirror.
@@ -509,6 +522,38 @@ sub _changes_has_next_entry {
   return $changes =~ /^\{\{\$NEXT\}\}\h*\R+\h+\S/m ? 1 : 0;
 }
 
+# Why the release must not start, or undef when the translated changelogs - if
+# there are any - are in order. Structural faults come first: a file with two
+# markers or a stray {{$NEXT}} cannot be reasoned about, so asking it whether a
+# translation is owed would be guessing.
+sub _translated_changelog_blocker {
+  my @faults = changelog_marker_faults();
+  return join '', map { "mist release: $_" } @faults if @faults;
+
+  my @owed = grep { head_block_state( $_ ) eq 'empty' } translated_changelogs();
+  return _untranslated_release_error( @owed ) if @owed;
+
+  return undef;
+}
+
+# The one thing a translated changelog does that Changes cannot: opt out. Spell
+# out what deleting the marker costs, because it is also the one-line edit that
+# makes this error go away.
+sub _untranslated_release_error {
+  my ( @files ) = @_;
+
+  my $subject = @files == 1
+    ? "$files[0] has"
+    : join( ', ', @files ) . ' have';
+
+  return "mist release: ${subject} no entry under {{\$HEAD}}.\n"
+    . "Translate this release's pending entry under the {{\$HEAD}} line first.\n"
+    . "\n"
+    . "Deleting the {{\$HEAD}} line also clears this error, but it retires the\n"
+    . "translated changelog permanently - a project decision, not a fix for\n"
+    . "this release.\n";
+}
+
 1;
 
 __END__
@@ -558,6 +603,36 @@ F<Changes> rewrite, no commit, no tag, and no push. Use it to confirm a release
 would build and test cleanly before committing to it. Like a real release it
 requires a F<Changes> entry under C<{{$NEXT}}> and fails fast if there is none,
 so a dry-run predicts that block rather than passing over it.
+
+=head2 Translated changelogs
+
+A project may keep a changelog in translation beside F<Changes>, named
+F<Changes.I<locale>> - F<Changes.de> or F<Changes.de_DE>. Only locale-shaped
+suffixes count, so a F<Changes.bak> left lying around is never mistaken for one.
+
+Its topmost block sits under a C<{{$HEAD}}> marker rather than a version line.
+The marker is positional: it means "this block translates whatever F<Changes>
+lists first", which is what lets a translation be written in the same commit as
+the English entry, before the release has assigned a number. At release the
+marker is replaced by the version line just stamped into F<Changes>, copied
+verbatim so the two files cannot drift apart on a timestamp, and a fresh marker
+is opened above it for the next entry.
+
+The release B<refuses to start> when a marker has nothing under it: a
+translation is owed, and releasing would silently re-point the marker at the
+next entry written. Unlike the C<{{$NEXT}}> gate this one has no interactive
+prompt to fall through to, so it applies on a terminal too. Deleting the
+C<{{$HEAD}}> line retires the translated changelog and lifts the gate for good;
+a file without the marker is left alone entirely.
+
+Three structural faults are refused rather than guessed past, because each is
+otherwise silent: a C<{{$HEAD}}> marker in F<Changes>, a C<{{$NEXT}}> marker in
+a translation - it would never be given a version, since only F<Changes> is
+rewritten - and more than one C<{{$HEAD}}> in a single file.
+
+This gate runs before the pipeline, so a refusal costs nothing. The stamp
+itself happens after the version bump and the F<Changes> rewrite, where failing
+would strand a half-released working tree.
 
 =head2 Reusing a dry-run's build with C<--candidate>
 
