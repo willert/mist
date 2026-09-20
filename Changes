@@ -2,6 +2,10 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+  - A translated changelog (`Changes.<locale>`) now gets the release's
+    version line too, filed under its `{{$HEAD}}` marker. An empty marker
+    means a translation is owed, and blocks the release.
+
 0.57 2026-09-13T00:22:58Z
 
   - `mist release`, `prerelease` and `build_dist` exit nonzero when a
