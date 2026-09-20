@@ -2,6 +2,8 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+0.58 2026-09-20T01:59:11Z
+
   - A translated changelog (`Changes.<locale>`) now gets the release's
     version line too, filed under its `{{$HEAD}}` marker. An empty marker
     means a translation is owed, and blocks the release.
