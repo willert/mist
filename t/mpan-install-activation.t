@@ -655,6 +655,35 @@ PURGE_WITH_BUILD_ONLY_KEEPS_LIVE_AND_BUILT: {
     'the superseded generation 1 is reclaimed';
 }
 
+BACKGROUND_INSTALL_RESTORES_SIGINT: {
+  # A non-interactive shell starts `cmd &` with SIGINT and SIGQUIT ignored, and
+  # the ignore survives exec down to every dist's test suite - a detached build
+  # failed Test::TCP's t/05_sigint.t that way. The installer resets it before
+  # its perlbrew re-exec; a finalize script, a child of the re-exec'd pass like
+  # cpanm's test runs, reports what it inherited.
+  my $installer = build_installer( <<'MISTFILE' );
+perl q{5.20.3};
+script finalize => q{perl}, q{-e},
+  q{open my $fh, q{>}, q{sigint.txt} or die; print $fh defined $SIG{INT} ? $SIG{INT} : q{default}};
+MISTFILE
+  my $box = make_sandbox( $installer );
+
+  my $exit = do {
+    local $ENV{TMPDIR} = $box;
+    clean_run( "cd $box && ./mpan-install >install.log 2>&1 </dev/null & wait \$!" );
+  };
+  my $out = _slurp( File::Spec->catfile( $box, 'install.log' ) );
+  is $exit, 0, 'a backgrounded install exits 0' or diag $out;
+  like $out, qr/^mpan-install: SIGINT and SIGQUIT arrived ignored/m,
+    'it says it restored the default';
+  is _slurp( File::Spec->catfile( $box, 'sigint.txt' ) ), 'default',
+    "a child of the re-exec'd installer sees SIGINT at its default";
+
+  my ( $fg_exit, $fg_out ) = run_install( $box );
+  is $fg_exit, 0, 'a foreground re-install exits 0' or diag $fg_out;
+  unlike $fg_out, qr/arrived ignored/, 'and stays quiet about signals';
+}
+
 # The per-project workspace where ephemeral bundles live, derived the way the host
 # (and App::Mist::Context) derive it: lc the realpath'd project root, \W -> _,
 # trimmed, under <home>/.mist/<...>/bundles.

@@ -47,6 +47,10 @@ BEGIN {
   );
 }
 
+# Before the perlbrew re-exec and any child process, so the reset reaches every
+# build and test below; the re-exec'd pass finds nothing left to reset.
+Mist::Signals::restore_inherited_ignores( 'mpan-install' );
+
 # Build populates this perl's lib/body/rc; Activate repoints the stable
 # selectors at them. --build-only does Build but skips Activate.
 my $activate = $build_only ? 0 : 1;

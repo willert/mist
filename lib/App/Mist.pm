@@ -58,6 +58,7 @@ use App::Cmd::Setup -app;
 our $VERSION = '0.58';
 
 use App::Mist::Context;
+use Mist::Signals ();
 
 # Set only by the argv parse below, and deliberately not readable from the
 # environment: this is an emergency escape, and an env var would let one export
@@ -76,6 +77,10 @@ sub ctx {
 # re-apply a relative path on top of the already-changed cwd.
 sub run {
   my $class = shift;
+
+  # inject, merge, upgrade and release all build and test dists, so the CLI
+  # needs the same reset as ./mpan-install, before any command can fork.
+  Mist::Signals::restore_inherited_ignores( 'mist' );
 
   # Leading global options only, in any order. Restricted to the front rather
   # than swept from the whole argv because `mist run -- <cmd> <args>` passes

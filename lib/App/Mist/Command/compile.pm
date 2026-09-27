@@ -122,6 +122,7 @@ sub execute {
     # host and the build-master cannot drift apart on how a generation is named,
     # seeded, promoted or activated.
     append_module_source( 'Mist::Generation'   => $out );
+    append_module_source( 'Mist::Signals'      => $out );
 
     print $out $ctx->mist_environment->as_code( package => 'DISTRIBUTION' );
 
