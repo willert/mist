@@ -5,6 +5,9 @@ Revision history for App::Mist
   - `./mpan-install --build-only` no longer activates over a pre-generation
     install. A real `perl5/<arch>` directory counts as the live environment
     and is left untouched until the next activating run.
+  - `./mpan-install` and `mist` restore SIGINT and SIGQUIT when started from
+    a background job that inherited them ignored, so dist tests that
+    interrupt their own children no longer fail in detached builds.
 
 0.58 2026-09-20T01:59:11Z
 
