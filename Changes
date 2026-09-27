@@ -2,6 +2,8 @@ Revision history for App::Mist
 
 {{$NEXT}}
 
+0.59 2026-09-27T23:44:50Z
+
   - `./mpan-install --build-only` no longer activates over a pre-generation
     install. A real `perl5/<arch>` directory counts as the live environment
     and is left untouched until the next activating run.

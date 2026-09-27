@@ -55,7 +55,7 @@ ERROR_MSG
 
 use App::Cmd::Setup -app;
 
-our $VERSION = '0.58';
+our $VERSION = '0.59';
 
 use App::Mist::Context;
 use Mist::Signals ();
