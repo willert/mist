@@ -469,10 +469,14 @@ my $mist_rc     = File::Spec->catfile( $rc_dir, 'mist.mistrc' );  # convenience 
 # failure just orphans the staging generation and the old one stays live. No loud
 # stub is needed. The one case that must not move the live generation is
 # --build-only of the perl that is *currently active*: it stages the build
-# without making it current.
-my $active_body     = readlink $mist_run_fn;
-my $is_active_perl  = defined( $active_body ) && $active_body eq $body_name;
-my $repoint_generic = !( $build_only && $is_active_perl );
+# without making it current. A legacy real lib dir (pre-generation layout) is
+# active whatever the selector says - pre-generation installers wrote mist-run as
+# a plain file, so readlink cannot identify it - and migrating it would reclaim
+# the environment the running app is using.
+my $active_body      = readlink $mist_run_fn;
+my $is_active_perl   = defined( $active_body ) && $active_body eq $body_name;
+my $is_legacy_libdir = -d $generic_libdir && ! -l $generic_libdir;
+my $repoint_generic  = !( $build_only && ( $is_active_perl || $is_legacy_libdir ) );
 
 open my $env, '>', $rc_new        # stage early to catch write errors; never the live rc
   or die "Creating $rc_new failed: $!";

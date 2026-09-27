@@ -552,6 +552,38 @@ MIGRATION_FROM_LEGACY_REALDIR: {
     'the renamed-aside legacy copy is cleaned up when its content is removable';
 }
 
+BUILD_ONLY_LEAVES_LEGACY_REALDIR: {
+  # A pre-generation install is live on its real lib dir, and its installer wrote
+  # perl5/bin/mist-run as a plain file, not a selector symlink - so nothing that
+  # reads the selector can tell this perl is active. --build-only must still leave
+  # the legacy dir alone: migrating it is an activation, and it would also reclaim
+  # the only copy of the environment the running app is using.
+  my $box = make_sandbox( $installer_ok );
+  my $legacy = File::Spec->catdir( $box, 'perl5', $arch_name );
+  mkpath( File::Spec->catdir( $legacy, qw/ lib perl5 / ) );
+  _spew( File::Spec->catfile( $legacy, 'LEGACY_MARKER' ), "legacy\n" );
+  mkpath( File::Spec->catdir( $box, qw/ perl5 bin / ) );
+  my $legacy_wrapper = "#!/bin/bash\n# pre-generation mist-run\n";
+  _spew( selector( $box ), $legacy_wrapper );
+
+  my ( $exit, $out ) = run_install( $box, '--build-only' );
+  is $exit, 0, '--build-only over a legacy real dir exits 0' or diag $out;
+
+  ok( -d $legacy && ! -l $legacy, 'the legacy lib dir is still a real directory' );
+  ok -e File::Spec->catfile( $legacy, 'LEGACY_MARKER' ), 'and its content is intact';
+  ok ! scalar( glob File::Spec->catdir( $box, 'perl5', "$arch_name.legacy-*" ) ),
+    'nothing was moved aside';
+  ok ! -e File::Spec->catfile( $box, qw/ perl5 etc mist.active-generation / ),
+    'no activation stamp was written';
+  is _slurp( selector( $box ) ), $legacy_wrapper,
+    'the legacy mist-run wrapper is untouched';
+
+  my $built = File::Spec->catdir( $box, qw/ perl5 generations /, "${arch_name}-1" );
+  ok -d $built, 'the new generation was built beside it';
+  ok -e File::Spec->catfile( $built, 'LEGACY_MARKER' ),
+    'seeded from the legacy dir';
+}
+
 PERL5_NOT_WRITABLE_FAILS_FAST: {
   # A deployment where perl5/ is owned by another user must fail up front with an
   # actionable message, not a cryptic mkdir/rename failure deep in the build.
