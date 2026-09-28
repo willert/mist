@@ -731,7 +731,9 @@ automatically prepended to \$PATH) you can also use this wrapper script:
 $mist_run_fn my_script.pl [OPTIONS ..]
 
 SUCCESS
-} else {
+} elsif ( $repoint_generic ) {
+  # --build-only of a perl that is not the active one: its own selector now
+  # points at the new generation, so its per-perl body runs this build.
   print <<"SUCCESS";
 
 Successfully built $arch_path without activating it; the active perl is
@@ -740,6 +742,25 @@ $body_fn my_script.pl [OPTIONS ..]
 
 or enable it in a shell with:
 source $rc_fn
+
+SUCCESS
+} else {
+  # --build-only of the active perl, or over a legacy real lib dir: the
+  # per-perl body resolves through the selector that was deliberately left
+  # alone, so it still runs the live environment, not this build.
+  ( my $gen_id = $gen_name ) =~ s/\A\Q$arch_path\E-//;
+  print <<"SUCCESS";
+
+Successfully built generation $gen_name without activating it; the live
+environment is unchanged. So is $body_fn,
+which follows perl5/$arch_path and therefore still runs the live
+environment, not this build.
+
+The new generation is at:
+$local_lib
+
+Activate it (seeding from it, so nothing is rebuilt) with:
+./mpan-install --parent $gen_id
 
 SUCCESS
 }

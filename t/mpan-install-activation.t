@@ -182,6 +182,8 @@ BUILD_ONLY_DOES_NOT_ACTIVATE: {
   my $box = make_sandbox( $installer_ok );
   my ( $exit, $out ) = run_install( $box, '--build-only' );
   is $exit, 0, '--build-only exits 0' or diag $out;
+  like $out, qr/Run binaries from this build directly via:/,
+    'with no live env to protect, the per-perl body runs the build, and it says so';
 
   my ( $body ) = glob File::Spec->catfile(
     $box, qw/ perl5 bin /, 'mist-run-perl-5.20.3-*' );
@@ -582,6 +584,11 @@ BUILD_ONLY_LEAVES_LEGACY_REALDIR: {
   ok -d $built, 'the new generation was built beside it';
   ok -e File::Spec->catfile( $built, 'LEGACY_MARKER' ),
     'seeded from the legacy dir';
+
+  unlike $out, qr/Run binaries from this build directly/,
+    'it does not offer the per-perl body, which still runs the legacy env';
+  like $out, qr/^\Q$built\E$/m, 'it names the new generation instead';
+  like $out, qr{^\./mpan-install --parent 1$}m, 'and the command that activates it';
 }
 
 PERL5_NOT_WRITABLE_FAILS_FAST: {
@@ -644,6 +651,8 @@ PURGE_WITH_BUILD_ONLY_KEEPS_LIVE_AND_BUILT: {
 
   my ( $exit, $out ) = run_install( $box, '--build-only', '--purge' );
   is $exit, 0, '--build-only --purge exits 0' or diag $out;
+  like $out, qr{^\./mpan-install --parent 3$}m,
+    'building the active perl points at activation, not at the per-perl body';
 
   is readlink( gen_link( $box ) ), $live,
     '--build-only leaves the live selector pointing at generation 2';
