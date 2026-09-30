@@ -470,7 +470,15 @@ sub _git {
     App::Mist::Command::merge::_CleanupGuard;
 
   sub new { my ( $class, $code ) = @_; return bless { code => $code }, $class }
-  sub DESTROY { my $self = shift; $self->{code}->() if $self->{code}; return }
+
+  # Runs while a die unwinds, after perl has fixed the exit status in $? - and
+  # the cleanup shells out to git, whose system() would reset it to 0.
+  sub DESTROY {
+    my $self = shift;
+    local $?;
+    $self->{code}->() if $self->{code};
+    return;
+  }
 }
 
 1;
