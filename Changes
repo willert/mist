@@ -5,6 +5,8 @@ Revision history for App::Mist
   - After `--build-only` of the active perl, `./mpan-install` names the new
     generation and the `--parent` command that activates it, instead of
     offering a wrapper that still runs the live environment.
+  - `mist merge` exits non-zero again when merging a release tag fails,
+    instead of reporting the failure and exiting 0.
 
 0.59 2026-09-27T23:44:50Z
 
